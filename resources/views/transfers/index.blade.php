@@ -110,6 +110,16 @@
                         <a href="{{ route('transfers.print', $transfer) }}" class="btn btn-sm btn-secondary" target="_blank">
                             <i class="fas fa-print"></i> Print
                         </a>
+                        @if(auth()->user()->isAdmin())
+                        <form action="{{ route('transfers.destroy', $transfer) }}" method="POST" style="display:inline"
+                              onsubmit="return confirm('Delete {{ $transfer->transfer_number }}? This will reverse all dispatched stock.')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-sm btn-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                        @endif
                     </td>
                 </tr>
                 @empty

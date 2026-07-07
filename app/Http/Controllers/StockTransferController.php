@@ -398,7 +398,59 @@ class StockTransferController extends Controller
     }
 
     /**
-     * Admin: show the edit form for a completed transfer.
+     * Admin: delete a stock transfer and reverse all stock movements.
+     *
+     * For each dispatched line:
+     *   - source item gets its stock back (quantity += dispatched)
+     *   - destination item loses the stock (quantity -= dispatched, clamped to 0)
+     *   - transfer_out and transfer_in stock card entries are deleted
+     * Then the transfer items and the transfer record itself are deleted.
+     */
+    public function destroy(StockTransfer $transfer)
+    {
+        abort_unless(Auth::user()->isAdmin(), 403);
+
+        DB::transaction(function () use ($transfer) {
+            $transfer->load(['items.sourceItem', 'items.destinationItem']);
+
+            foreach ($transfer->items as $sti) {
+                $sourceItem = $sti->sourceItem;
+                $destItem   = $sti->destinationItem;
+                $dispatched = (float) $sti->quantity; // how much was actually moved
+
+                // Reverse stock only for dispatched quantity
+                if ($dispatched > 0) {
+                    if ($sourceItem) {
+                        $sourceItem->increment('quantity', $dispatched);
+                    }
+                    if ($destItem) {
+                        $newDestQty = max(0, $destItem->quantity - $dispatched);
+                        $destItem->update(['quantity' => $newDestQty]);
+                    }
+                }
+
+                // Delete stock card entries tied to this transfer
+                StockCardEntry::where('reference_type', 'transfer_out')
+                    ->where('reference_id', $transfer->id)
+                    ->where('item_id', $sti->item_id)
+                    ->delete();
+
+                StockCardEntry::where('reference_type', 'transfer_in')
+                    ->where('reference_id', $transfer->id)
+                    ->where('item_id', $sti->destination_item_id)
+                    ->delete();
+            }
+
+            // Delete line items then the transfer header
+            $transfer->items()->delete();
+            $transfer->delete();
+        });
+
+        return redirect()->route('transfers.index')
+            ->with('success', "Transfer {$transfer->transfer_number} deleted and stock reversed.");
+    }
+
+    /**
      */
     public function edit(StockTransfer $transfer)
     {

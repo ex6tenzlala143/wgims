@@ -120,10 +120,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/transfers/{transfer}/dispatch', [StockTransferController::class, 'processDispatch'])->name('transfers.process_dispatch');
     });
     Route::get('/transfers/{transfer}',          [StockTransferController::class, 'show'])->name('transfers.show');
-    // Edit / Update — admin only
+    // Edit / Update / Delete — admin only
     Route::middleware('admin')->group(function () {
         Route::get('/transfers/{transfer}/edit', [StockTransferController::class, 'edit'])->name('transfers.edit');
         Route::put('/transfers/{transfer}',      [StockTransferController::class, 'update'])->name('transfers.update');
+        Route::delete('/transfers/{transfer}',   [StockTransferController::class, 'destroy'])->name('transfers.destroy');
     });
 
     // ── Suppliers ─────────────────────────────────────────────────────────────
