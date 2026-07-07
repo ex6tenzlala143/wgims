@@ -24,7 +24,9 @@ class StockCardController extends Controller
             $category = array_key_first($allCategories);
         }
 
-        $query = Item::with(['warehouse', 'stockCardEntries'])
+        $query = Item::with('warehouse')
+            ->withSum('stockCardEntries as total_received', 'receipt_qty')
+            ->withSum('stockCardEntries as total_issued', 'issue_qty')
             ->where('category', $category)
             ->where('is_active', true);
 
@@ -132,7 +134,9 @@ class StockCardController extends Controller
     {
         $user = Auth::user();
 
-        $query = Item::with(['warehouse', 'stockCardEntries'])
+        $query = Item::with(['warehouse'])
+            ->withSum('stockCardEntries as total_received', 'receipt_qty')
+            ->withSum('stockCardEntries as total_issued', 'issue_qty')
             ->where('is_active', true);
 
         $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);

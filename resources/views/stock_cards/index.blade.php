@@ -59,8 +59,8 @@
                 @php $grandBalance = 0; $grandValue = 0; @endphp
                 @forelse($items as $item)
                 @php
-                    $totalReceived = $item->stockCardEntries->sum('receipt_qty');
-                    $totalIssued = $item->stockCardEntries->sum('issue_qty');
+                    $totalReceived = $item->total_received ?? 0;
+                    $totalIssued = $item->total_issued ?? 0;
                     $grandBalance += $item->quantity;
                     $grandValue += $item->quantity * $item->unit_cost;
                 @endphp

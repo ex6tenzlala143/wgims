@@ -52,25 +52,28 @@
                         <th>Account Code</th>
                         <th>Category</th>
                         <th style="text-align:right">Total Qty</th>
+                        <th style="text-align:right">Unit Cost (₱)</th>
                         <th style="text-align:right">Total Value (₱)</th>
                     </tr>
                 </thead>
                 <tbody>
                     @php $total = 0; @endphp
                     @forelse($accountBalances as $ab)
+                    @php $unitCost = $ab['total_qty'] > 0 ? $ab['total_value'] / $ab['total_qty'] : 0; @endphp
                     <tr>
                         <td><span class="badge badge-primary">{{ $ab['account_code'] }}</span></td>
                         <td>{{ $ab['label'] }}</td>
                         <td style="text-align:right">{{ number_format($ab['total_qty'], 2) }}</td>
+                        <td style="text-align:right">₱{{ number_format($unitCost, 2) }}</td>
                         <td style="text-align:right">₱{{ number_format($ab['total_value'], 2) }}</td>
                     </tr>
                     @php $total += $ab['total_value']; @endphp
                     @empty
-                    <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted)">No inventory data yet.</td></tr>
+                    <tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted)">No inventory data yet.</td></tr>
                     @endforelse
                     @if(count($accountBalances) > 0)
                     <tr style="background:#f0fff4;font-weight:700">
-                        <td colspan="3" style="text-align:right">TOTAL:</td>
+                        <td colspan="4" style="text-align:right">TOTAL:</td>
                         <td style="text-align:right">₱{{ number_format($total, 2) }}</td>
                     </tr>
                     @endif

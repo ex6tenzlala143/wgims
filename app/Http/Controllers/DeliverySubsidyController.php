@@ -8,9 +8,7 @@ use App\Models\DeliveryItem;
 use App\Models\Item;
 use App\Models\DeliverySubsidy;
 use App\Models\DeliverySubsidyItem;
-use App\Models\RequisitionItem;
 use App\Models\StockCardEntry;
-use App\Models\StockTransferItem;
 use App\Models\Supplier;
 use App\Models\SystemNotification;
 use App\Models\User;
@@ -466,20 +464,29 @@ class DeliverySubsidyController extends Controller
             'items.*.expiration_date'    => 'nullable|date',
         ]);
 
-        // Validate that each batch's ds_item_id belongs to this delivery/subsidy
-        foreach ($request->items as $line) {
-            if ((float) ($line['quantity_delivered'] ?? 0) <= 0) {
-                continue;
-            }
-            $belongs = DeliverySubsidyItem::where('id', $line['ds_item_id'])
-                ->where('delivery_subsidy_id', $deliverySubsidy->id)
-                ->exists();
-            if (! $belongs) {
+        // Pre-load all DSI IDs for this delivery subsidy — validates ownership in one query
+        // and makes them available by id inside the transaction without re-fetching.
+        $submittedDsiIds = collect($request->items)
+            ->filter(fn ($l) => (float) ($l['quantity_delivered'] ?? 0) > 0)
+            ->pluck('ds_item_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $dsItemsMap = DeliverySubsidyItem::with('item')
+            ->whereIn('id', $submittedDsiIds)
+            ->where('delivery_subsidy_id', $deliverySubsidy->id)
+            ->get()
+            ->keyBy('id');
+
+        // Validate that every submitted ds_item_id actually belongs to this delivery subsidy
+        foreach ($submittedDsiIds as $dsiId) {
+            if (! $dsItemsMap->has($dsiId)) {
                 return back()->withInput()->with('error', 'Invalid item reference in submission.');
             }
         }
 
-        DB::transaction(function () use ($request, $deliverySubsidy, $user) {
+        DB::transaction(function () use ($request, $deliverySubsidy, $user, $dsItemsMap) {
             // ── Delivery header: one row per shipment ──────────────────────
             $delivery = Delivery::create([
                 'delivery_subsidy_id'  => $deliverySubsidy->id,
@@ -497,9 +504,11 @@ class DeliverySubsidyController extends Controller
                 if ((float) $line['quantity_delivered'] <= 0) {
                     continue;
                 }
-                $dsItem = DeliverySubsidyItem::where('id', $line['ds_item_id'])
-                    ->where('delivery_subsidy_id', $deliverySubsidy->id)
-                    ->firstOrFail();
+                // Use the pre-loaded map — no extra query per line
+                $dsItem = $dsItemsMap->get((int) $line['ds_item_id']);
+                if (! $dsItem) {
+                    continue;
+                }
 
                 $baseItem = $dsItem->item;
                 if (! $baseItem) {
@@ -636,6 +645,8 @@ class DeliverySubsidyController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $deliverySubsidy, $delivery) {
+            $cascadeSvc = new DeliverySubsidyCascadeService();
+
             // Update delivery header (dr_number + quantity_delivered live here)
             $delivery->update([
                 'dr_number'          => $request->dr_number,
@@ -659,7 +670,7 @@ class DeliverySubsidyController extends Controller
                 $newCost = round((float) $line['unit_cost'], 2);
                 $delta   = $newQty - $oldQty;
 
-                $item  = $di->item;
+                $item   = $di->item;
                 $dsItem = $di->deliverySubsidyItem;
 
                 if (! $item || ! $dsItem) {
@@ -669,16 +680,14 @@ class DeliverySubsidyController extends Controller
                 $newItemQty = max(0, $item->quantity + $delta);
                 $item->update([
                     'quantity'   => $newItemQty,
-                    'unit_cost'  => $newCost,
                     'ris_number' => $deliverySubsidy->ris_number,
                 ]);
 
-                // Cascade unit cost changes to related RIS and stock transfer records
-                if (abs($delta) > 0.0001 || abs($di->unit_cost - $newCost) > 0.001) {
-                    RequisitionItem::where('item_id', $item->id)
-                        ->update(['unit_cost' => $newCost]);
-                    StockTransferItem::where('item_id', $item->id)
-                        ->update(['unit_cost' => $newCost]);
+                // Cascade unit-cost change through the full transfer chain
+                // (covers second-generation transfers that the old manual update missed)
+                if (abs($di->unit_cost - $newCost) > 0.001) {
+                    $dummySummary = [];
+                    $cascadeSvc->cascadeUnitCost($item, $newCost, $dummySummary);
                 }
 
                 // Adjust delivery/subsidy item qty_delivered

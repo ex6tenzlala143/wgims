@@ -114,19 +114,20 @@
                     <th>Unit</th>
                     <th style="text-align:right">Qty</th>
                     <th style="text-align:right">Unit Cost</th>
+                    <th style="text-align:right">Total Value</th>
                     @if(auth()->user()->hasAdminAccess())
                     <th style="text-align:right">Engas Unit Cost</th>
                     <th style="text-align:right">Engas Total Value</th>
                     @endif
-                    <th style="text-align:right">Total Value</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($b['categories'] as $cat)
                 <tr style="background:#ebf4ff">
                     <td><span class="badge badge-primary">{{ $cat['account_code'] }}</span></td>
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 7 : 5 }}"><strong>{{ $cat['label'] }}</strong></td>
-                    <td style="text-align:right;font-weight:700">₱{{ number_format($cat['total_value'], 2) }}</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 5 : 3 }}"><strong>{{ $cat['label'] }}</strong></td>
+                    <td style="text-align:right;font-weight:700" colspan="2">₱{{ number_format($cat['total_value'], 2) }}</td>
+                    @if(auth()->user()->hasAdminAccess())<td colspan="2"></td>@endif
                 </tr>
                 @foreach($cat['items'] as $item)
                 <tr>
@@ -136,6 +137,7 @@
                     <td>{{ $item->unit }}</td>
                     <td style="text-align:right">{{ number_format($item->quantity, 2) }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>
+                    <td style="text-align:right">₱{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
                         @if($item->engas_unit_cost !== null)
@@ -152,14 +154,14 @@
                         @endif
                     </td>
                     @endif
-                    <td style="text-align:right">₱{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
+                </tr>
                 </tr>
                 @endforeach
                 @endforeach
             </tbody>
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 6 }}" style="text-align:right">WAREHOUSE TOTAL:</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}" style="text-align:right">WAREHOUSE TOTAL:</td>
                     <td style="text-align:right">₱{{ number_format($b['grand_total'], 2) }}</td>
                 </tr>
             </tfoot>

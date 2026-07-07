@@ -18,9 +18,6 @@ class StockTransferController extends Controller
 {
     use ScopesWarehouse;
 
-    /** Temporary property to pass the new transfer id out of the transaction closure. */
-    private int $createdTransferId;
-
     /**
      * Paginated list of transfers, scoped by user role.
      */
@@ -141,8 +138,10 @@ class StockTransferController extends Controller
             }
         }
 
+        $createdTransferId = null;
+
         try {
-            DB::transaction(function () use ($request, $fromWarehouse, $toWarehouse, $user) {
+            DB::transaction(function () use ($request, $fromWarehouse, $toWarehouse, $user, &$createdTransferId) {
                 $transferNumber = StockTransfer::generateTransferNumber();
 
                 $transfer = StockTransfer::create([
@@ -182,27 +181,32 @@ class StockTransferController extends Controller
                     ]);
                 }
 
-                // Notifications
+                // Bulk-insert notifications for all admins (single query instead of N inserts)
                 $adminIds = User::where('role', User::ROLE_ADMIN)->pluck('id');
-                foreach ($adminIds as $adminId) {
-                    SystemNotification::create([
-                        'user_id' => $adminId,
-                        'title'   => "Stock Transfer {$transfer->transfer_number}",
-                        'message' => "Transfer from {$fromWarehouse->name} to {$toWarehouse->name} created — pending dispatch.",
-                        'type'    => 'transfer',
-                        'link'    => route('transfers.show', $transfer->id),
-                        'is_read' => false,
-                    ]);
+                $now      = now();
+                $notifRows = $adminIds->map(fn ($adminId) => [
+                    'user_id'    => $adminId,
+                    'title'      => "Stock Transfer {$transfer->transfer_number}",
+                    'message'    => "Transfer from {$fromWarehouse->name} to {$toWarehouse->name} created — pending dispatch.",
+                    'type'       => 'transfer',
+                    'link'       => route('transfers.show', $transfer->id),
+                    'is_read'    => false,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->toArray();
+
+                if (! empty($notifRows)) {
+                    SystemNotification::insert($notifRows);
                 }
 
-                $this->createdTransferId = $transfer->id;
+                $createdTransferId = $transfer->id;
             });
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', 'Transfer could not be saved. Please try again.');
         }
 
         return redirect()
-            ->route('transfers.show', $this->createdTransferId)
+            ->route('transfers.show', $createdTransferId)
             ->with('success', 'Transfer request created. Use "Dispatch Items" to send stock in one or more shipments.');
     }
 

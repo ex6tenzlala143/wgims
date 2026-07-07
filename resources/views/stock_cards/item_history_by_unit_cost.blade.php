@@ -49,6 +49,7 @@
         </div>
         <div style="display:flex;gap:20px;font-size:13px">
             <div><span style="color:var(--text-muted)">Unit Cost:</span> <strong>₱{{ number_format($batch['unit_cost'], 2) }}</strong></div>
+            <div><span style="color:var(--text-muted)">Total Value:</span> <strong style="color:var(--primary)">₱{{ number_format($batch['remaining_qty'] * $batch['unit_cost'], 2) }}</strong></div>
             <div><span style="color:var(--text-muted)">Original Qty:</span> <strong>{{ number_format($batch['original_qty'], 2) }}</strong></div>
             <div><span style="color:var(--text-muted)">Remaining:</span> <strong style="color:{{ $batch['depleted'] ? 'var(--text-muted)' : 'var(--success)' }}">{{ number_format($batch['remaining_qty'], 2) }}</strong></div>
         </div>

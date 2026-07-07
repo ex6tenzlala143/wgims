@@ -161,16 +161,22 @@ class RequisitionController extends Controller
                              ->orWhereHas('warehouses', fn ($q3) => $q3->where('warehouses.id', $ris->warehouse_id));
                       });
                 })
-                ->get();
+                ->pluck('id');
 
-            foreach ($approvers as $approver) {
-                SystemNotification::create([
-                    'user_id' => $approver->id,
-                    'title' => 'New RIS Submitted',
-                    'message' => "RIS #{$ris->ris_number} requires approval.",
-                    'type' => 'warning',
-                    'link' => route('requisitions.show', $ris->id),
-                ]);
+            $now       = now();
+            $notifRows = $approvers->map(fn ($approverId) => [
+                'user_id'    => $approverId,
+                'title'      => 'New RIS Submitted',
+                'message'    => "RIS #{$ris->ris_number} requires approval.",
+                'type'       => 'warning',
+                'link'       => route('requisitions.show', $ris->id),
+                'is_read'    => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->toArray();
+
+            if (! empty($notifRows)) {
+                SystemNotification::insert($notifRows);
             }
         });
 
@@ -236,6 +242,10 @@ class RequisitionController extends Controller
         }
 
         DB::transaction(function () use ($request, $requisition) {
+            // Pre-load all item models to avoid N+1 inside the loop
+            $requestedItemIds = collect($request->items)->pluck('item_id')->filter()->unique();
+            $itemsMap = Item::whereIn('id', $requestedItemIds)->get()->keyBy('id');
+
             $requisition->update([
                 'entity_name' => $request->entity_name,
                 'fund_cluster' => $request->fund_cluster,
@@ -256,7 +266,8 @@ class RequisitionController extends Controller
             $requisition->items()->delete();
 
             foreach ($request->items as $line) {
-                $item = Item::findOrFail($line['item_id']);
+                $item = $itemsMap->get((int) $line['item_id']);
+                if (! $item) continue;
                 $old = $existingItems->get((int) $line['item_id']);
 
                 RequisitionItem::create([
