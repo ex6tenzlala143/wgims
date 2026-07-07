@@ -79,6 +79,7 @@ class Item extends Model
         'box' => 'Box (bx)',
         'ream' => 'Ream (rm)',
         'pack' => 'Pack (pk)',
+        'kit' => 'Kit',
         'bottle' => 'Bottle (btl)',
         'can' => 'Can',
         'set' => 'Set',
