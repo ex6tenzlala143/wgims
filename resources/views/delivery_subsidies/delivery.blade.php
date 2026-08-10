@@ -57,7 +57,6 @@
 
 <form action="{{ route('delivery_subsidies.store_delivery', $deliverySubsidy->id) }}" method="POST" id="delivery-form">
 @csrf
-<input type="hidden" name="delivery_date"      value="{{ $deliveryDate }}">
 <input type="hidden" name="condition_status"   id="condition-status-hidden" value="good">
 <input type="hidden" name="quantity_delivered" id="qty-delivered-hidden" value="0">
 
@@ -74,7 +73,15 @@
                 </span>
             </div>
             <div class="card-body">
-                <div class="form-row cols-3">
+                <div class="form-row cols-2" style="margin-bottom:12px">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Delivery Date <span style="color:red">*</span></label>
+                        <input type="date" name="delivery_date" class="form-control"
+                               value="{{ $deliveryDate }}" required>
+                        @error('delivery_date')
+                            <div style="color:var(--danger);font-size:12px;margin-top:3px">{{ $message }}</div>
+                        @enderror
+                    </div>
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label">DR No. <span style="color:red">*</span>
                             <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— this shipment's receipt</span>
@@ -85,6 +92,8 @@
                             <div style="color:var(--danger);font-size:12px;margin-top:3px">{{ $message }}</div>
                         @enderror
                     </div>
+                </div>
+                <div class="form-row cols-2">
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label">Batch No. <span style="font-size:11px;color:var(--text-muted);font-weight:normal">optional</span></label>
                         <input type="text" name="batch_number" class="form-control"

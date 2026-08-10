@@ -155,13 +155,16 @@
                     </td>
                     @endif
                 </tr>
-                </tr>
                 @endforeach
                 @endforeach
             </tbody>
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}" style="text-align:right">WAREHOUSE TOTAL:</td>
+                    @if(auth()->user()->hasAdminAccess())
+                    <td colspan="8" style="text-align:right">WAREHOUSE TOTAL:</td>
+                    @else
+                    <td colspan="6" style="text-align:right">WAREHOUSE TOTAL:</td>
+                    @endif
                     <td style="text-align:right">₱{{ number_format($b['grand_total'], 2) }}</td>
                 </tr>
             </tfoot>

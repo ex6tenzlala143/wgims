@@ -144,7 +144,7 @@ class RequisitionController extends Controller
                     'requisition_id'     => $ris->id,
                     'item_id'            => $line['item_id'],
                     'quantity_requested' => $line['quantity_requested'],
-                    'stock_available'    => $item->quantity >= $line['quantity_requested'],
+                    'stock_available'    => (float) $item->quantity,
                     'unit_cost'          => $item->unit_cost ?? 0,
                     'expiration_date'    => $item->expiration_date,
                 ]);
@@ -274,8 +274,8 @@ class RequisitionController extends Controller
                     'requisition_id'     => $requisition->id,
                     'item_id'            => $line['item_id'],
                     'quantity_requested' => $line['quantity_requested'],
-                    'quantity_issued'    => $old ? $old->quantity_issued : 0,
-                    'stock_available'    => $item->quantity >= $line['quantity_requested'],
+                    'quantity_issued'    => $old ? (float) $old->quantity_issued : 0,
+                    'stock_available'    => (float) $item->quantity,
                     'unit_cost'          => $item->unit_cost ?? 0,
                     'expiration_date'    => $item->expiration_date,
                 ]);
@@ -373,7 +373,7 @@ class RequisitionController extends Controller
                     // Accumulate — add to existing quantity_issued
                     $riItem->update([
                         'quantity_issued' => $alreadyIssued + $newIssuance,
-                        'stock_available' => $item->quantity >= $riItem->quantity_requested,
+                        'stock_available' => (float) $newItemQty,
                     ]);
 
                     $item->update(['quantity' => $newItemQty]);

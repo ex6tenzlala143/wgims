@@ -12,7 +12,7 @@ class WarehouseController extends Controller
     {
         $user = auth()->user();
 
-        $query = Warehouse::withCount(['users', 'assignedUsers', 'items'])
+        $query = Warehouse::withCount(['assignedUsers', 'items'])
             ->orderBy('name');
 
         if (! $user->hasAdminAccess()) {
@@ -39,7 +39,7 @@ class WarehouseController extends Controller
             'place' => 'nullable|string|max:100',
         ]);
 
-        Warehouse::create($validated);
+        Warehouse::create(array_merge($validated, ['is_active' => true]));
 
         return redirect()->route('warehouses.index')->with('success', 'Warehouse created.');
     }

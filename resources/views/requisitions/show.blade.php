@@ -238,10 +238,10 @@
                     </td>
 
                     <td>
-                        @if($ri->stock_available)
-                        <span class="badge badge-success"><i class="fas fa-check"></i> Yes</span>
+                        @if($ri->stock_available > 0)
+                        <span class="badge badge-success"><i class="fas fa-check"></i> {{ number_format($ri->stock_available, 0) }}</span>
                         @else
-                        <span class="badge badge-danger"><i class="fas fa-times"></i> No</span>
+                        <span class="badge badge-danger"><i class="fas fa-times"></i> None</span>
                         @endif
                     </td>
                     <td style="text-align:right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued, 2) : '—' }}</td>
@@ -268,11 +268,21 @@
             @if($grandTotal > 0)
             <tfoot>
                 <tr>
+                    @if(auth()->user()->hasAdminAccess())
+                    {{-- 12 cols: SN, Unit, Desc, Expiry, Cost, EngasCost, EngasTotal, QtyReq, TotalCost, StockAvail, QtyIssued, Outstanding, Remarks --}}
+                    <td colspan="8" style="text-align:right;font-weight:700;padding:10px 12px">Grand Total</td>
+                    <td style="text-align:right;font-weight:800;white-space:nowrap;color:var(--primary)">
+                        ₱&nbsp;{{ number_format($grandTotal, 2) }}
+                    </td>
+                    <td colspan="4"></td>
+                    @else
+                    {{-- 10 cols: SN, Unit, Desc, Expiry, Cost, QtyReq, TotalCost, StockAvail, QtyIssued, Outstanding, Remarks --}}
                     <td colspan="6" style="text-align:right;font-weight:700;padding:10px 12px">Grand Total</td>
                     <td style="text-align:right;font-weight:800;white-space:nowrap;color:var(--primary)">
                         ₱&nbsp;{{ number_format($grandTotal, 2) }}
                     </td>
-                    <td colspan="3"></td>
+                    <td colspan="4"></td>
+                    @endif
                 </tr>
             </tfoot>
             @endif

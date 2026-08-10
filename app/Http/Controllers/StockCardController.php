@@ -141,8 +141,7 @@ class StockCardController extends Controller
 
         $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
 
-        $query->when($request->warehouse_id, fn ($q, $id) => $q->where('warehouse_id', $id))
-            ->when($request->account_code, fn ($q, $code) => $q->where('account_code', $code))
+        $query->when($request->account_code, fn ($q, $code) => $q->where('account_code', $code))
             ->when($request->description, fn ($q, $desc) => $q->where('description', $desc));
 
         $items = $query->orderBy('category')->orderBy('description')->get();

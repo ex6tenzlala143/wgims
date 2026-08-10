@@ -50,16 +50,14 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             if ($intended) {
-                $user         = Auth::user();
-                $intendedPath = parse_url($intended, PHP_URL_PATH) ?? '';
-                $adminPaths   = ['/users', '/warehouses/create', '/warehouses/', '/transfers/'];
+                $user = Auth::user();
 
-                $isAdminRoute = collect($adminPaths)->contains(
-                    fn ($prefix) => str_starts_with($intendedPath, $prefix)
-                );
-
-                // Non-admins must not be bounced into admin-only routes.
-                if ($isAdminRoute && ! $user->isAdmin()) {
+                // Routes are already middleware-protected, so any 403 will be caught
+                // if the user tries to access something they can't. The only thing to
+                // prevent here is bouncing a non-admin back into an admin-only URL
+                // they happened to visit before their session expired, which would
+                // just give them an immediate 403. Send them to the dashboard instead.
+                if (! $user->hasAdminAccess()) {
                     return redirect($dashboard);
                 }
 

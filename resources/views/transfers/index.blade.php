@@ -124,7 +124,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted)">
+                    <td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted)">
                         <i class="fas fa-exchange-alt" style="font-size:32px;margin-bottom:8px;display:block;opacity:0.3"></i>
                         No transfers found.
                     </td>

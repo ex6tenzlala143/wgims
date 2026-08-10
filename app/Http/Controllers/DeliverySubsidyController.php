@@ -27,7 +27,20 @@ class DeliverySubsidyController extends Controller
         $user = Auth::user();
         $query = DeliverySubsidy::with(['supplier', 'warehouse', 'creator']);
 
-        $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
+        // For non-admins: show subsidies for their warehouses OR unassigned ones (warehouse_id IS NULL)
+        if (! $user->hasAdminAccess()) {
+            $ids = $this->getUserWarehouseIds($user) ?? [];
+            if (empty($ids)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($ids) {
+                    $q->whereIn('warehouse_id', $ids)
+                      ->orWhereNull('warehouse_id');
+                });
+            }
+        } elseif ($request->warehouse_id) {
+            $query->where('warehouse_id', (int) $request->warehouse_id);
+        }
 
         if ($request->status) {
             $query->where('status', $request->status);
@@ -66,15 +79,14 @@ class DeliverySubsidyController extends Controller
         $suppliers = Supplier::where('is_active', true)->orderBy('name')->get();
 
         if ($user->hasAdminAccess()) {
-            $warehouses = Warehouse::where('is_active', true)->get();
-            $items = Item::where('is_active', true)->with('warehouse')->orderBy('description')->get();
+            $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
         } else {
             $warehouseIds = $this->getUserWarehouseIds($user);
-            $warehouses = Warehouse::whereIn('id', $warehouseIds)->where('is_active', true)->get();
-            $items = Item::whereIn('warehouse_id', $warehouseIds)->where('is_active', true)->orderBy('description')->get();
+            $warehouses   = Warehouse::whereIn('id', $warehouseIds)->where('is_active', true)->orderBy('name')->get();
         }
 
-        return view('delivery_subsidies.create', compact('suppliers', 'warehouses', 'items'));
+        // $items is no longer needed on the create form (items are added during shipment recording)
+        return view('delivery_subsidies.create', compact('suppliers', 'warehouses'));
     }
 
     public function store(Request $request)
@@ -82,102 +94,43 @@ class DeliverySubsidyController extends Controller
         $request->validate([
             'ris_number'         => 'required|string|max:255',
             'supplier_id'        => 'required|exists:suppliers,id',
-            'warehouse_id'       => 'required|exists:warehouses,id',
             'date'               => 'required|date',
-            'items'              => 'required|array|min:1',
-            'items.*.description'    => 'required|string|max:255',
-            'items.*.unit'           => 'required|string',
-            'items.*.category' => 'required|string|in:'.implode(',', array_keys(Item::getCategories())),
-            'items.*.quantity'       => 'required|numeric|min:0.01',
-            'items.*.unit_cost'      => 'required|numeric|min:0',
-            'items.*.expiration_date'=> 'nullable|date',
+            'quantity_requested' => 'required|numeric|min:0.01',
+            'date_of_delivery'   => 'nullable|date',
+            'date_of_expiration' => 'nullable|date',
+            'remarks'            => 'nullable|string|max:1000',
         ]);
 
         $user = Auth::user();
-        if ($user->isCenterUser() && !$this->userCanAccessWarehouse($user, (int) $request->warehouse_id)) {
-            abort(403);
-        }
-
-        // Validate items belong to the correct warehouse
-        $warehouseId = (int) $request->warehouse_id;
-        foreach ($request->items as $line) {
-            $item = Item::find($line['item_id'] ?? null);
-            if ($item && $item->warehouse_id !== $warehouseId && ! $user->isAdmin()) {
-                abort(403, 'Item does not belong to your warehouse.');
-            }
-        }
 
         DB::transaction(function () use ($request, $user) {
-            $total = collect($request->items)->sum(fn ($l) => $l['quantity'] * $l['unit_cost']);
-
-            // Derive quantity_requested from the sum of all line item quantities
-            $quantityRequested = collect($request->items)->sum(fn ($l) => (float) $l['quantity']);
-
             // Use ris_number as dr_number; append suffix only if duplicate
             $drNumber = $request->ris_number;
-            $suffix = 0;
+            $suffix   = 0;
             while (DeliverySubsidy::where('dr_number', $drNumber)->exists() && $suffix < 100) {
                 $suffix++;
                 $drNumber = $request->ris_number . '-' . $suffix;
             }
 
             $po = DeliverySubsidy::create([
-                'dr_number' => $drNumber,
-                'supplier_id' => $request->supplier_id,
-                'warehouse_id' => $request->warehouse_id,
-                'created_by' => $user->id,
-                'date' => $request->date,
-                'ris_number' => $request->ris_number,
-                'place_of_delivery' => $request->place_of_delivery,
-                'total_amount' => $total,
-                'quantity_requested' => $quantityRequested,
-                'remarks' => $request->remarks,
+                'dr_number'          => $drNumber,
+                'supplier_id'        => $request->supplier_id,
+                'warehouse_id'       => null,   // assigned on first shipment
+                'created_by'         => $user->id,
+                'date'               => $request->date,
+                'ris_number'         => $request->ris_number,
+                'place_of_delivery'  => null,
+                'date_of_delivery'   => $request->date_of_delivery,
+                'date_of_expiration' => $request->date_of_expiration,
+                'total_amount'       => 0,
+                'quantity_requested' => (float) $request->quantity_requested,
+                'remarks'            => $request->remarks,
+                'status'             => 'pending',
             ]);
 
-            foreach ($request->items as $line) {
-                // Resolve item_id: use provided id if valid, otherwise find/create by description
-                $itemId = null;
-                if (! empty($line['item_id'])) {
-                    $itemId = (int) $line['item_id'];
-                } else {
-                    // Find existing item in this warehouse matching description+unit+category
-                    $existingItem = Item::where('warehouse_id', $po->warehouse_id)
-                        ->where('description', $line['description'])
-                        ->where('unit', $line['unit'])
-                        ->where('category', $line['category'])
-                        ->first();
-
-                    if ($existingItem) {
-                        $itemId = $existingItem->id;
-                    } else {
-                        // Create a placeholder item (no stock number yet — assigned on delivery)
-                        $newItem = Item::create([
-                            'description' => $line['description'],
-                            'unit' => $line['unit'],
-                            'category' => $line['category'],
-                            'account_code' => Item::getAccountCodeForCategory($line['category']),
-                            'warehouse_id' => $po->warehouse_id,
-                            'unit_cost' => $line['unit_cost'],
-                            'quantity' => 0,
-                            'expiration_date' => $line['expiration_date'] ?? null,
-                            'is_active' => true,
-                        ]);
-                        $itemId = $newItem->id;
-                    }
-                }
-
-                DeliverySubsidyItem::create([
-                    'delivery_subsidy_id' => $po->id,
-                    'item_id' => $itemId,
-                    'quantity' => $line['quantity'],
-                    'unit_cost' => $line['unit_cost'],
-                    'amount' => $line['quantity'] * $line['unit_cost'],
-                ]);
-            }
-
-            // Bulk-insert notifications for all admins (single query instead of N inserts)
-            $adminIds = User::where('role', 'admin')->pluck('id');
-            $now = now();
+            // Notify all admins
+            $adminIds  = User::where('role', 'admin')->pluck('id');
+            $now       = now();
             $notifRows = $adminIds->map(fn ($id) => [
                 'user_id'    => $id,
                 'title'      => 'New Delivery/Subsidy',
@@ -194,13 +147,14 @@ class DeliverySubsidyController extends Controller
             }
         });
 
-        return redirect()->route('delivery_subsidies.index')->with('success', 'Delivery / Subsidy created successfully.');
+        return redirect()->route('delivery_subsidies.index')
+            ->with('success', 'Delivery / Subsidy created successfully.');
     }
 
     public function show(DeliverySubsidy $deliverySubsidy)
     {
         $user = Auth::user();
-        if (! $this->userCanAccessWarehouse($user, $deliverySubsidy->warehouse_id)) {
+        if ($deliverySubsidy->warehouse_id && ! $this->userCanAccessWarehouse($user, $deliverySubsidy->warehouse_id)) {
             abort(403);
         }
         $deliverySubsidy->load(['supplier', 'warehouse', 'creator', 'items.item', 'deliveries.items.item', 'deliveries.receiver']);
@@ -235,7 +189,7 @@ class DeliverySubsidyController extends Controller
         $request->validate([
             'ris_number'         => 'required|string|max:255',
             'supplier_id'        => 'required|exists:suppliers,id',
-            'warehouse_id'       => 'required|exists:warehouses,id',
+            'warehouse_id'       => 'nullable|exists:warehouses,id',
             'date'               => 'required|date',
             'status'             => 'required|string|in:pending,partial,fully_delivered,cancelled',
             'quantity_requested' => 'required|numeric|min:0.01',
@@ -436,7 +390,7 @@ class DeliverySubsidyController extends Controller
     public function delivery(DeliverySubsidy $deliverySubsidy)
     {
         $user = Auth::user();
-        if (! $this->userCanAccessWarehouse($user, $deliverySubsidy->warehouse_id)) {
+        if ($deliverySubsidy->warehouse_id && ! $this->userCanAccessWarehouse($user, $deliverySubsidy->warehouse_id)) {
             abort(403);
         }
         $deliverySubsidy->load(['items.item', 'supplier', 'warehouse']);
@@ -447,7 +401,7 @@ class DeliverySubsidyController extends Controller
     public function storeDelivery(Request $request, DeliverySubsidy $deliverySubsidy)
     {
         $user = Auth::user();
-        if (! $this->userCanAccessWarehouse($user, $deliverySubsidy->warehouse_id)) {
+        if ($deliverySubsidy->warehouse_id && ! $this->userCanAccessWarehouse($user, $deliverySubsidy->warehouse_id)) {
             abort(403);
         }
 
@@ -526,7 +480,7 @@ class DeliverySubsidyController extends Controller
                 }
 
                 $item = Item::findOrCreateByUnitCost(
-                    $deliverySubsidy->warehouse_id,
+                    $baseItem->warehouse_id,  // use the item's actual warehouse, not header warehouse
                     $baseItem->description,
                     $baseItem->unit,
                     $baseItem->category,
@@ -571,11 +525,22 @@ class DeliverySubsidyController extends Controller
                     'balance_qty'         => $newQty,
                     'balance_unit_cost'   => $actualUnitCost,
                     'balance_total_cost'  => $newQty * $actualUnitCost,
-                    'from_to'             => $deliverySubsidy->supplier->name ?? '',
+                    'from_to'             => $deliverySubsidy->supplier?->name ?? '',
                 ]);
             }
 
             // ── Recalculate PO status ──────────────────────────────────────
+            // Auto-assign warehouse_id from the first delivered item's warehouse
+            // if the subsidy was created without one (new flow).
+            if (! $deliverySubsidy->warehouse_id) {
+                $firstItem = $dsItemsMap->first()?->item;
+                if ($firstItem && $firstItem->warehouse_id) {
+                    DeliverySubsidy::where('id', $deliverySubsidy->id)
+                        ->update(['warehouse_id' => $firstItem->warehouse_id]);
+                    $deliverySubsidy->warehouse_id = $firstItem->warehouse_id;
+                }
+            }
+
             $deliverySubsidy->updateDeliveryStatus();
 
             $adminIds  = User::where('role', 'admin')->pluck('id');

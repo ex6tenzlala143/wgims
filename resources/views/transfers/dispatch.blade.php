@@ -61,7 +61,12 @@
 <form action="{{ route('transfers.process_dispatch', $transfer) }}" method="POST" id="dispatch-form">
 @csrf
 
-<input type="hidden" name="dispatch_date" value="{{ date('Y-m-d') }}">
+{{-- Dispatch date — visible so user can set the actual date --}}
+<div style="max-width:260px;margin-bottom:16px">
+    <label class="form-label">Dispatch Date <span style="color:red">*</span></label>
+    <input type="date" name="dispatch_date" class="form-control"
+           value="{{ date('Y-m-d') }}" required>
+</div>
 
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">
 

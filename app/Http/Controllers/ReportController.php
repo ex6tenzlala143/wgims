@@ -88,12 +88,12 @@ class ReportController extends Controller
             ?? ($user->isCenterUser() ? $user->warehouse_id : null);
 
         ReportSnapshot::create([
-            'report_type' => 'rpci',
-            'warehouse_id' => $snapshotWarehouseId,
-            'period_month' => $request->period_month,
+            'report_type'   => 'rpci',
+            'warehouse_id'  => $snapshotWarehouseId,
+            'period_month'  => $request->period_month,
             'serial_number' => $request->serial_number,
-            'data' => json_encode($items),
-            'created_by' => $user->id,
+            'data'          => $items->toArray(),
+            'created_by'    => $user->id,
         ]);
 
         return back()->with('success', 'RPCI snapshot saved.');
@@ -216,7 +216,7 @@ class ReportController extends Controller
             $query->whereDate('date_approved', '<=', $request->date_to);
         }
 
-        $data = $query->get()->flatMap(fn ($r) => $r->items->map(fn ($ri) => [
+        $data = $query->with(['warehouse', 'items.item'])->get()->flatMap(fn ($r) => $r->items->map(fn ($ri) => [
             'ris_number' => $r->ris_number,
             'warehouse_code' => $r->warehouse->code ?? '',
             'stock_number' => $ri->item->stock_number ?? '',
@@ -228,12 +228,12 @@ class ReportController extends Controller
         ]));
 
         ReportSnapshot::create([
-            'report_type' => 'rsmi',
-            'warehouse_id' => $request->warehouse_id ?? ($user->isCenterUser() ? $user->warehouse_id : null),
-            'period_month' => $request->period_month,
+            'report_type'   => 'rsmi',
+            'warehouse_id'  => $request->warehouse_id ?? ($user->isCenterUser() ? $user->warehouse_id : null),
+            'period_month'  => $request->period_month,
             'serial_number' => $request->serial_number,
-            'data' => json_encode($data),
-            'created_by' => $user->id,
+            'data'          => $data->values()->toArray(),
+            'created_by'    => $user->id,
         ]);
 
         return back()->with('success', 'RSMI snapshot saved.');

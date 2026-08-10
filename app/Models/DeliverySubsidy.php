@@ -17,6 +17,7 @@ class DeliverySubsidy extends Model
         'date_of_delivery'   => 'date',
         'total_amount'       => 'float',
         'quantity_requested' => 'float',
+        'warehouse_id'       => 'integer',
     ];
 
     public function supplier()

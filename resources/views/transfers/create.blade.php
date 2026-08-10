@@ -143,7 +143,9 @@ function loadSourceItems() {
     const warehouseId = document.getElementById('from_warehouse_id')?.value;
     if (!warehouseId) { sourceItems = []; return; }
 
-    fetch(`{{ route('transfers.items_for_warehouse') }}?warehouse_id=${warehouseId}`)
+    fetch(`{{ route('transfers.items_for_warehouse') }}?warehouse_id=${warehouseId}`, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
         .then(r => r.json())
         .then(data => {
             sourceItems = data;

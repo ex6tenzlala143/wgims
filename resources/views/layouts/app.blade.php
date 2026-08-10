@@ -361,13 +361,13 @@
             <div class="topbar-title">@yield('page-title', 'Dashboard')</div>
             <div class="topbar-actions">
                 @php
-                    // Use eager-loaded warehouses from the user relation if already loaded,
-                    // otherwise fall back to a single targeted query.
-                    $topbarWarehouses = auth()->user()->relationLoaded('warehouses')
-                        ? auth()->user()->warehouses->pluck('name')
-                        : auth()->user()->warehouses()->pluck('name');
-                    if ($topbarWarehouses->isEmpty() && auth()->user()->warehouse) {
-                        $topbarWarehouses = collect([auth()->user()->warehouse->name]);
+                    // Load warehouses once — avoids a DB query on every page render.
+                    // loadMissing() is a no-op if the relation is already eager-loaded.
+                    $authedUser = auth()->user();
+                    $authedUser->loadMissing('warehouse', 'warehouses');
+                    $topbarWarehouses = $authedUser->warehouses->pluck('name');
+                    if ($topbarWarehouses->isEmpty() && $authedUser->warehouse) {
+                        $topbarWarehouses = collect([$authedUser->warehouse->name]);
                     }
                 @endphp
                 @if($topbarWarehouses->isNotEmpty())

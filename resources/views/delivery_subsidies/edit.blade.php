@@ -48,10 +48,13 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Warehouse</label>
-                        <select name="warehouse_id" class="form-control" required>
+                        <label class="form-label">Warehouse
+                            <span style="font-size:11px;font-weight:normal;color:var(--text-muted)">— assigned from first shipment if blank</span>
+                        </label>
+                        <select name="warehouse_id" class="form-control">
+                            <option value="">— Not yet assigned —</option>
                             @foreach($warehouses as $c)
-                            <option value="{{ $c->id }}" {{ old('warehouse_id', $deliverySubsidy->warehouse_id)==$c->id?'selected':'' }}>{{ $c->name }}</option>
+                            <option value="{{ $c->id }}" {{ old('warehouse_id', $deliverySubsidy->warehouse_id) == $c->id ? 'selected' : '' }}>{{ $c->name }}</option>
                             @endforeach
                         </select>
                     </div>
