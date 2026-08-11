@@ -120,9 +120,9 @@
                 <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
                     {{ $ris->date_approved?->format('M d, Y') ?? '—' }}
                     &nbsp;·&nbsp;
-                    <span class="badge badge-secondary">{{ $ris->warehouse->code ?? '—' }}</span>
+                    <span class="badge badge-secondary">{{ $ris->warehouse_names ?? ($ris->warehouse->code ?? '—') }}</span>
                     &nbsp;·&nbsp;
-                    {{ $ris->warehouse->name ?? '—' }}
+                    {{ $ris->warehouse_names ?? ($ris->warehouse->name ?? '—') }}
                     @if($ris->office)
                     &nbsp;·&nbsp; Office: {{ $ris->office }}
                     @endif
@@ -173,15 +173,16 @@
             <tbody>
                 @foreach($items as $ri)
                 @php
-                    $amount      = $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
+                    $unitCost   = $ri->unit_cost ?? $ri->item?->unit_cost ?? 0;
+                    $amount     = $ri->quantity_issued * $unitCost;
                     $outstanding = max(0, $ri->quantity_requested - $ri->quantity_issued);
                 @endphp
                 <tr>
                     <td>
-                        <code style="font-size:11px">{{ $ri->item->stock_number ?? '—' }}</code>
+                        <code style="font-size:11px">{{ $ri->item?->stock_number ?? '—' }}</code>
                     </td>
-                    <td>{{ $ri->item->description ?? '—' }}</td>
-                    <td>{{ $ri->item->unit ?? '—' }}</td>
+                    <td>{{ $ri->description ?? $ri->item?->description ?? '—' }}</td>
+                    <td>{{ $ri->unit ?? $ri->item?->unit ?? '—' }}</td>
                     <td style="text-align:right">{{ number_format($ri->quantity_requested, 2) }}</td>
                     <td style="text-align:right;color:var(--success);font-weight:600">
                         {{ number_format($ri->quantity_issued, 2) }}
@@ -195,17 +196,17 @@
                             </span>
                         @endif
                     </td>
-                    <td style="text-align:right">{{ number_format($ri->item->unit_cost ?? 0, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($unitCost, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
-                        @if(($ri->item->engas_unit_cost ?? null) !== null)
+                        @if(($ri->item?->engas_unit_cost ?? null) !== null)
                             <span style="color:var(--primary);font-weight:600">{{ number_format($ri->item->engas_unit_cost, 2) }}</span>
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td style="text-align:right">
-                        @if(($ri->item->engas_unit_cost ?? null) !== null)
+                        @if(($ri->item?->engas_unit_cost ?? null) !== null)
                             <span style="color:var(--primary);font-weight:600">{{ number_format($ri->quantity_issued * $ri->item->engas_unit_cost, 2) }}</span>
                         @else
                             <span style="color:var(--text-muted)">—</span>

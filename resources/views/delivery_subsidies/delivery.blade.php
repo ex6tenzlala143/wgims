@@ -10,6 +10,7 @@
     $totalRemaining = max(0, $totalRequested - $totalDelivered);
     $pct            = $totalRequested > 0 ? min(100, round($totalDelivered / $totalRequested * 100)) : 0;
     $deliveryDate   = old('delivery_date', date('Y-m-d'));
+    $whList         = $warehouses->map(fn ($w) => ['id' => $w->id, 'name' => $w->name])->values();
 @endphp
 
 <div class="page-header">
@@ -53,6 +54,11 @@
     If the same item arrives in different lots with different expiry dates or unit costs,
     click <strong>+ Add Batch</strong> on that item's row to add a second (or third) batch entry.
     Each batch gets its own stock card.
+    <br>
+    <i class="fas fa-warehouse" style="margin-top:6px"></i>
+    For each batch, choose the <strong>destination warehouse</strong>, the <strong>unit cost</strong>,
+    and its own <strong>DR No.</strong>. Stock is recorded in the selected warehouse's inventory
+    and stock card, and each item keeps its own Delivery Receipt number.
 </div>
 
 <form action="{{ route('delivery_subsidies.store_delivery', $deliverySubsidy->id) }}" method="POST" id="delivery-form">
@@ -74,17 +80,7 @@
                 </span>
             </div>
             <div class="card-body">
-                <div class="form-row cols-3">
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label">DR No. <span style="color:red">*</span>
-                            <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— this shipment's receipt</span>
-                        </label>
-                        <input type="text" name="dr_number" class="form-control"
-                               value="{{ old('dr_number') }}" placeholder="e.g. DR-2026-002" required>
-                        @error('dr_number')
-                            <div style="color:var(--danger);font-size:12px;margin-top:3px">{{ $message }}</div>
-                        @enderror
-                    </div>
+                <div class="form-row cols-2">
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label">Batch No. <span style="font-size:11px;color:var(--text-muted);font-weight:normal">optional</span></label>
                         <input type="text" name="batch_number" class="form-control"
@@ -102,34 +98,45 @@
         {{-- Per-item sections --}}
         @foreach($deliverySubsidy->items as $poiIdx => $poi)
         @php
+            // Per-item remaining: this line is done when ITS OWN requested
+            // quantity has been fully dispatched — independent of other lines.
             $lineRemaining = max(0, $poi->quantity - $poi->qty_delivered);
-            $isDone        = $lineRemaining <= 0 && $totalRemaining <= 0;
+            $isDone        = $lineRemaining <= 0;
         @endphp
 
-        <div class="card" style="margin-bottom:16px" id="item-section-{{ $poiIdx }}">
+        <div class="card" style="margin-bottom:16px" id="item-section-{{ $poiIdx }}" data-remaining="{{ $lineRemaining }}">
             {{-- Item header --}}
             <div class="card-header" style="background:{{ $isDone ? '#f7fafc' : '#f0f9ff' }}">
                 <div style="display:flex;align-items:center;gap:10px">
                     <div>
-                        <strong style="font-size:14px">{{ $poi->item->description ?? '—' }}</strong>
-                        <span style="font-size:12px;color:var(--text-muted);margin-left:6px">{{ $poi->item->unit ?? '' }}</span>
+                        <strong style="font-size:14px">{{ $poi->item->description ?? $poi->description ?? '—' }}</strong>
+                        <span style="font-size:12px;color:var(--text-muted);margin-left:6px">{{ $poi->item->unit ?? $poi->unit ?? '' }}</span>
+                        @if($poi->warehouse)
+                            <span class="badge badge-info" style="margin-left:8px;font-size:10px" title="Assigned warehouse">
+                                <i class="fas fa-warehouse"></i> {{ $poi->warehouse->name }}
+                            </span>
+                        @endif
                         @if($isDone)
-                            <span class="badge badge-success" style="margin-left:6px;font-size:10px">
-                                <i class="fas fa-check"></i> Complete
+                            <span class="badge badge-success" style="margin-left:6px;font-size:10px" title="Requested quantity has already been fully dispatched">
+                                <i class="fas fa-check"></i> Fully Dispatched
+                            </span>
+                        @else
+                            <span class="badge badge-warning" style="margin-left:6px;font-size:10px" title="Still dispatchable">
+                                <i class="fas fa-hourglass-half"></i> Pending
                             </span>
                         @endif
                     </div>
                     <div style="margin-left:auto;display:flex;gap:16px;font-size:12px;text-align:right">
                         <div>
-                            <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Ordered</div>
+                            <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Requested</div>
                             <strong>{{ number_format($poi->quantity, 2) }}</strong>
                         </div>
                         <div>
-                            <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Delivered</div>
+                            <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Dispatched</div>
                             <strong style="color:var(--success)">{{ number_format($poi->qty_delivered, 2) }}</strong>
                         </div>
                         <div>
-                            <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Still Needed</div>
+                            <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Remaining</div>
                             <strong style="color:{{ $lineRemaining > 0 ? 'var(--warning)' : 'var(--success)' }}">
                                 {{ $lineRemaining > 0 ? number_format($lineRemaining, 2) : '—' }}
                             </strong>
@@ -141,9 +148,29 @@
             {{-- Batch rows container --}}
             <div id="batches-{{ $poiIdx }}">
                 {{-- First (default) batch row --}}
-                <div class="batch-row" data-poi="{{ $poiIdx }}" style="padding:14px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
-                    {{-- Hidden po_item_id for this batch --}}
-                    <input type="hidden" name="items[{{ $poiIdx }}_0][ds_item_id]" value="{{ $poi->id }}">
+                <div class="batch-row" data-poi="{{ $poiIdx }}" style="padding:14px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto;gap:12px;align-items:end">
+                    {{-- Hidden po_item_id for this batch. Disabled for fully
+                         delivered items so the row is excluded from the
+                         submission payload entirely. --}}
+                    <input type="hidden" name="items[{{ $poiIdx }}_0][ds_item_id]" value="{{ $poi->id }}"
+                           {{ $isDone ? 'disabled' : '' }}>
+
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:12px">
+                            Warehouse <span style="color:red">*</span>
+                        </label>
+                        <select name="items[{{ $poiIdx }}_0][warehouse_id]"
+                                class="form-control batch-wh"
+                                {{ $isDone ? 'disabled' : 'required' }}>
+                            <option value="">— Select warehouse —</option>
+                            @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}"
+                                {{ (int) old("items.{$poiIdx}_0.warehouse_id", $poi->warehouse_id ?: ($poi->item?->warehouse_id ?? 0)) === (int) $wh->id ? 'selected' : '' }}>
+                                {{ $wh->name }}
+                            </option>
+                            @endforeach
+                        </select>
+                    </div>
 
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label" style="font-size:12px">
@@ -153,7 +180,7 @@
                         <input type="date"
                                name="items[{{ $poiIdx }}_0][expiration_date]"
                                class="form-control"
-                               value="{{ old("items.{$poiIdx}_0.expiration_date", $poi->item->expiration_date ? $poi->item->expiration_date->format('Y-m-d') : '') }}"
+                               value="{{ old("items.{$poiIdx}_0.expiration_date", $poi->item?->expiration_date ? $poi->item->expiration_date->format('Y-m-d') : '') }}"
                                {{ $isDone ? 'disabled' : '' }}>
                     </div>
 
@@ -172,20 +199,60 @@
 
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label" style="font-size:12px">
+                            ENGAS Unit Cost (₱) <span style="color:red">*</span>
+                        </label>
+                        <input type="number"
+                               name="items[{{ $poiIdx }}_0][engas_unit_cost]"
+                               class="form-control batch-engas"
+                               min="0" step="0.01"
+                               value="{{ old("items.{$poiIdx}_0.engas_unit_cost", $poi->item?->engas_unit_cost ? number_format($poi->item->engas_unit_cost, 2, '.', '') : '') }}"
+                               placeholder="0.00"
+                               {{ $isDone ? 'disabled' : 'required' }}
+                               oninput="recalcBatch(this)">
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                            ENGAS Total: <span class="engas-total" style="font-weight:700;color:var(--primary)">₱0.00</span>
+                        </div>
+                        @error("items.{$poiIdx}_0.engas_unit_cost")
+                            <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:12px">
                             Quantity <span style="color:red">*</span>
                             @if(!$isDone)
                                 <span style="font-size:10px;color:var(--text-muted);font-weight:normal">max {{ number_format($lineRemaining, 2) }}</span>
+                            @else
+                                <span style="font-size:10px;color:var(--success);font-weight:normal">no more dispatchable</span>
                             @endif
                         </label>
                         <input type="number"
                                name="items[{{ $poiIdx }}_0][quantity_delivered]"
                                class="form-control item-qty"
                                min="0" step="0.01"
+                               max="{{ $lineRemaining }}"
+                               data-max="{{ $lineRemaining }}"
                                value="{{ old("items.{$poiIdx}_0.quantity_delivered", 0) }}"
-                               placeholder="0"
+                               placeholder="{{ $isDone ? 'Fully dispatched' : '0' }}"
                                {{ $isDone ? 'disabled' : '' }}
-                               oninput="recalcTotal()"
-                               style="{{ $isDone ? '' : 'border:2px solid var(--primary);font-weight:700' }}">
+                               oninput="recalcBatch(this)"
+                               style="{{ $isDone ? 'background:#f7fafc;opacity:.6' : 'border:2px solid var(--primary);font-weight:700' }}">
+                        @error("items.{$poiIdx}_0.quantity_delivered")
+                            <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:12px">
+                            DR No. <span style="color:red">*</span>
+                        </label>
+                        <input type="text"
+                               name="items[{{ $poiIdx }}_0][dr_number]"
+                               class="form-control batch-dr"
+                               value="{{ old("items.{$poiIdx}_0.dr_number") }}"
+                               placeholder="e.g. DR-2026-002"
+                               {{ $isDone ? 'disabled' : 'required' }}
+                               maxlength="100">
                     </div>
 
                     {{-- Remove button (hidden on first row, shown when cloned) --}}
@@ -202,13 +269,20 @@
             @if(!$isDone)
             <div style="padding:10px 20px;background:#f7fafc">
                 <button type="button" class="btn btn-sm btn-outline"
-                        onclick="addBatch({{ $poiIdx }}, {{ $poi->id }}, '{{ $poi->item->expiration_date ? $poi->item->expiration_date->format('Y-m-d') : '' }}', {{ $poi->unit_cost ?? 0 }})">
+                        onclick="addBatch({{ $poiIdx }}, {{ $poi->id }}, '{{ $poi->item?->expiration_date ? $poi->item->expiration_date->format('Y-m-d') : '' }}', {{ $poi->unit_cost ?? 0 }}, {{ $poi->warehouse_id ?: ($poi->item?->warehouse_id ?? 0) }}, {{ $lineRemaining }}, {{ $poi->item?->engas_unit_cost ?? 0 }})">
                     <i class="fas fa-plus" style="color:var(--primary)"></i>
                     Add Batch
                     <span style="font-size:11px;color:var(--text-muted);margin-left:4px">— different expiry or unit cost</span>
                 </button>
             </div>
             @endif
+
+            {{-- Per-item batch overflow warning (filled in by JS) --}}
+            <div class="batch-overflow" data-poi="{{ $poiIdx }}" style="display:none;padding:10px 20px;background:#fff5f5;color:var(--danger);font-size:12px;border-top:1px solid var(--border)">
+                <i class="fas fa-exclamation-circle"></i>
+                The combined quantity across all batches for this item exceeds its remaining quantity of
+                <strong>{{ number_format($lineRemaining, 2) }}</strong>.
+            </div>
         </div>
         @endforeach
     </div>
@@ -281,6 +355,18 @@
 const _alreadyDelivered = {{ $totalDelivered }};
 const _totalRequested   = {{ $totalRequested }};
 
+// Warehouses available to this dispatcher
+const warehouseList = {!! json_encode($whList) !!};
+
+function warehouseOptionsHtml(selectedId) {
+    let html = '<option value="">— Select warehouse —</option>';
+    warehouseList.forEach(function(w) {
+        const sel = String(w.id) === String(selectedId) ? ' selected' : '';
+        html += '<option value="' + w.id + '"' + sel + '>' + w.name.replace(/</g, '&lt;') + '</option>';
+    });
+    return html;
+}
+
 // Track how many batch rows exist per PO item (starts at 1 — the default row)
 const batchCounts = {};
 
@@ -297,9 +383,44 @@ function recalcTotal() {
     const remaining = Math.max(0, _totalRequested - cumul);
     const epsilon   = 0.0001;
 
+    // Per-row enforcement: a single batch cannot exceed its line's remaining
+    // quantity (drives the browser's native validation message on submit).
+    document.querySelectorAll('.item-qty').forEach(function(el) {
+        const max = parseFloat(el.dataset.max) || 0;
+        const val = parseFloat(el.value) || 0;
+        if (max > 0 && val > max + epsilon) {
+            el.setCustomValidity('Cannot exceed the remaining quantity of ' + max + ' for this item.');
+        } else {
+            el.setCustomValidity('');
+        }
+    });
+
+    // Per-item enforcement: all batches for one subsidy line, combined, must
+    // stay within that line's remaining quantity.
+    document.querySelectorAll('.batch-overflow').forEach(function(msg) {
+        const section = document.getElementById('item-section-' + msg.dataset.poi);
+        let itemSum = 0;
+        if (section) {
+            section.querySelectorAll('.item-qty').forEach(function(el) {
+                itemSum += parseFloat(el.value) || 0;
+            });
+        }
+        const remainingLine = parseFloat(section ? section.dataset.remaining : 0) || 0;
+        msg.style.display   = (itemSum > remainingLine + epsilon) ? 'block' : 'none';
+    });
+
     document.getElementById('sidebar-cumul').textContent  = cumul.toFixed(2);
     document.getElementById('sidebar-remain').textContent = remaining.toFixed(2);
     document.getElementById('sidebar-remain').style.color = remaining > 0 ? 'var(--warning)' : 'var(--success)';
+
+    // Refresh per-row ENGAS totals (qty x ENGAS unit cost)
+    document.querySelectorAll('.batch-row').forEach(function(row) {
+        const qty   = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const engas = parseFloat(row.querySelector('.batch-engas').value) || 0;
+        const span  = row.querySelector('.engas-total');
+        if (span) span.textContent = '₱' + (qty * engas)
+            .toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
 
     // Set condition_status based on fulfilment: good if complete, partial otherwise
     const conditionEl = document.getElementById('condition-status-hidden');
@@ -324,14 +445,32 @@ function recalcTotal() {
 }
 
 /**
+ * Recompute the ENGAS total (qty x ENGAS unit cost) for one batch row,
+ * then refresh the grand totals.
+ */
+function recalcBatch(el) {
+    const row = el.closest('.batch-row');
+    if (row) {
+        const qty   = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const engas = parseFloat(row.querySelector('.batch-engas').value) || 0;
+        const span  = row.querySelector('.engas-total');
+        if (span) span.textContent = '₱' + (qty * engas)
+            .toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    recalcTotal();
+}
+
+/**
  * Add a new batch row for a given PO item.
  * @param {number} poiIdx     - index of the PO item in the Blade loop
  * @param {number} poItemId   - delivery_subsidy_items.id
  * @param {string} defaultExpiry - pre-fill expiry from item master
  * @param {number} defaultCost   - pre-fill unit cost from PO line
- * @param {number|null} expiryYear
+ * @param {number} defaultWh     - pre-fill warehouse
+ * @param {number} maxQty        - remaining dispatchable quantity for this line
+ * @param {number} defaultEngas  - pre-fill ENGAS unit cost from item master
  */
-function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost) {
+function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQty, defaultEngas) {
     if (!batchCounts[poiIdx]) batchCounts[poiIdx] = 1;
     const batchIdx = batchCounts[poiIdx]++;
     const key      = poiIdx + '_' + batchIdx;
@@ -341,10 +480,22 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost) {
     const div = document.createElement('div');
     div.className = 'batch-row';
     div.dataset.poi = poiIdx;
-    div.style.cssText = 'padding:14px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;background:#fffbeb';
+    div.style.cssText = 'padding:14px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto;gap:12px;align-items:end;background:#fffbeb';
 
     div.innerHTML = `
         <input type="hidden" name="items[${key}][ds_item_id]" value="${poItemId}">
+
+        <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:12px">
+                Warehouse <span style="color:red">*</span>
+            </label>
+            <select name="items[${key}][warehouse_id]"
+                    class="form-control batch-wh"
+                    required
+                    style="border-color:#f6ad55">
+                ${warehouseOptionsHtml(defaultWh || '')}
+            </select>
+        </div>
 
         <div class="form-group" style="margin-bottom:0">
             <label class="form-label" style="font-size:12px">
@@ -374,16 +525,50 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost) {
 
         <div class="form-group" style="margin-bottom:0">
             <label class="form-label" style="font-size:12px">
+                ENGAS Unit Cost (₱) <span style="color:red">*</span>
+            </label>
+            <input type="number"
+                   name="items[${key}][engas_unit_cost]"
+                   class="form-control batch-engas"
+                   min="0" step="0.01"
+                   value="${defaultEngas > 0 ? defaultEngas.toFixed(2) : ''}"
+                   placeholder="0.00"
+                   required
+                   oninput="recalcBatch(this)"
+                   style="border-color:#f6ad55">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                ENGAS Total: <span class="engas-total" style="font-weight:700;color:var(--primary)">₱0.00</span>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:12px">
                 Quantity <span style="color:red">*</span>
+                <span style="font-size:10px;color:var(--text-muted);font-weight:normal">max ${maxQty.toFixed(2)}</span>
             </label>
             <input type="number"
                    name="items[${key}][quantity_delivered]"
                    class="form-control item-qty"
                    min="0" step="0.01"
+                   max="${maxQty}"
+                   data-max="${maxQty}"
                    value="0"
                    placeholder="0"
-                   oninput="recalcTotal()"
+                   oninput="recalcBatch(this)"
                    style="border:2px solid #f6ad55;font-weight:700">
+        </div>
+
+        <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:12px">
+                DR No. <span style="color:red">*</span>
+            </label>
+            <input type="text"
+                   name="items[${key}][dr_number]"
+                   class="form-control batch-dr"
+                   maxlength="100"
+                   placeholder="e.g. DR-2026-002"
+                   required
+                   style="border-color:#f6ad55">
         </div>
 
         <div style="padding-bottom:2px">

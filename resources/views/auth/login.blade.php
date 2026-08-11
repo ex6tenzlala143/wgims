@@ -182,7 +182,7 @@
 
         {{-- Left Panel: Branding & Atmosphere --}}
         <div class="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden animated-gradient select-none"
-             style="background: linear-gradient(135deg, #0b0f1a 0%, #111629 25%, #1a1040 50%, #0f172a 75%, #0b0f1a 100%);">
+             style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 25%, #f5f3ff 50%, #e0e7ff 75%, #eef2ff 100%);">
 
             {{-- Decorative orbs --}}
             <div class="deco-orb w-96 h-96 -top-24 -left-24" style="background: #6366f1;"></div>
@@ -190,23 +190,23 @@
             <div class="deco-orb w-[28rem] h-[28rem] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style="background: #8b5cf6;"></div>
 
             {{-- Subtle grid overlay --}}
-            <div class="absolute inset-0 opacity-[0.03]"
-                 style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E'); background-repeat: repeat;">
+            <div class="absolute inset-0 opacity-[0.06]"
+                 style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%236366f1\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E'); background-repeat: repeat;">
             </div>
 
             {{-- Branding content --}}
             <div class="relative z-10 text-center px-12 max-w-lg">
-                <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg shadow-indigo-500/25 mb-8 ring-1 ring-white/10">
+                <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg shadow-indigo-500/25 mb-8">
                     <span class="text-white text-2xl font-extrabold tracking-tight">WG</span>
                 </div>
-                <h1 class="text-4xl font-extrabold text-white tracking-tight mb-3">WGIMSv2</h1>
-                <p class="text-lg text-indigo-200/70 font-light leading-relaxed mb-8">
+                <h1 class="text-4xl font-extrabold text-slate-800 tracking-tight mb-3">WGIMSv2</h1>
+                <p class="text-lg text-indigo-900/60 font-light leading-relaxed mb-8">
                     Welfare Goods Inventory Management System
                 </p>
                 <div class="h-px bg-gradient-to-r from-transparent via-indigo-400/40 to-transparent mb-8"></div>
-                <div class="inline-flex items-center gap-2.5 px-5 py-2.5 bg-white/5 backdrop-blur-sm rounded-full border border-white/[0.08]">
-                    <i class="fas fa-shield-alt text-indigo-300 text-xs"></i>
-                    <span class="text-sm text-indigo-200/60 font-medium">DSWD Region X — Northern Mindanao</span>
+                <div class="inline-flex items-center gap-2.5 px-5 py-2.5 bg-white/70 backdrop-blur-sm rounded-full border border-indigo-200 shadow-sm">
+                    <i class="fas fa-shield-alt text-indigo-500 text-xs"></i>
+                    <span class="text-sm text-indigo-800/70 font-medium">DSWD Region X — Northern Mindanao</span>
                 </div>
             </div>
         </div>

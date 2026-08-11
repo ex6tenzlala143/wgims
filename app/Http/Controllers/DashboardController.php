@@ -124,8 +124,12 @@ class DashboardController extends Controller
         $stats = [
             'total_items' => Item::whereIn('warehouse_id', $warehouseIds)->count(),
             'total_pos'   => DeliverySubsidy::whereIn('warehouse_id', $warehouseIds)->count(),
-            'pending_ris' => Requisition::whereIn('warehouse_id', $warehouseIds)
-                                ->where('status', 'pending')->count(),
+            'pending_ris' => Requisition::where('status', 'pending')
+                ->where(function ($q) use ($warehouseIds) {
+                    $q->whereHas('items', fn ($i) => $i->whereIn('warehouse_id', $warehouseIds))
+                      ->orWhereIn('warehouse_id', $warehouseIds); // legacy
+                })
+                ->count(),
         ];
 
         // Keep backward-compat: pass the primary warehouse as $warehouse

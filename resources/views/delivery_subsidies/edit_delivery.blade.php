@@ -39,7 +39,7 @@
                     <h3><i class="fas fa-truck" style="color:var(--primary)"></i> Shipment Details</h3>
                 </div>
                 <div class="card-body">
-                    <div class="form-row cols-3">
+                    <div class="form-row cols-2">
                         <div class="form-group">
                             <label class="form-label">Delivery Date <span style="color:red">*</span></label>
                             <input type="date" name="delivery_date" class="form-control"
@@ -47,22 +47,13 @@
                             @error('delivery_date')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
                         </div>
                         <div class="form-group">
-                            <label class="form-label">DR No. <span style="color:red">*</span>
-                                <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— this shipment's receipt</span>
-                            </label>
-                            <input type="text" name="dr_number" class="form-control"
-                                   value="{{ old('dr_number', $delivery->dr_number) }}"
-                                   placeholder="e.g. DR-2026-001" required>
-                            @error('dr_number')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="form-group">
                             <label class="form-label">Qty Delivered <span style="color:red">*</span>
-                                <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— this shipment only</span>
+                                <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— auto = sum of items below</span>
                             </label>
                             <input type="number" name="quantity_delivered" id="qty-delivered-header"
-                                   class="form-control" min="0" step="0.01"
+                                   class="form-control" step="0.01" readonly tabindex="-1"
                                    value="{{ old('quantity_delivered', $delivery->quantity_delivered) }}"
-                                   oninput="updateProgress()" required>
+                                   style="background:#f7fafc;color:var(--text-muted)">
                             <div id="progress-hint" style="font-size:11px;margin-top:4px"></div>
                             @error('quantity_delivered')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
                         </div>
@@ -96,50 +87,77 @@
             <div class="card">
                 <div class="card-header">
                     <h3><i class="fas fa-boxes"></i> Item Detail</h3>
-                    <span style="font-size:12px;color:var(--text-muted)">Adjust quantities and unit costs. Stock levels update automatically.</span>
+                    <span style="font-size:12px;color:var(--text-muted)">Adjust quantities, unit cost, warehouse, ENGAS unit cost and DR#. Stock levels update automatically — the delta is applied, never double-counted.</span>
                 </div>
                 <div class="table-wrapper">
                     <table>
                         <thead>
                             <tr>
                                 <th>Description</th>
-                                <th>Unit</th>
-                                <th>Stock No.</th>
-                                <th style="text-align:right">Original Qty</th>
-                                <th style="width:120px">Qty Delivered <span style="color:red">*</span></th>
-                                <th style="width:120px">Unit Cost (₱) <span style="color:red">*</span></th>
-                                <th style="text-align:right">Total</th>
+                                <th style="width:150px">Warehouse <span style="color:red">*</span></th>
+                                <th style="width:100px">Qty Delivered <span style="color:red">*</span></th>
+                                <th style="width:105px">Unit Cost (₱) <span style="color:red">*</span></th>
+                                <th style="width:105px">ENGAS Unit Cost (₱) <span style="color:red">*</span></th>
+                                <th style="width:130px">DR No. <span style="color:red">*</span></th>
+                                <th style="width:130px">Expiration</th>
+                                <th style="text-align:right">Total Value</th>
+                                <th style="text-align:right">ENGAS Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($delivery->items as $idx => $di)
                             <input type="hidden" name="items[{{ $idx }}][di_id]" value="{{ $di->id }}">
+                            @php
+                                $dsLine     = $di->deliverySubsidyItem;
+                                $lineMax    = $dsLine ? max(0, (float) $dsLine->quantity - (float) $dsLine->qty_delivered) : 0;
+                                $editMaxQty = (float) $di->quantity_delivered + $lineMax;
+                                $currentWh  = (int) ($di->warehouse_id ?? $dsLine?->warehouse_id ?? $di->item->warehouse_id ?? 0);
+                                $defaultWh  = (int) old("items.{$idx}.warehouse_id", $currentWh);
+                            @endphp
                             <tr>
                                 <td>
                                     <strong>{{ $di->item->description ?? '-' }}</strong>
                                     <div style="font-size:11px;color:var(--text-muted)">
+                                        {{ $di->item->unit ?? '-' }}
+                                        @if($di->item?->stock_number)
+                                            · <code style="font-size:11px">{{ $di->item->stock_number }}</code>
+                                        @endif
+                                    </div>
+                                    <div style="font-size:11px;color:var(--text-muted)">
                                         Current stock: <strong>{{ number_format($di->item->quantity ?? 0, 2) }}</strong>
                                     </div>
                                 </td>
-                                <td>{{ $di->item->unit ?? '-' }}</td>
                                 <td>
-                                    @if($di->item?->stock_number)
-                                        <code style="font-size:11px">{{ $di->item->stock_number }}</code>
-                                    @else
-                                        <span style="color:var(--text-muted)">—</span>
-                                    @endif
-                                </td>
-                                <td style="text-align:right">
-                                    <span class="badge badge-secondary">{{ number_format($di->quantity_delivered, 2) }}</span>
+                                    <select name="items[{{ $idx }}][warehouse_id]" class="form-control" required>
+                                        <option value="">— Select —</option>
+                                        @foreach($warehouses as $wh)
+                                        <option value="{{ $wh->id }}" {{ $defaultWh === (int) $wh->id ? 'selected' : '' }}>
+                                            {{ $wh->name }}
+                                        </option>
+                                        @endforeach
+                                    </select>
+                                    @error("items.{$idx}.warehouse_id")
+                                        <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
+                                    @enderror
                                 </td>
                                 <td>
+                                    @php
+                                        $oldQtyVal = old("items.{$idx}.quantity_delivered", $di->quantity_delivered);
+                                    @endphp
                                     <input type="number"
                                            name="items[{{ $idx }}][quantity_delivered]"
                                            id="qty-{{ $idx }}"
                                            class="form-control qty-delivered-input"
-                                           value="{{ old("items.{$idx}.quantity_delivered", $di->quantity_delivered) }}"
-                                           min="0" step="0.01" required
+                                           value="{{ $oldQtyVal }}"
+                                           min="0" step="0.01"
+                                           max="{{ $editMaxQty }}"
+                                           data-max="{{ $editMaxQty }}"
+                                           required
                                            oninput="recalcRow({{ $idx }})">
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+                                        Max <strong>{{ number_format($editMaxQty, 2) }}</strong>
+                                        ({{ number_format($lineMax, 2) }} remaining)
+                                    </div>
                                     @error("items.{$idx}.quantity_delivered")
                                         <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
                                     @enderror
@@ -156,9 +174,46 @@
                                         <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
                                     @enderror
                                 </td>
+                                <td>
+                                    <input type="number"
+                                           name="items[{{ $idx }}][engas_unit_cost]"
+                                           id="engas-{{ $idx }}"
+                                           class="form-control engas-cost-input"
+                                           value="{{ old("items.{$idx}.engas_unit_cost", $di->engas_unit_cost) }}"
+                                           min="0" step="0.01"
+                                           oninput="recalcRow({{ $idx }})">
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+                                        ENGAS Total: <strong id="engas-total-{{ $idx }}" style="color:var(--primary)">₱0.00</strong>
+                                    </div>
+                                    @error("items.{$idx}.engas_unit_cost")
+                                        <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
+                                    @enderror
+                                </td>
+                                <td>
+                                    <input type="text"
+                                           name="items[{{ $idx }}][dr_number]"
+                                           id="dr-{{ $idx }}"
+                                           class="form-control"
+                                           value="{{ old("items.{$idx}.dr_number", $di->dr_number ?? $delivery->dr_number) }}"
+                                           maxlength="100" required>
+                                    @error("items.{$idx}.dr_number")
+                                        <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
+                                    @enderror
+                                </td>
+                                <td>
+                                    <input type="date"
+                                           name="items[{{ $idx }}][expiration_date]"
+                                           class="form-control"
+                                           value="{{ old("items.{$idx}.expiration_date", $di->item?->expiration_date?->format('Y-m-d')) }}">
+                                </td>
                                 <td style="text-align:right">
                                     <span id="total-{{ $idx }}" style="font-weight:600">
                                         ₱{{ number_format($di->quantity_delivered * $di->unit_cost, 2) }}
+                                    </span>
+                                </td>
+                                <td style="text-align:right">
+                                    <span id="etotal-{{ $idx }}" style="font-weight:600;color:var(--primary)">
+                                        ₱{{ number_format($di->engas_total_cost ?? ($di->quantity_delivered * $di->engas_unit_cost), 2) }}
                                     </span>
                                 </td>
                             </tr>
@@ -166,9 +221,12 @@
                         </tbody>
                         <tfoot>
                             <tr style="background:#f7fafc;font-weight:700">
-                                <td colspan="6" style="text-align:right;padding:10px 14px">Grand Total:</td>
+                                <td colspan="7" style="text-align:right;padding:10px 14px">Grand Totals:</td>
                                 <td style="text-align:right;padding:10px 14px" id="grand-total">
                                     ₱{{ number_format($delivery->items->sum(fn($di) => $di->quantity_delivered * $di->unit_cost), 2) }}
+                                </td>
+                                <td style="text-align:right;padding:10px 14px;color:var(--primary)" id="grand-engas-total">
+                                    ₱{{ number_format($delivery->items->sum(fn($di) => $di->engas_total_cost ?? ($di->quantity_delivered * $di->engas_unit_cost)), 2) }}
                                 </td>
                             </tr>
                         </tfoot>
@@ -221,6 +279,7 @@
                         <strong>Stock Impact:</strong><br>
                         Increasing qty → adds stock.<br>
                         Decreasing qty → removes stock.<br>
+                        Changing warehouse → moves stock between warehouses (old stock reversed first).<br>
                         Setting to 0 → fully reverses that line.
                     </div>
 
@@ -241,6 +300,66 @@
 <script>
 const totalRequested  = {{ (float) $deliverySubsidy->quantity_requested }};
 const otherDelivered  = {{ (float) ($deliverySubsidy->totalDelivered() - $delivery->quantity_delivered) }};
+
+function recalcRow(idx) {
+    const qty   = parseFloat(document.getElementById('qty-'   + idx)?.value) || 0;
+    const cost  = parseFloat(document.getElementById('cost-'  + idx)?.value) || 0;
+    const engas = parseFloat(document.getElementById('engas-' + idx)?.value) || 0;
+
+    const el = document.getElementById('total-' + idx);
+    if (el) {
+        el.textContent = '₱\u00a0' + (qty * cost).toLocaleString('en-PH', {
+            minimumFractionDigits: 2, maximumFractionDigits: 2
+        });
+    }
+
+    const eTotal = qty * engas;
+    const etEl = document.getElementById('etotal-' + idx);
+    if (etEl) {
+        etEl.textContent = '₱\u00a0' + eTotal.toLocaleString('en-PH', {
+            minimumFractionDigits: 2, maximumFractionDigits: 2
+        });
+    }
+    const etHint = document.getElementById('engas-total-' + idx);
+    if (etHint) {
+        etHint.textContent = '₱\u00a0' + eTotal.toLocaleString('en-PH', {
+            minimumFractionDigits: 2, maximumFractionDigits: 2
+        });
+    }
+
+    recalcGrand();
+}
+
+function fmtPhp(n) {
+    return '₱\u00a0' + n.toLocaleString('en-PH', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    });
+}
+
+function recalcGrand() {
+    let grand = 0, grandEngas = 0, qtySum = 0;
+
+    document.querySelectorAll('.qty-delivered-input').forEach(el => {
+        qtySum += parseFloat(el.value) || 0;
+    });
+
+    document.querySelectorAll('[id^="total-"]').forEach(el => {
+        grand += parseFloat(el.textContent.replace(/[^\d.]/g, '')) || 0;
+    });
+    document.querySelectorAll('[id^="etotal-"]').forEach(el => {
+        grandEngas += parseFloat(el.textContent.replace(/[^\d.]/g, '')) || 0;
+    });
+
+    const el = document.getElementById('grand-total');
+    if (el) el.textContent = fmtPhp(grand);
+
+    const ge = document.getElementById('grand-engas-total');
+    if (ge) ge.textContent = fmtPhp(grandEngas);
+
+    // Header quantity is always the sum of the per-item quantities
+    const header = document.getElementById('qty-delivered-header');
+    if (header) header.value = qtySum.toFixed(2);
+}
 
 function updateProgress() {
     const input   = document.getElementById('qty-delivered-header');
@@ -275,33 +394,33 @@ function updateProgress() {
     }
 }
 
-function recalcRow(idx) {
-    const qty  = parseFloat(document.getElementById('qty-'  + idx)?.value) || 0;
-    const cost = parseFloat(document.getElementById('cost-' + idx)?.value) || 0;
-    const el   = document.getElementById('total-' + idx);
-    if (el) {
-        el.textContent = '₱\u00a0' + (qty * cost).toLocaleString('en-PH', {
-            minimumFractionDigits: 2, maximumFractionDigits: 2
-        });
-    }
-    recalcGrand();
-}
-
-function recalcGrand() {
-    let grand = 0;
-    document.querySelectorAll('[id^="total-"]').forEach(el => {
-        grand += parseFloat(el.textContent.replace(/[^\d.]/g, '')) || 0;
-    });
-    const el = document.getElementById('grand-total');
-    if (el) {
-        el.textContent = '₱\u00a0' + grand.toLocaleString('en-PH', {
-            minimumFractionDigits: 2, maximumFractionDigits: 2
-        });
-    }
-}
-
 document.addEventListener('DOMContentLoaded', function() {
+    // Initial live totals
+    document.querySelectorAll('.qty-delivered-input').forEach(el => {
+        const id = el.id.replace('qty-', '');
+        recalcRow(parseInt(id, 10));
+    });
     updateProgress();
+
+    // ENGAS Unit Cost is required for any line that keeps a positive quantity,
+    // even though the field is not marked required in HTML (qty-0 rows skip it).
+    document.querySelector('form').addEventListener('submit', function(e) {
+        let missing = [];
+        document.querySelectorAll('.qty-delivered-input').forEach(el => {
+            const id    = parseInt(el.id.replace('qty-', ''), 10);
+            const qty   = parseFloat(el.value) || 0;
+            const engas = parseFloat(document.getElementById('engas-' + id)?.value || '');
+            if (qty > 0 && !(engas >= 0)) {
+                missing.push(el.closest('tr').querySelector('strong').textContent.trim());
+            }
+        });
+        if (missing.length > 0) {
+            e.preventDefault();
+            alert('ENGAS Unit Cost is required for the following dispatched item(s):\n\n'
+                + missing.join('\n'));
+            return false;
+        }
+    });
 });
 </script>
 @endpush

@@ -181,11 +181,6 @@
                 <br>
                 RIS Number:&nbsp;
                 <strong>{{ $requisition->ris_number }}</strong>
-                @if($requisition->dr_number)
-                <br>
-                DR Number:&nbsp;
-                <strong>{{ $requisition->dr_number }}</strong>
-                @endif
             </td>
         </tr>
     </table>
@@ -218,9 +213,23 @@
         <tbody>
             @foreach($items as $ri)
             <tr class="item-row">
-                <td>{{ $ri->item->stock_number ?? '' }}</td>
-                <td>{{ $ri->item->unit ?? '' }}</td>
-                <td class="left">{{ $ri->item->description ?? '' }}</td>
+                <td>{{ $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode(', ') ?: ($ri->item?->stock_number ?? '') }}</td>
+                <td>{{ $ri->unit ?? ($ri->item?->unit ?? '') }}</td>
+                <td class="left">
+                    {{ $ri->description ?? ($ri->item?->description ?? '') }}
+                    @if($ri->dr_number)
+                        <div style="font-size:6.5pt;color:#333;margin-top:1px"><strong>DR:</strong> {{ $ri->dr_number }}</div>
+                    @endif
+                    @php
+                        $whName = $ri->dispatchItems->pluck('item.warehouse.name')->filter()->unique()->implode(', ');
+                        $whName = $whName ?: ($ri->warehouse?->name ?? null);
+                    @endphp
+                    @if($whName)
+                        <div style="font-size:6.5pt;color:#333;margin-top:1px">Whse: {{ $whName }}</div>
+                    @elseif($requisition->warehouse)
+                        <div style="font-size:6.5pt;color:#333;margin-top:1px">Whse: {{ $requisition->warehouse->name }}</div>
+                    @endif
+                </td>
                 <td class="right">{{ number_format($ri->quantity_requested, 2) }}</td>
                 <td>{{ $ri->stock_available ? '✓' : '' }}</td>
                 <td>{{ !$ri->stock_available ? '✓' : '' }}</td>

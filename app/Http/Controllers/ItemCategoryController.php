@@ -12,6 +12,7 @@ class ItemCategoryController extends Controller
     public function index()
     {
         $categories = ItemCategory::withCount('items')
+            ->with(['catalogItems' => fn ($q) => $q->orderBy('name')])
             ->orderBy('sort_order')
             ->orderBy('key')
             ->get();

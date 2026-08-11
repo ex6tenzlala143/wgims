@@ -9,7 +9,7 @@
         <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / Delivery / Subsidies</div>
     </div>
     @if(auth()->user()->canCreate())
-    <a href="{{ route('delivery_subsidies.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> New Delivery/Subsidy</a>
+    <button type="button" class="btn btn-primary" onclick="openCreateModal()"><i class="fas fa-plus"></i> New Delivery/Subsidy</button>
     @endif
 </div>
 
@@ -75,7 +75,24 @@
                     <td><strong>{{ $po->ris_number }}</strong></td>
                     <td>{{ $po->date ? $po->date->format('M d, Y') : '-' }}</td>
                     <td>{{ $po->supplier->name ?? '-' }}</td>
-                    @if(auth()->user()->hasAdminAccess())<td>{{ $po->warehouse->name ?? '-' }}</td>@endif
+                    @if(auth()->user()->hasAdminAccess())
+                    <td>
+                        @php
+                            $whNames = $po->items
+                                ->filter(fn ($i) => $i->warehouse !== null)
+                                ->pluck('warehouse.name')
+                                ->merge(
+                                    $po->deliveries
+                                        ->flatMap(fn ($d) => $d->items)
+                                        ->filter(fn ($di) => $di->warehouse !== null)
+                                        ->pluck('warehouse.name')
+                                )
+                                ->unique()
+                                ->values();
+                        @endphp
+                        {{ $whNames->isNotEmpty() ? $whNames->join(', ') : '—' }}
+                    </td>
+                    @endif
                     <td style="text-align:right">₱{{ number_format($po->total_amount, 2) }}</td>
                     <td style="text-align:right;white-space:nowrap">
                         {{ $requested > 0 ? number_format($requested, 2) : '—' }}
@@ -104,7 +121,7 @@
                             <a href="{{ route('delivery_subsidies.delivery', $po->id) }}" class="btn btn-sm btn-success btn-icon" title="Record Delivery"><i class="fas fa-truck"></i></a>
                             @endif
                             @if(auth()->user()->canWrite() && $po->status !== 'cancelled')
-                            <a href="{{ route('delivery_subsidies.edit', $po->id) }}" class="btn btn-sm btn-outline btn-icon" title="Edit"><i class="fas fa-edit"></i></a>
+                            <button type="button" class="btn btn-sm btn-outline btn-icon" title="Edit" onclick="openEditModal({{ $po->id }})"><i class="fas fa-edit"></i></button>
                             @endif
                             @if(auth()->user()->canWrite())
                             <form action="{{ route('delivery_subsidies.destroy', $po->id) }}" method="POST"
@@ -129,4 +146,12 @@
     <div class="card-footer">{{ $pos->links() }}</div>
     @endif
 </div>
+
+@if(auth()->user()->canCreate())
+@include('delivery_subsidies._create_form', ['createModalOpen' => $errors->any(), 'modalOnlyPage' => false])
+@endif
+
+@if(auth()->user()->canWrite())
+@include('delivery_subsidies._edit_form')
+@endif
 @endsection

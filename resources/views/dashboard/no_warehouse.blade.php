@@ -3,10 +3,17 @@
 @section('page-title', 'Dashboard')
 
 @section('content')
+<div class="page-header">
+    <div>
+        <h1>Dashboard</h1>
+        <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a></div>
+    </div>
+</div>
+
 <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
     <div style="text-align:center;max-width:480px;padding:40px">
         <div style="font-size:64px;margin-bottom:16px">🏭</div>
-        <h2 style="font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:8px">
+        <h2 style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:8px">
             No Warehouse Assigned
         </h2>
         <p style="color:var(--text-muted);font-size:15px;line-height:1.6;margin-bottom:24px">

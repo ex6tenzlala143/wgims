@@ -9,7 +9,7 @@
         <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / Requisitions</div>
     </div>
     @if(auth()->user()->canCreate())
-    <a href="{{ route('requisitions.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> New RIS</a>
+    <button type="button" class="btn btn-primary" onclick="openCreateModal()"><i class="fas fa-plus"></i> New RIS</button>
     @endif
 </div>
 
@@ -66,16 +66,17 @@
                 <tr>
                     <td><strong>{{ $ris->ris_number }}</strong></td>
                     <td>
-                        @if($ris->dr_number)
-                            <code style="font-size:12px">{{ $ris->dr_number }}</code>
+                        @php $drs = $ris->items->pluck('dr_number')->filter()->unique(); @endphp
+                        @if($drs->isNotEmpty())
+                            @foreach($drs as $dr)
+                                <code style="font-size:12px">{{ $dr }}</code>@if(!$loop->last)<br>@endif
+                            @endforeach
                         @else
-                            <span style="color:var(--danger);font-size:12px;font-weight:600">
-                                <i class="fas fa-exclamation-triangle"></i> Missing
-                            </span>
+                            <span style="color:var(--text-muted);font-size:12px">—</span>
                         @endif
                     </td>
                     <td>{{ $ris->date_requested->format('M d, Y') }}</td>
-                    <td>{{ $ris->warehouse->name ?? '-' }}</td>
+                    <td>{{ $ris->warehouse_names ?? ($ris->warehouse->name ?? '-') }}</td>
                     <td>{{ $ris->office ?? '-' }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($ris->purpose, 40) }}</td>
                     <td>
@@ -126,4 +127,8 @@
     <div class="card-footer">{{ $requisitions->links() }}</div>
     @endif
 </div>
+
+@if(auth()->user()->canCreate())
+@include('requisitions._create_form', ['createModalOpen' => $errors->any(), 'modalOnlyPage' => false])
+@endif
 @endsection

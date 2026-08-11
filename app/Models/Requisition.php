@@ -8,7 +8,7 @@ class Requisition extends Model
 {
     protected $fillable = [
         'ris_number', 'dr_number', 'warehouse_id', 'created_by', 'approved_by',
-        'entity_name', 'fund_cluster', 'office', 'division',
+        'entity_name', 'fund_cluster', 'office', 'division', 'province', 'municipality',
         'responsibility_center_code', 'purpose', 'date_requested', 'date_approved', 'status',
         'requested_by_name', 'requested_by_designation',
         'approved_by_name', 'approved_by_designation',
@@ -36,6 +36,56 @@ class Requisition extends Model
     public function items()
     {
         return $this->hasMany(RequisitionItem::class);
+    }
+
+    /**
+     * Human-readable list of the warehouses this requisition draws from.
+     * Includes the warehouse of every dispatch, plus any line-level warehouse.
+     * Falls back to the legacy single warehouse when nothing else is set.
+     */
+    public function getWarehouseNamesAttribute(): string
+    {
+        $names = collect();
+
+        foreach ($this->items as $ri) {
+            $names->push($ri->warehouse?->name);
+
+            // A dispatch's warehouse is derived from its exact stock record
+            foreach ($ri->dispatchItems as $di) {
+                $names->push($di->item?->warehouse?->name);
+            }
+        }
+
+        $names = $names->filter()->unique();
+
+        if ($names->isEmpty() && $this->warehouse) {
+            return $this->warehouse->name;
+        }
+
+        return $names->implode(', ') ?: '-';
+    }
+
+    /**
+     * Unique warehouse IDs involved in this requisition (from its dispatches
+     * and line items). Falls back to the legacy single warehouse_id column.
+     */
+    public function getWarehouseIdsAttribute(): array
+    {
+        $ids = collect();
+
+        foreach ($this->items as $ri) {
+            $ids->push((int) $ri->warehouse_id);
+            // A dispatch's warehouse is derived from its exact stock record
+            $ids->push(...$ri->dispatchItems->map(fn ($di) => (int) $di->item?->warehouse_id));
+        }
+
+        $ids = $ids->filter()->unique()->values()->toArray();
+
+        if (empty($ids) && $this->warehouse_id) {
+            $ids = [(int) $this->warehouse_id];
+        }
+
+        return $ids;
     }
 
     public function getStatusBadgeClass(): string

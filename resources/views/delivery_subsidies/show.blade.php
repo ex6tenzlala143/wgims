@@ -18,9 +18,9 @@
         </a>
         @endif
         @if(auth()->user()->canWrite())
-        <a href="{{ route('delivery_subsidies.edit', $deliverySubsidy->id) }}" class="btn btn-secondary">
+        <button type="button" class="btn btn-secondary" onclick="openEditModal({{ $deliverySubsidy->id }})">
             <i class="fas fa-edit"></i> Edit PO
-        </a>
+        </button>
         @endif
         @if(auth()->user()->isAdmin())
         <a href="{{ route('delivery_subsidies.audit_log', $deliverySubsidy->id) }}" class="btn btn-outline">
@@ -187,6 +187,7 @@
                 <tr>
                     <th>Description</th>
                     <th>Unit</th>
+                    <th>Warehouse</th>
                     <th style="text-align:right">Ordered Qty</th>
                     <th style="text-align:right">Delivered Qty</th>
                     <th style="text-align:right">Remaining</th>
@@ -202,8 +203,18 @@
             <tbody>
                 @foreach($deliverySubsidy->items as $poi)
                 <tr>
-                    <td><strong>{{ $poi->item->description ?? '-' }}</strong></td>
-                    <td>{{ $poi->item->unit ?? '-' }}</td>
+                    <td><strong>{{ $poi->item->description ?? $poi->description ?? '-' }}</strong></td>
+                    <td>{{ $poi->item->unit ?? $poi->unit ?? '-' }}</td>
+                    <td>
+                        @if($poi->warehouse)
+                            <span style="font-size:12px;font-weight:600;white-space:nowrap">
+                                <i class="fas fa-warehouse" style="color:var(--primary);margin-right:4px"></i>
+                                {{ $poi->warehouse->name }}
+                            </span>
+                        @else
+                            <span style="color:var(--text-muted);font-size:12px">—</span>
+                        @endif
+                    </td>
                     <td style="text-align:right">{{ number_format($poi->quantity, 2) }}</td>
                     <td style="text-align:right">{{ number_format($poi->qty_delivered, 2) }}</td>
                     <td style="text-align:right">
@@ -211,7 +222,7 @@
                             {{ number_format($poi->quantity - $poi->qty_delivered, 2) }}
                         </span>
                     </td>
-                    <td style="text-align:right">₱{{ number_format($poi->unit_cost, 2) }}</td>
+                    <td style="text-align:right">{{ $poi->unit_cost !== null ? '₱' . number_format($poi->unit_cost, 2) : '—' }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
                         @if($poi->item && $poi->item->engas_unit_cost !== null)
@@ -228,7 +239,7 @@
                         @endif
                     </td>
                     @endif
-                    <td style="text-align:right">₱{{ number_format($poi->amount, 2) }}</td>
+                    <td style="text-align:right">{{ $poi->amount !== null ? '₱' . number_format($poi->amount, 2) : '—' }}</td>
                     <td>
                         @if($poi->item && $poi->item->stock_number)
                             <a href="{{ route('stock_cards.item_history', $poi->item->id) }}"
@@ -243,8 +254,9 @@
                 @endforeach
             </tbody>
             <tfoot>
+                @php $engasCols = auth()->user()->hasAdminAccess() ? 2 : 0; @endphp
                 <tr style="background:#f7fafc;font-weight:700">
-                    <td colspan="6" style="text-align:right">TOTAL:</td>
+                    <td colspan="{{ 7 + $engasCols }}" style="text-align:right">TOTAL:</td>
                     <td style="text-align:right">₱{{ number_format($deliverySubsidy->total_amount, 2) }}</td>
                     <td></td>
                 </tr>
@@ -280,8 +292,13 @@
         {{-- Item header --}}
         <div style="padding:12px 20px;background:#f7fafc;display:flex;justify-content:space-between;align-items:center">
             <div>
-                <strong style="font-size:14px">{{ $poi->item->description ?? '—' }}</strong>
-                <span style="font-size:12px;color:var(--text-muted);margin-left:8px">{{ $poi->item->unit ?? '' }}</span>
+                <strong style="font-size:14px">{{ $poi->item->description ?? $poi->description ?? '—' }}</strong>
+                <span style="font-size:12px;color:var(--text-muted);margin-left:8px">{{ $poi->item->unit ?? $poi->unit ?? '' }}</span>
+                @if($poi->warehouse)
+                    <span style="font-size:11px;background:#eef2ff;padding:1px 6px;border-radius:4px;color:#4f46e5;margin-left:6px;white-space:nowrap">
+                        <i class="fas fa-warehouse"></i> {{ $poi->warehouse->name }}
+                    </span>
+                @endif
                 @if($poi->item && $poi->item->stock_number)
                     <code style="font-size:11px;background:#ebf4ff;padding:1px 6px;border-radius:4px;color:var(--primary);margin-left:6px">
                         {{ $poi->item->stock_number }}
@@ -330,10 +347,15 @@
                         <th style="padding:8px 20px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">#</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Shipment DR No.</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Date</th>
+                        <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Warehouse</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Qty This Shipment</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Cumulative</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Unit Cost</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Value</th>
+                        @if(auth()->user()->hasAdminAccess())
+                        <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--primary)">ENGAS Unit Cost</th>
+                        <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--primary)">ENGAS Total</th>
+                        @endif
                         <th style="padding:8px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Condition</th>
                     </tr>
                 </thead>
@@ -346,13 +368,24 @@
                     <tr style="border-top:1px solid var(--border)">
                         <td style="padding:10px 20px;color:var(--text-muted);font-size:12px">{{ $shipNum + 1 }}</td>
                         <td style="padding:10px 14px">
-                            <strong>{{ $row['delivery']->dr_number }}</strong>
+                            <strong>{{ $row['di']->dr_number ?? $row['delivery']->dr_number }}</strong>
                             @if($row['delivery']->batch_number)
                                 <span style="font-size:11px;color:var(--text-muted);margin-left:4px">Batch: {{ $row['delivery']->batch_number }}</span>
                             @endif
                         </td>
                         <td style="padding:10px 14px;color:var(--text-muted)">
                             {{ $row['delivery']->delivery_date->format('M d, Y') }}
+                        </td>
+                        <td style="padding:10px 14px">
+                            @php $shipWh = $row['di']->warehouse; @endphp
+                            @if($shipWh)
+                                <span style="font-size:12px;font-weight:600;white-space:nowrap">
+                                    <i class="fas fa-warehouse" style="color:var(--primary);margin-right:4px"></i>
+                                    {{ $shipWh->name }}
+                                </span>
+                            @else
+                                <span style="color:var(--text-muted);font-size:12px">—</span>
+                            @endif
                         </td>
                         <td style="padding:10px 14px;text-align:right;font-weight:700;color:var(--primary)">
                             +{{ number_format($row['di']->quantity_delivered, 2) }}
@@ -363,6 +396,22 @@
                         </td>
                         <td style="padding:10px 14px;text-align:right">₱{{ number_format($row['di']->unit_cost, 2) }}</td>
                         <td style="padding:10px 14px;text-align:right">₱{{ number_format($row['di']->quantity_delivered * $row['di']->unit_cost, 2) }}</td>
+                        @if(auth()->user()->hasAdminAccess())
+                        <td style="padding:10px 14px;text-align:right">
+                            @if($row['di']->engas_unit_cost !== null)
+                                <span style="color:var(--primary)">₱{{ number_format($row['di']->engas_unit_cost, 2) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        <td style="padding:10px 14px;text-align:right">
+                            @if($row['di']->engas_total_cost !== null)
+                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($row['di']->engas_total_cost, 2) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        @endif
                         <td style="padding:10px 14px">
                             <span class="badge {{ $row['di']->condition === 'good' ? 'badge-success' : 'badge-warning' }}">
                                 {{ ucfirst($row['di']->condition) }}
@@ -373,7 +422,7 @@
                 </tbody>
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
-                        <td colspan="3" style="padding:10px 20px;font-size:13px">Total Delivered</td>
+                        <td colspan="4" style="padding:10px 20px;font-size:13px">Total Delivered</td>
                         <td style="padding:10px 14px;text-align:right;color:var(--success)">
                             {{ number_format($poi->qty_delivered, 2) }}
                         </td>
@@ -386,6 +435,13 @@
                         <td style="padding:10px 14px;text-align:right">
                             ₱{{ number_format($allDiForItem->sum(fn($r) => $r['di']->quantity_delivered * $r['di']->unit_cost), 2) }}
                         </td>
+                        @if(auth()->user()->hasAdminAccess())
+                        <td></td>
+                        <td style="padding:10px 14px;text-align:right;color:var(--primary)">
+                            @php $engasLineTotal = $allDiForItem->sum(fn($r) => $r['di']->engas_total_cost); @endphp
+                            {{ $engasLineTotal > 0 ? '₱'.number_format($engasLineTotal, 2) : '—' }}
+                        </td>
+                        @endif
                         <td></td>
                     </tr>
                 </tfoot>
@@ -416,7 +472,7 @@
                     </div>
                     <div style="font-size:12px;color:var(--text-muted)">
                         Received by: {{ $delivery->receiver->name ?? '-' }}
-                        &nbsp;·&nbsp; DR No.: <strong>{{ $delivery->dr_number ?? '-' }}</strong>
+                        &nbsp;·&nbsp; DR No.: <strong>{{ $delivery->dr_number ?? ($delivery->items->first()?->dr_number ?? '-') }}</strong>
                         @if($delivery->batch_number)
                         &nbsp;·&nbsp; Batch: <strong>{{ $delivery->batch_number }}</strong>
                         @endif
@@ -445,11 +501,20 @@
                         <th>Generated Stock No.</th>
                         <th>Description</th>
                         <th>Unit</th>
+                        <th>Warehouse</th>
+                        <th>DR No.</th>
                         <th style="text-align:right">Qty Delivered</th>
                         <th style="text-align:right">Unit Cost</th>
                         <th style="text-align:right">Total Value</th>
+                        @if(auth()->user()->hasAdminAccess())
+                        <th style="text-align:right">ENGAS Unit Cost</th>
+                        <th style="text-align:right">ENGAS Total</th>
+                        @endif
                         <th>Condition</th>
                         <th>Stock Card</th>
+                        @if(auth()->user()->canWrite())
+                        <th>Actions</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
@@ -469,9 +534,45 @@
                         </td>
                         <td>{{ $di->item->description ?? '-' }}</td>
                         <td>{{ $di->item->unit ?? '-' }}</td>
+                        <td>
+                            @php $diWh = $di->warehouse; @endphp
+                            @if($diWh)
+                                <span style="font-size:12px;font-weight:600;white-space:nowrap">
+                                    <i class="fas fa-warehouse" style="color:var(--primary);margin-right:4px"></i>
+                                    {{ $diWh->name }}
+                                </span>
+                            @else
+                                <span style="color:var(--text-muted);font-size:12px">—</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($di->dr_number)
+                                <code style="font-size:12px;background:#ebf4ff;padding:2px 6px;border-radius:4px;color:var(--primary)">
+                                    {{ $di->dr_number }}
+                                </code>
+                            @else
+                                <span style="color:var(--text-muted);font-size:12px">{{ $delivery->dr_number ?? '-' }}</span>
+                            @endif
+                        </td>
                         <td style="text-align:right">{{ number_format($di->quantity_delivered, 2) }}</td>
                         <td style="text-align:right">₱{{ number_format($di->unit_cost, 2) }}</td>
                         <td style="text-align:right">₱{{ number_format($di->quantity_delivered * $di->unit_cost, 2) }}</td>
+                        @if(auth()->user()->hasAdminAccess())
+                        <td style="text-align:right">
+                            @if($di->engas_unit_cost !== null)
+                                <span style="color:var(--primary)">₱{{ number_format($di->engas_unit_cost, 2) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        <td style="text-align:right">
+                            @if($di->engas_total_cost !== null)
+                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($di->engas_total_cost, 2) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        @endif
                         <td>
                             <span class="badge {{ $di->condition == 'good' ? 'badge-success' : 'badge-warning' }}">
                                 {{ ucfirst($di->condition) }}
@@ -485,16 +586,30 @@
                             </a>
                             @endif
                         </td>
+                        @if(auth()->user()->canWrite())
+                        <td>
+                            <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $delivery->id]) }}"
+                               class="btn btn-sm btn-outline btn-icon" title="Edit this dispatched item">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                        </td>
+                        @endif
                     </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:600">
-                        <td colspan="5" style="text-align:right;font-size:13px">Delivery Total:</td>
+                        <td colspan="7" style="text-align:right;font-size:13px">Delivery Total:</td>
                         <td style="text-align:right">
                             ₱{{ number_format($delivery->items->sum(fn($di) => $di->quantity_delivered * $di->unit_cost), 2) }}
                         </td>
-                        <td colspan="2"></td>
+                        @if(auth()->user()->hasAdminAccess())
+                        <td colspan="2" style="text-align:right;color:var(--primary)">
+                            @php $engasShipTotal = $delivery->items->sum(fn($di) => $di->engas_total_cost); @endphp
+                            {{ $engasShipTotal > 0 ? '₱'.number_format($engasShipTotal, 2) : '—' }}
+                        </td>
+                        @endif
+                        <td colspan="{{ 2 + (auth()->user()->canWrite() ? 1 : 0) }}"></td>
                     </tr>
                 </tfoot>
             </table>
@@ -515,5 +630,9 @@
         No deliveries recorded yet. Stock numbers will appear here once items are delivered.
     </div>
 </div>
+@endif
+
+@if(auth()->user()->canWrite())
+@include('delivery_subsidies._edit_form')
 @endif
 @endsection

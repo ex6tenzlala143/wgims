@@ -127,6 +127,11 @@ class Item extends Model
         return $this->hasMany(RequisitionItem::class);
     }
 
+    public function requisitionDispatchItems()
+    {
+        return $this->hasMany(RequisitionDispatchItem::class);
+    }
+
     public function getCategoryLabel(): string
     {
         $cats = static::getCategories();
@@ -181,7 +186,8 @@ class Item extends Model
         float $unitCost,
         ?string $risNumber = null,
         ?string $expirationDate = null,
-        ?float $engasUnitCost = null
+        ?float $engasUnitCost = null,
+        ?string $accountCode = null
     ): self {
         $unitCost = round($unitCost, 2);
 
@@ -203,6 +209,10 @@ class Item extends Model
             if ($engasUnitCost !== null && $existing->engas_unit_cost === null) {
                 $existing->update(['engas_unit_cost' => $engasUnitCost]);
             }
+            // Keep the configured account code in sync (admin-configured codes win)
+            if ($accountCode && $existing->account_code !== $accountCode) {
+                $existing->update(['account_code' => $accountCode]);
+            }
             return $existing->fresh();
         }
 
@@ -221,6 +231,7 @@ class Item extends Model
             $base->update([
                 'stock_number'    => $stockNumber,
                 'unit_cost'       => $unitCost,
+                'account_code'    => $accountCode ?: ($base->account_code ?: static::getAccountCodeForCategory($category)),
                 'expiration_date' => $expirationDate ?? $base->expiration_date,
                 'engas_unit_cost' => $engasUnitCost ?? $base->engas_unit_cost,
                 'is_active'       => true,
@@ -234,7 +245,7 @@ class Item extends Model
             'ris_number'      => $risNumber,
             'unit'            => $unit,
             'category'        => $category,
-            'account_code'    => static::getAccountCodeForCategory($category),
+            'account_code'    => $accountCode ?: static::getAccountCodeForCategory($category),
             'warehouse_id'    => $warehouseId,
             'unit_cost'       => $unitCost,
             'engas_unit_cost' => $engasUnitCost,

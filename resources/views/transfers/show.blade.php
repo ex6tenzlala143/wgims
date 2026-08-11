@@ -23,6 +23,15 @@
             <i class="fas fa-edit"></i> Edit Transfer
         </a>
         @endif
+        @if(auth()->user()->canWrite())
+        <form action="{{ route('transfers.destroy', $transfer) }}" method="POST"
+            onsubmit="return confirm('Delete transfer {{ $transfer->transfer_number }}?\n\nThis will permanently delete the transfer and reverse all dispatched stock quantities — stock returns to the source warehouse.')">
+            @csrf @method('DELETE')
+            <button type="submit" class="btn btn-danger">
+                <i class="fas fa-trash"></i> Delete Transfer
+            </button>
+        </form>
+        @endif
         <a href="{{ route('transfers.print', $transfer) }}" class="btn btn-outline" target="_blank">
             <i class="fas fa-print"></i> Print Slip
         </a>

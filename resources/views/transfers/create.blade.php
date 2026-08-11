@@ -29,7 +29,7 @@
                             <input type="text" class="form-control" value="{{ $sourceWarehouse->name }}" readonly>
                             <input type="hidden" name="from_warehouse_id" value="{{ $sourceWarehouse->id }}">
                         @else
-                            <select name="from_warehouse_id" id="from_warehouse_id" class="form-control {{ $errors->has('from_warehouse_id') ? 'is-invalid' : '' }}" required onchange="loadSourceItems()">
+                            <select name="from_warehouse_id" id="from_warehouse_id" class="form-control {{ $errors->has('from_warehouse_id') ? 'is-invalid' : '' }}" required onchange="loadSourceItems(); syncWarehouseOptions()">
                                 <option value="">— Select Source —</option>
                                 @foreach($warehouses as $wh)
                                 <option value="{{ $wh->id }}" {{ old('from_warehouse_id') == $wh->id ? 'selected' : '' }}>{{ $wh->name }}</option>
@@ -41,12 +41,15 @@
 
                     <div class="form-group">
                         <label class="form-label">Destination Warehouse <span style="color:var(--danger)">*</span></label>
-                        <select name="to_warehouse_id" id="to_warehouse_id" class="form-control {{ $errors->has('to_warehouse_id') ? 'is-invalid' : '' }}" required>
-                            <option value="">— Select Destination —</option>
-                            @foreach($warehouses as $wh)
-                            <option value="{{ $wh->id }}" {{ old('to_warehouse_id') == $wh->id ? 'selected' : '' }}>{{ $wh->name }}</option>
-                            @endforeach
-                        </select>
+                            <select name="to_warehouse_id" id="to_warehouse_id" class="form-control {{ $errors->has('to_warehouse_id') ? 'is-invalid' : '' }}" required onchange="syncWarehouseOptions()">
+                                <option value="">— Select Destination —</option>
+                                @foreach($warehouses as $wh)
+                                <option value="{{ $wh->id }}" {{ old('to_warehouse_id') == $wh->id ? 'selected' : '' }}>{{ $wh->name }}</option>
+                                @endforeach
+                            </select>
+                            <div id="wh-diff-hint" style="display:none;color:var(--danger);font-size:12px;margin-top:4px">
+                                <i class="fas fa-exclamation-circle"></i> Source warehouse and destination warehouse must be different.
+                            </div>
                         @error('to_warehouse_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 </div>
@@ -100,12 +103,13 @@
                 <table class="line-items-table" id="items-table">
                     <thead>
                         <tr>
-                            <th style="width:35%">Item</th>
-                            <th style="width:12%">Unit</th>
-                            <th style="width:12%">Available</th>
-                            <th style="width:14%">Qty to Transfer</th>
-                            <th style="width:14%">Unit Cost</th>
-                            <th style="width:10%">Total</th>
+                            <th style="width:30%">Item</th>
+                            <th style="width:9%">Unit</th>
+                            <th style="width:10%">Available</th>
+                            <th style="width:13%">ENGAS Unit Cost</th>
+                            <th style="width:12%">Qty to Transfer</th>
+                            <th style="width:12%">Unit Cost</th>
+                            <th style="width:11%">Total</th>
                             <th style="width:3%"></th>
                         </tr>
                     </thead>
@@ -114,7 +118,7 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="5" style="text-align:right;font-weight:600;padding:10px 14px">Grand Total:</td>
+                            <td colspan="6" style="text-align:right;font-weight:600;padding:10px 14px">Grand Total:</td>
                             <td style="font-weight:700;padding:10px 14px" id="grand-total">₱ 0.00</td>
                             <td></td>
                         </tr>
@@ -156,6 +160,40 @@ function loadSourceItems() {
         });
 }
 
+// Keep Source and Destination warehouses different: disable the matching options
+// and clear the destination if it ever equals the source.
+function syncWarehouseOptions() {
+    const fromEl = document.getElementById('from_warehouse_id');
+    const toEl   = document.getElementById('to_warehouse_id');
+    if (!toEl) return;
+
+    // Source id: admin uses the select, non-admin uses the hidden field
+    const fromId = fromEl
+        ? String(fromEl.value || '')
+        : String(document.querySelector('input[name="from_warehouse_id"]')?.value || '');
+
+    // Disable the selected source warehouse in the destination dropdown
+    toEl.querySelectorAll('option').forEach(opt => {
+        opt.disabled = !!(opt.value && opt.value === fromId);
+    });
+
+    // Symmetric: disable the selected destination warehouse in the source dropdown
+    if (fromEl) {
+        fromEl.querySelectorAll('option').forEach(opt => {
+            opt.disabled = !!(opt.value && opt.value === String(toEl.value || ''));
+        });
+    }
+
+    // If the destination somehow equals the source, clear it and show a hint
+    const hint = document.getElementById('wh-diff-hint');
+    if (String(toEl.value || '') === fromId) {
+        toEl.value = '';
+        if (hint) hint.style.display = 'block';
+    } else if (hint) {
+        hint.style.display = 'none';
+    }
+}
+
 function populateItemSelect(selectEl) {
     const currentVal = selectEl.value;
     selectEl.innerHTML = '<option value="">— Select Item —</option>';
@@ -165,6 +203,7 @@ function populateItemSelect(selectEl) {
         opt.textContent = `${item.description} (${item.unit}) — ${item.stock_number || 'No SN'} | Qty: ${item.quantity}`;
         opt.dataset.unit = item.unit;
         opt.dataset.unitCost = item.unit_cost;
+        opt.dataset.engasUnitCost = item.engas_unit_cost;
         opt.dataset.available = item.quantity;
         selectEl.appendChild(opt);
     });
@@ -184,6 +223,7 @@ function addRow() {
         </td>
         <td><input type="text" id="unit-${idx}" readonly placeholder="—"></td>
         <td><input type="text" id="avail-${idx}" readonly placeholder="—"></td>
+        <td><input type="text" id="engas-${idx}" readonly placeholder="—" title="ENGAS Unit Cost for this item at the source warehouse"></td>
         <td>
             <input type="number" name="items[${idx}][quantity]" id="qty-${idx}"
                    step="0.0001" min="0.0001" placeholder="0"
@@ -209,6 +249,20 @@ function onItemChange(sel, idx) {
     const opt = sel.options[sel.selectedIndex];
     document.getElementById(`unit-${idx}`).value  = opt.dataset.unit || '';
     document.getElementById(`avail-${idx}`).value = opt.dataset.available || '';
+
+    const engasEl = document.getElementById(`engas-${idx}`);
+    const engasRaw = opt.dataset.engasUnitCost;
+    const engas = (engasRaw && engasRaw !== 'null') ? parseFloat(engasRaw) : NaN;
+    if (Number.isNaN(engas)) {
+        engasEl.value = 'Not set';
+        engasEl.style.color = 'var(--warning)';
+        engasEl.title = 'No ENGAS Unit Cost recorded for this item at the source warehouse';
+    } else {
+        engasEl.value = '₱ ' + engas.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        engasEl.style.color = '';
+        engasEl.title = 'ENGAS Unit Cost for this item at the source warehouse';
+    }
+
     document.getElementById(`cost-${idx}`).value  = opt.dataset.unitCost || '';
     recalcRow(idx);
 }
@@ -253,6 +307,9 @@ document.getElementById('transfer-form').addEventListener('submit', function(e) 
 
 // Add first row on load
 addRow();
+
+// Apply warehouse difference rule on page load (old input / non-admin fixed source)
+syncWarehouseOptions();
 
 // If admin, trigger load on page load if a warehouse is already selected (old input)
 @if(auth()->user()->hasAdminAccess())

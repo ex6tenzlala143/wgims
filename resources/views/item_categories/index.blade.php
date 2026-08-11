@@ -103,9 +103,10 @@
                         <th>Label</th>
                         <th>Account Code</th>
                         <th>Key</th>
+                        <th style="text-align:right">Item Names</th>
                         <th style="text-align:right">Items</th>
                         <th>Status</th>
-                        <th style="min-width:130px">Actions</th>
+                        <th style="min-width:150px">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -122,6 +123,9 @@
                             <code style="font-size:11px;color:var(--text-muted)">{{ $cat->key }}</code>
                         </td>
                         <td style="text-align:right;font-weight:600">
+                            {{ $cat->catalogItems->count() }}
+                        </td>
+                        <td style="text-align:right;font-weight:600">
                             {{ $cat->items_count }}
                         </td>
                         <td>
@@ -133,6 +137,13 @@
                         </td>
                         <td>
                             <div style="display:flex;gap:4px">
+                                {{-- Manage item names --}}
+                                <button type="button" class="btn btn-sm btn-outline btn-icon"
+                                        title="Manage Item Names"
+                                        onclick="toggleCatalog({{ $cat->id }})">
+                                    <i class="fas fa-cubes"></i>
+                                </button>
+
                                 {{-- Edit --}}
                                 <button type="button" class="btn btn-sm btn-outline btn-icon"
                                         title="Edit"
@@ -172,6 +183,118 @@
                             </div>
                         </td>
                     </tr>
+
+                    {{-- ── Item names panel (expandable) ─────────────────────────────── --}}
+                    <tr class="catalog-row" id="catalog-row-{{ $cat->id }}" style="display:none">
+                        <td colspan="8" style="padding:0;background:#fbfdff">
+                            <div style="padding:16px 20px">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                                    <strong style="font-size:13px">
+                                        <i class="fas fa-cubes" style="color:var(--primary)"></i>
+                                        Item Names — {{ $cat->label }}
+                                        <span style="font-weight:400;color:var(--text-muted)">({{ $cat->catalogItems->count() }} total)</span>
+                                    </strong>
+                                    <button type="button" class="btn btn-sm btn-outline" onclick="toggleCatalog({{ $cat->id }})">
+                                        <i class="fas fa-chevron-up"></i> Close
+                                    </button>
+                                </div>
+
+                                {{-- Add item name --}}
+                                <form action="{{ route('item_catalog_items.store') }}" method="POST" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">
+                                    @csrf
+                                    <input type="hidden" name="item_category_id" value="{{ $cat->id }}">
+                                    <div style="flex:2;min-width:220px">
+                                        <label class="form-label" style="font-size:12px">Item Name / Description <span style="color:red">*</span></label>
+                                        <input type="text" name="name" class="form-control" placeholder="e.g. Bond Paper A4" value="{{ old('item_category_id') == $cat->id ? old('name') : '' }}" required>
+                                    </div>
+                                    <div style="flex:1;min-width:160px">
+                                        <label class="form-label" style="font-size:12px">Account Code <span style="color:red">*</span></label>
+                                        <input type="text" name="account_code" class="form-control" placeholder="e.g. 101-001" value="{{ old('item_category_id') == $cat->id ? old('account_code') : '' }}" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-primary" style="margin-bottom:2px"><i class="fas fa-plus"></i> Add Item Name</button>
+                                </form>
+                                @if(old('item_category_id') == $cat->id)
+                                    @error('name')<div style="color:var(--danger);font-size:12px;margin-bottom:6px">{{ $message }}</div>@enderror
+                                    @error('account_code')<div style="color:var(--danger);font-size:12px;margin-bottom:6px">{{ $message }}</div>@enderror
+                                @endif
+
+                                {{-- Item name list --}}
+                                @if($cat->catalogItems->isEmpty())
+                                <div style="font-size:12px;color:var(--text-muted);padding:8px 0">
+                                    No item names yet. Add one above — these become selectable descriptions in the New Delivery/Subsidy form.
+                                </div>
+                                @else
+                                <div class="table-wrapper">
+                                    <table class="line-items-table" style="font-size:13px">
+                                        <thead>
+                                            <tr>
+                                                <th>Item Name / Description</th>
+                                                <th style="width:180px">Account Code</th>
+                                                <th style="width:90px">Status</th>
+                                                <th style="width:110px">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($cat->catalogItems as $ci)
+                                            <tr>
+                                                <td>{{ $ci->name }}</td>
+                                                <td>
+                                                    <code style="font-size:12px;background:#f0f4f8;padding:2px 6px;border-radius:4px">{{ $ci->account_code }}</code>
+                                                </td>
+                                                <td>
+                                                    @if($ci->is_active)
+                                                        <span class="badge badge-success">Active</span>
+                                                    @else
+                                                        <span class="badge badge-secondary">Inactive</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    <div style="display:flex;gap:4px">
+                                                        <button type="button" class="btn btn-sm btn-outline btn-icon" title="Edit"
+                                                                onclick="openCatalogEdit({{ $ci->id }}, {{ $cat->id }}, {{ json_encode($ci->name) }}, {{ json_encode($ci->account_code) }}, {{ $ci->is_active ? 'true' : 'false' }})">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <form action="{{ route('item_catalog_items.destroy', $ci->id) }}" method="POST" style="display:inline"
+                                                              onsubmit="return confirm('Delete item name &quot;{{ $ci->name }}&quot;? This cannot be undone.')">
+                                                            @csrf @method('DELETE')
+                                                            <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @endif
+
+                                {{-- Edit item name form (hidden, filled via JS) --}}
+                                <form action="" method="POST" id="catalog-edit-form-{{ $cat->id }}" style="display:none;margin-top:14px;padding:14px;border:1px solid var(--primary);border-radius:8px;background:#f0f9ff">
+                                    @csrf @method('PUT')
+                                    <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--primary)"><i class="fas fa-edit"></i> Edit Item Name</div>
+                                    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+                                        <div style="flex:2;min-width:220px">
+                                            <label class="form-label" style="font-size:12px">Item Name / Description</label>
+                                            <input type="text" name="name" class="form-control catalog-edit-name" required>
+                                        </div>
+                                        <div style="flex:1;min-width:160px">
+                                            <label class="form-label" style="font-size:12px">Account Code</label>
+                                            <input type="text" name="account_code" class="form-control catalog-edit-code" required>
+                                        </div>
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-bottom:8px">
+                                            <input type="checkbox" name="is_active" value="1" class="catalog-edit-active" style="width:15px;height:15px"> Active
+                                        </label>
+                                        <div style="display:flex;gap:6px;padding-bottom:2px">
+                                            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> Save</button>
+                                            <button type="button" class="btn btn-sm btn-secondary" onclick="closeCatalogEdit({{ $cat->id }})">Cancel</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
                     @endforeach
                 </tbody>
             </table>
@@ -180,8 +303,8 @@
 
         <div class="card-footer" style="font-size:12px;color:var(--text-muted)">
             <i class="fas fa-info-circle"></i>
-            Categories with existing items cannot be deleted — deactivate them instead to hide them from dropdowns.
-            Changes take effect immediately across all modules.
+            Manage the <strong>item names</strong> (description + account code) available under each category — they appear in the searchable
+            item dropdown of the New Delivery/Subsidy form. Categories with existing inventory items cannot be deleted — deactivate them instead.
         </div>
     </div>
 
@@ -190,7 +313,8 @@
 
 @push('scripts')
 <script>
-const editRouteBase = '{{ url("/item-categories") }}';
+const editRouteBase          = '{{ url("/item-categories") }}';
+const catalogEditRouteBase   = '{{ url("/item-categories/catalog-items") }}';
 
 function openEdit(id, label, accountCode, sortOrder, isActive) {
     const form = document.getElementById('edit-form');
@@ -210,5 +334,37 @@ function cancelEdit() {
     document.getElementById('edit-card').style.display = 'none';
     document.getElementById('add-card').style.display  = '';
 }
+
+function toggleCatalog(id) {
+    const row = document.getElementById('catalog-row-' + id);
+    if (!row) return;
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function openCatalogEdit(id, catId, name, code, isActive) {
+    const form = document.getElementById('catalog-edit-form-' + catId);
+    if (!form) return;
+    form.action = catalogEditRouteBase + '/' + id;
+    form.querySelector('.catalog-edit-name').value   = name;
+    form.querySelector('.catalog-edit-code').value   = code;
+    form.querySelector('.catalog-edit-active').checked = isActive;
+    form.style.display = '';
+    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeCatalogEdit(catId) {
+    const form = document.getElementById('catalog-edit-form-' + catId);
+    if (form) form.style.display = 'none';
+}
+
+@if($errors->has('name') || $errors->has('account_code'))
+(function() {
+    const catId = Number('{{ old('item_category_id', '') }}');
+    if (catId) {
+        const row = document.getElementById('catalog-row-' + catId);
+        if (row) row.style.display = '';
+    }
+})();
+@endif
 </script>
 @endpush

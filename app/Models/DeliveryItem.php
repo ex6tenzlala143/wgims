@@ -12,12 +12,18 @@ class DeliveryItem extends Model
         'item_id',
         'quantity_delivered', // per-item qty for stock card purposes
         'unit_cost',
+        'engas_unit_cost',
+        'engas_total_cost',
         'condition',
+        'warehouse_id',      // the warehouse this dispatch delivered stock into
+        'dr_number',         // this dispatched item's own Delivery Receipt number
     ];
 
     protected $casts = [
         'quantity_delivered' => 'float',
         'unit_cost'          => 'float',
+        'engas_unit_cost'    => 'float',
+        'engas_total_cost'   => 'float',
     ];
 
     protected static function boot(): void
@@ -50,6 +56,11 @@ class DeliveryItem extends Model
     public function deliverySubsidyItem()
     {
         return $this->belongsTo(DeliverySubsidyItem::class);
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function item()

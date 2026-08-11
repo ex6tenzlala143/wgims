@@ -14,12 +14,13 @@
     <i class="fas fa-info-circle"></i>
     @if($requisition->status === 'partially_approved')
         <strong>Partially fulfilled.</strong>
-        Some items were previously issued. The table below shows only the outstanding quantities.
-        Enter how much to issue now — you can issue less than the outstanding amount and come back later.
+        Some items were previously issued. For each line below, choose the warehouse and exact stock
+        record to issue from now — a line may be issued in parts from different warehouses.
     @else
         <strong>Review the requested quantities.</strong>
-        If stock is insufficient, you can issue only the available amount.
-        The stock card will be updated automatically upon approval.
+        Choose the warehouse and exact stock record (item + unit cost) to issue each line from.
+        Issuance is deducted only from that record — it will never fall back to another
+        unit-cost/FIFO record, and each dispatch keeps its own warehouse and DR Number.
     @endif
 </div>
 
@@ -28,80 +29,151 @@
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">
     <div>
         <div class="card" style="margin-bottom:20px">
-            <div class="card-header"><h3>Items to Issue</h3></div>
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Stock No.</th>
-                            <th>Description</th>
-                            <th>Unit</th>
-                            <th style="text-align:right">Qty Requested</th>
-                            <th style="text-align:right">Already Issued</th>
-                            <th style="text-align:right">Outstanding</th>
-                            <th style="text-align:right">Current Stock</th>
-                            <th style="width:140px">Qty to Issue Now</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($requisition->items as $ri)
-                        @php
-                            $available   = $ri->item->quantity ?? 0;
-                            $outstanding = max(0, $ri->quantity_requested - $ri->quantity_issued);
-                            $canIssue    = min($available, $outstanding);
-                            $isDone      = $outstanding <= 0;
-                        @endphp
-                        <tr style="{{ $isDone ? 'opacity:.6;background:#f7fafc' : '' }}">
-                            <td><code>{{ $ri->item->stock_number ?? '-' }}</code></td>
-                            <td>
-                                {{ $ri->item->description ?? '-' }}
+            <div class="card-header">
+                <h3>Items to Issue</h3>
+                <span style="font-size:12px;color:var(--text-muted);font-weight:400">
+                    Each dispatch is recorded with its own warehouse, stock record, DR Number and costs.
+                </span>
+            </div>
+            <div class="card-body" style="display:grid;gap:20px">
+                @foreach($requisition->items as $ri)
+                @php
+                    $outstanding = max(0, $ri->quantity_requested - $ri->quantity_issued);
+                    $isDone      = $outstanding <= 0;
+                @endphp
+                <div class="ris-item-card" style="{{ $isDone ? 'opacity:.72;background:#fbfcfd' : '' }}">
+                    <div class="ris-item-head">
+                        <div>
+                            <i class="fas fa-box" style="color:var(--primary)"></i>
+                            <span style="font-weight:700">{{ $ri->description ?? ($ri->item?->description ?? '—') }}</span>
+                            @if($ri->unit)
+                                <span style="font-size:12px;color:var(--text-muted);margin-left:6px">{{ $ri->unit }}</span>
+                            @endif
+                            @if($isDone)
+                                <span class="badge badge-success" style="font-size:10px;margin-left:6px"><i class="fas fa-check"></i> Fulfilled</span>
+                            @endif
+                        </div>
+                        <div style="display:flex;gap:18px;font-size:12px;text-align:right">
+                            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Requested</div><strong>{{ number_format($ri->quantity_requested, 2) }}</strong></div>
+                            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Already Issued</div><strong style="color:var(--success)">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued, 2) : '—' }}</strong></div>
+                            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Outstanding</div>
                                 @if($isDone)
-                                    <span class="badge badge-success" style="font-size:10px;margin-left:4px">
-                                        <i class="fas fa-check"></i> Fulfilled
-                                    </span>
-                                @endif
-                            </td>
-                            <td>{{ $ri->item->unit ?? '-' }}</td>
-                            <td style="text-align:right;font-weight:600">{{ number_format($ri->quantity_requested, 2) }}</td>
-                            <td style="text-align:right;color:var(--success)">
-                                {{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued, 2) : '—' }}
-                            </td>
-                            <td style="text-align:right">
-                                @if($isDone)
-                                    <span class="badge badge-success">—</span>
+                                    <span class="badge badge-success" style="font-size:10px">—</span>
                                 @else
-                                    <span style="font-weight:700;color:var(--warning)">{{ number_format($outstanding, 2) }}</span>
+                                    <strong style="color:var(--warning)">{{ number_format($outstanding, 2) }}</strong>
                                 @endif
-                            </td>
-                            <td style="text-align:right">
-                                <span class="{{ $available >= $outstanding ? 'badge badge-success' : 'badge badge-danger' }}">
-                                    {{ number_format($available, 2) }}
-                                </span>
-                            </td>
-                            <td>
-                                <input type="number"
-                                       name="items[{{ $ri->id }}][quantity_issued]"
-                                       class="form-control"
-                                       min="0"
-                                       step="0.01"
-                                       value="{{ $isDone ? 0 : $canIssue }}"
-                                       {{ $isDone ? 'disabled' : '' }}
-                                       title="Outstanding: {{ $outstanding }} | Available: {{ $available }}">
-                                @if(!$isDone && $available < $outstanding)
-                                <small style="color:var(--danger);font-size:11px">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    Only {{ number_format($available, 2) }} in stock
-                                </small>
-                                @endif
-                                @if($isDone)
-                                    {{-- Submit 0 for fulfilled lines so the controller sees them --}}
-                                    <input type="hidden" name="items[{{ $ri->id }}][quantity_issued]" value="0">
-                                @endif
-                            </td>
-                        </tr>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if($ri->dispatchItems->isNotEmpty())
+                    <div class="ris-item-meta" style="display:grid;gap:4px">
+                        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Previously Dispatched</div>
+                        @foreach($ri->dispatchItems as $di)
+                            <span style="font-size:12px">
+                                <strong>{{ $di->quantity_issued }} {{ $ri->unit }}</strong>
+                                from <strong>{{ $di->item?->warehouse?->name ?? '—' }}</strong>
+                                (DR# {{ $di->dr_number ?? '—' }})
+                                @if($di->expiration_date) · Exp. {{ $di->expiration_date->format('M d, Y') }} @endif
+                                · {{ $di->created_at?->format('M d, Y') }}
+                            </span>
                         @endforeach
-                    </tbody>
-                </table>
+                    </div>
+                    @endif
+
+                    @if(!$isDone)
+                    <div class="form-section-label"><i class="fas fa-truck-fast"></i> Dispatch from (this issuance)</div>
+                    <div class="form-row cols-2">
+                        <div class="form-group">
+                            <label class="form-label">Warehouse <span class="req">*</span></label>
+                            <select name="items[{{ $ri->id }}][warehouse_id]"
+                                    id="wh-select-{{ $ri->id }}"
+                                    class="form-control ris-wh-select {{ $errors->has('items.' . $ri->id . '.warehouse_id') ? 'is-invalid' : '' }}"
+                                    onchange="onWhChange('{{ $ri->id }}')">
+                                <option value="">— Select Warehouse —</option>
+                                @foreach($warehouses as $w)
+                                    <option value="{{ $w->id }}" {{ old('items.' . $ri->id . '.warehouse_id') == $w->id ? 'selected' : '' }}>
+                                        {{ $w->name }}{{ $w->code ? ' (' . $w->code . ')' : '' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error("items.{$ri->id}.warehouse_id")
+                            <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
+                                <i class="fas fa-exclamation-triangle"></i> {{ $message }}
+                            </small>
+                            @enderror
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Stock Record <span class="req">*</span></label>
+                            <select name="items[{{ $ri->id }}][item_id]"
+                                    id="item-select-{{ $ri->id }}"
+                                    class="form-control {{ $errors->has('items.' . $ri->id . '.item_id') ? 'is-invalid' : '' }}"
+                                    onchange="fillDispatchItem(this, '{{ $ri->id }}')">
+                                <option value="">— Select Warehouse first —</option>
+                            </select>
+                            @error("items.{$ri->id}.item_id")
+                            <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
+                                <i class="fas fa-exclamation-triangle"></i> {{ $message }}
+                            </small>
+                            @enderror
+                            <small id="stock-{{ $ri->id }}" style="color:var(--text-muted);font-size:11px"></small>
+                        </div>
+                    </div>
+
+                    <div class="form-row cols-3">
+                        <div class="form-group">
+                            <label class="form-label">Quantity to Issue Now</label>
+                            <input type="number"
+                                   name="items[{{ $ri->id }}][quantity_issued]"
+                                   id="qty-{{ $ri->id }}"
+                                   class="form-control"
+                                   min="0" step="0.01"
+                                   value="{{ old('items.' . $ri->id . '.quantity_issued', 0) }}"
+                                   oninput="checkDispatch('{{ $ri->id }}')">
+                            @error("items.{$ri->id}.quantity_issued")
+                            <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
+                                <i class="fas fa-exclamation-triangle"></i> {{ $message }}
+                            </small>
+                            @enderror
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Unit Cost</label>
+                            <input type="number" name="items[{{ $ri->id }}][unit_cost]"
+                                   id="unit-cost-{{ $ri->id }}" class="form-control" readonly tabindex="-1"
+                                   step="0.01" min="0" placeholder="—">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">ENGAS Unit Cost</label>
+                            <input type="number" name="items[{{ $ri->id }}][engas_unit_cost]"
+                                   id="engas-cost-{{ $ri->id }}" class="form-control"
+                                   min="0" step="0.01" placeholder="—">
+                        </div>
+                    </div>
+                    <div class="form-row cols-2">
+                        <div class="form-group">
+                            <label class="form-label">Expiration Date</label>
+                            <input type="date" name="items[{{ $ri->id }}][expiration_date]"
+                                   id="expiry-date-{{ $ri->id }}" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">DR Number <span class="req">*</span> <span class="hint">(Delivery Receipt — per dispatch)</span></label>
+                            <input type="text" name="items[{{ $ri->id }}][dr_number]"
+                                   id="dr-number-{{ $ri->id }}"
+                                   class="form-control {{ $errors->has('items.' . $ri->id . '.dr_number') ? 'is-invalid' : '' }}"
+                                   value="{{ old('items.' . $ri->id . '.dr_number') }}"
+                                   placeholder="e.g. DR-001">
+                            @error("items.{$ri->id}.dr_number")
+                            <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
+                                <i class="fas fa-exclamation-triangle"></i> {{ $message }}
+                            </small>
+                            @enderror
+                        </div>
+                    </div>
+                    @else
+                        <input type="hidden" name="items[{{ $ri->id }}][quantity_issued]" value="0">
+                    @endif
+                </div>
+                @endforeach
             </div>
         </div>
 
@@ -143,7 +215,7 @@
             <div class="card-header"><h3>RIS Summary</h3></div>
             <div class="card-body" style="font-size:14px">
                 <div style="margin-bottom:10px"><span style="color:var(--text-muted)">RIS Number:</span><br><strong>{{ $requisition->ris_number }}</strong></div>
-                <div style="margin-bottom:10px"><span style="color:var(--text-muted)">Warehouse:</span><br>{{ $requisition->warehouse->name ?? '-' }}</div>
+                <div style="margin-bottom:10px"><span style="color:var(--text-muted)">Warehouse(s):</span><br>{{ $requisition->warehouse_names }}</div>
                 <div style="margin-bottom:10px"><span style="color:var(--text-muted)">Purpose:</span><br>{{ $requisition->purpose }}</div>
                 <div style="margin-bottom:10px"><span style="color:var(--text-muted)">Items:</span><br>{{ $requisition->items->count() }} item(s)</div>
                 @php
@@ -176,4 +248,102 @@
     </div>
 </div>
 </form>
+
+@push('scripts')
+<script>
+const ITEMS_API_URL = '{{ route("requisitions.items_by_warehouse") }}';
+
+function onWhChange(idx) {
+    const sel = document.getElementById('wh-select-' + idx);
+    const itemSel = document.getElementById('item-select-' + idx);
+    const stockEl = document.getElementById('stock-' + idx);
+    if (!sel || !itemSel) { return; }
+
+    // Reset the item dropdown
+    itemSel.innerHTML = '<option value="">— Select Warehouse first —</option>';
+    if (stockEl) { stockEl.textContent = ''; }
+    resetDispatchFields(idx);
+
+    if (!sel.value) { return; }
+
+    itemSel.innerHTML = '<option value="">— Loading stock records… —</option>';
+    itemSel.disabled = true;
+
+    fetch(`${ITEMS_API_URL}?warehouse_id=${encodeURIComponent(sel.value)}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+    })
+    .then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+    .then(data => {
+        const opts = data.map(i =>
+            `<option value="${i.id}"
+                data-unit-cost="${i.unit_cost || 0}"
+                data-engas="${i.engas_unit_cost || ''}"
+                data-expiry="${i.expiry_date || ''}"
+                data-stock="${i.quantity}"
+                data-sn="${i.stock_number || ''}"
+                data-unit="${i.unit || ''}"
+            >${i.description}${i.stock_number ? ' [' + i.stock_number + ']' : ''} · ₱${Number(i.unit_cost || 0).toFixed(2)} · ${Number(i.quantity).toFixed(2)} ${i.unit || ''}</option>`
+        ).join('');
+        itemSel.innerHTML = '<option value="">— Select Stock Record —</option>' + opts;
+        itemSel.disabled = false;
+    })
+    .catch(() => {
+        itemSel.innerHTML = '<option value="">— Failed to load records —</option>';
+        itemSel.disabled = false;
+    });
+}
+
+function resetDispatchFields(idx) {
+    ['unit-cost', 'engas-cost'].forEach(prefix => {
+        const el = document.getElementById(prefix + '-' + idx);
+        if (el) { el.value = ''; }
+    });
+    const exp = document.getElementById('expiry-date-' + idx);
+    if (exp) { exp.value = ''; }
+}
+
+function fillDispatchItem(sel, idx) {
+    const opt = sel.options[sel.selectedIndex];
+    const stockEl = document.getElementById('stock-' + idx);
+
+    if (!opt.value) {
+        resetDispatchFields(idx);
+        if (stockEl) { stockEl.textContent = ''; }
+        return;
+    }
+
+    const cost = document.getElementById('unit-cost-' + idx);
+    if (cost) { cost.value = opt.dataset.unitCost || ''; }
+
+    const engas = document.getElementById('engas-cost-' + idx);
+    if (engas && !engas.value) { engas.value = opt.dataset.engas || ''; }
+
+    const exp = document.getElementById('expiry-date-' + idx);
+    if (exp && !exp.value) { exp.value = opt.dataset.expiry || ''; }
+
+    if (stockEl) {
+        const stock = parseFloat(opt.dataset.stock || 0);
+        stockEl.textContent = 'Available on this record: ' + Number(stock).toLocaleString('en-PH', { maximumFractionDigits: 2 });
+        stockEl.style.color = stock > 0 ? 'var(--success)' : 'var(--danger)';
+    }
+
+    const qtyInput = document.getElementById('qty-' + idx);
+    if (qtyInput) { qtyInput.max = opt.dataset.stock || ''; }
+    checkDispatch(idx);
+}
+
+function checkDispatch(idx) {
+    const qtyInput = document.getElementById('qty-' + idx);
+    const drInput  = document.getElementById('dr-number-' + idx);
+    if (!qtyInput) { return; }
+
+    const qty = parseFloat(qtyInput.value) || 0;
+    if (drInput) {
+        // DR# is only required when actually dispatching a quantity
+        if (qty > 0) { drInput.setAttribute('required', ''); }
+        else         { drInput.removeAttribute('required'); }
+    }
+}
+</script>
+@endpush
 @endsection

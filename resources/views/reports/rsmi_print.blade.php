@@ -277,13 +277,13 @@
             @foreach($items as $ri)
             <tr class="data-row">
                 <td>{{ $ris->ris_number }}</td>
-                <td>{{ $ris->warehouse->code ?? '' }}</td>
-                <td>{{ $ri->item->stock_number ?? '' }}</td>
-                <td class="left">{{ $ri->item->description ?? '' }}</td>
-                <td>{{ $ri->item->unit ?? '' }}</td>
+                <td>{{ $ri->warehouse?->code ?? $ris->warehouse?->code ?? '' }}</td>
+                <td>{{ $ri->item?->stock_number ?? '' }}</td>
+                <td class="left">{{ $ri->description ?? $ri->item?->description ?? '' }}</td>
+                <td>{{ $ri->unit ?? $ri->item?->unit ?? '' }}</td>
                 <td class="right col-divider">{{ number_format($ri->quantity_issued, 2) }}</td>
-                <td class="right">{{ number_format($ri->item->unit_cost ?? 0, 2) }}</td>
-                <td class="right">{{ number_format($ri->quantity_issued * ($ri->item->unit_cost ?? 0), 2) }}</td>
+                <td class="right">{{ number_format($ri->unit_cost ?? $ri->item?->unit_cost ?? 0, 2) }}</td>
+                <td class="right">{{ number_format($ri->quantity_issued * ($ri->unit_cost ?? $ri->item?->unit_cost ?? 0), 2) }}</td>
             </tr>
             @endforeach
 

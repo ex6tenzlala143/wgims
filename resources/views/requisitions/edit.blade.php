@@ -20,7 +20,7 @@
                 <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">RIS Number</label>
-                        <input type="text" class="form-control" value="{{ $requisition->ris_number }}" readonly style="background:#f7fafc;font-weight:600">
+                        <input type="text" class="form-control" value="{{ $requisition->ris_number }}" readonly style="background:var(--surface-soft);font-weight:600">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Date Requested <span style="color:red">*</span></label>
@@ -39,25 +39,6 @@
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">DR Number <span style="color:red">*</span> <span style="color:var(--text-muted);font-size:12px">(Delivery Receipt)</span></label>
-                        <input type="text" name="dr_number" class="form-control" value="{{ old('dr_number', $requisition->dr_number) }}" placeholder="e.g. DR-2026-0001" required>
-                        @error('dr_number')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="form-group">
-                        {{-- spacer --}}
-                    </div>
-                </div>
-                <div class="form-row cols-2">
-                    <div class="form-group">
-                        <label class="form-label">Warehouse <span style="color:red">*</span></label>
-                        <select name="warehouse_id" id="warehouse-select" class="form-control" required>
-                            <option value="">— Select Warehouse —</option>
-                            @foreach($warehouses as $c)
-                            <option value="{{ $c->id }}" {{ old('warehouse_id', $requisition->warehouse_id) == $c->id ? 'selected' : '' }}>{{ $c->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="form-group">
                         <label class="form-label">Responsibility Center Code</label>
                         <input type="text" name="responsibility_center_code" class="form-control" value="{{ old('responsibility_center_code', $requisition->responsibility_center_code) }}">
                     </div>
@@ -72,6 +53,21 @@
                         <input type="text" name="division" class="form-control" value="{{ old('division', $requisition->division) }}">
                     </div>
                 </div>
+
+                <div class="form-section-label">
+                    <i class="fas fa-city"></i> Requesting LGU
+                </div>
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label class="form-label">Province</label>
+                        <input type="text" name="province" class="form-control" value="{{ old('province', $requisition->province) }}" placeholder="e.g. Cebu" style="width:100%">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Municipality</label>
+                        <input type="text" name="municipality" class="form-control" value="{{ old('municipality', $requisition->municipality) }}" placeholder="e.g. Lapu-Lapu City" style="width:100%">
+                    </div>
+                </div>
+
                 <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">Requested By</label>
@@ -108,84 +104,95 @@
         <div class="card">
             <div class="card-header">
                 <h3>Requested Items</h3>
+                <span style="font-size:12px;color:var(--text-muted);font-weight:400">
+                    The warehouse and exact stock record are chosen by the warehouse when items are issued.
+                    Lines that have already been dispatched are locked — their quantity cannot go below what
+                    was issued, and their item cannot be changed.
+                </span>
                 <button type="button" class="btn btn-sm btn-primary" onclick="addRisRow()"><i class="fas fa-plus"></i> Add Item</button>
             </div>
 
-            {{-- Loading notice shown while items are being fetched --}}
-            <div id="items-notice" style="padding:20px;font-size:13px;color:var(--text-muted);display:none;align-items:center;gap:8px">
-                <i class="fas fa-spinner fa-spin" style="color:var(--primary)"></i> Loading items&hellip;
-            </div>
-
-            <div class="card-body" style="padding:0" id="items-table-wrapper">
-                <div class="table-wrapper">
-                    <table class="line-items-table" id="ris-table">
-                        <thead>
-                            <tr>
-                                <th>Stock No.</th>
-                                <th>Item Description</th>
-                                <th>Unit</th>
-                                <th>Available Stock</th>
-                                <th>Expiration Date</th>
-                                <th style="width:110px;text-align:right">Unit Cost</th>
-                                <th style="width:120px">Qty Requested</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="ris-body">
-                            {{-- rows pre-rendered by PHP, then JS enriches them once the API loads --}}
-                            @foreach($requisition->items as $idx => $ri)
-                            <tr id="ris-row-{{ $idx }}">
-                                <td><span id="sn-{{ $idx }}" style="font-size:12px;color:var(--text-muted)">{{ $ri->item->stock_number ?? '—' }}</span></td>
-                                <td>
-                                    {{-- item_id stored so JS can match it after the API loads --}}
-                                    <select name="items[{{ $idx }}][item_id]"
-                                            class="ris-item-select"
-                                            id="item-select-{{ $idx }}"
-                                            data-selected="{{ $ri->item_id }}"
-                                            onchange="fillRisItem(this, {{ $idx }})" required>
-                                        <option value="{{ $ri->item_id }}" selected>{{ $ri->item->description ?? '—' }}</option>
-                                    </select>
-                                </td>
-                                <td><span id="unit-{{ $idx }}">{{ $ri->item->unit ?? '—' }}</span></td>
-                                <td><span id="stock-{{ $idx }}" style="font-weight:600;color:{{ ($ri->item->quantity ?? 0) > 0 ? 'var(--success)' : 'var(--danger)' }}">{{ number_format($ri->item->quantity ?? 0, 2) }}</span></td>
-                                <td>
-                                    <span id="expiry-{{ $idx }}" style="font-size:12px">
-                                        @if($ri->expiration_date)
-                                            {{ $ri->expiration_date->format('M d, Y') }}
-                                        @elseif($ri->item->expiration_date)
-                                            {{ $ri->item->expiration_date->format('M d, Y') }}
-                                        @else
-                                            —
-                                        @endif
+            <div class="card-body">
+                <div id="ris-items" style="display:grid;gap:20px">
+                    @foreach($requisition->items as $idx => $ri)
+                    @php
+                        $locked = $ri->quantity_issued > 0 || $ri->dispatchItems->isNotEmpty();
+                    @endphp
+                    <div class="ris-item-card" id="ris-card-{{ $idx }}">
+                        <div class="ris-item-head">
+                            <div>
+                                <i class="fas fa-box" style="color:var(--primary)"></i>
+                                Item <span class="ris-item-num">{{ $loop->iteration }}</span>
+                                @if($ri->quantity_issued > 0)
+                                    <span class="badge badge-success" style="font-size:10px;margin-left:6px">
+                                        <i class="fas fa-check"></i> {{ number_format($ri->quantity_issued, 2) }} issued
                                     </span>
-                                </td>
-                                <td style="text-align:right">
-                                    <input type="number"
-                                           id="unit-cost-{{ $idx }}"
-                                           name="items[{{ $idx }}][unit_cost]"
-                                           class="form-control"
-                                           style="text-align:right;background:#f7fafc;min-width:90px"
-                                           readonly tabindex="-1"
-                                           step="0.01" min="0"
-                                           value="{{ $ri->unit_cost > 0 ? number_format($ri->unit_cost, 2, '.', '') : ($ri->item->unit_cost > 0 ? number_format($ri->item->unit_cost, 2, '.', '') : '') }}">
-                                </td>
-        <td>
-            <input type="number"
-                   name="items[{{ $idx }}][quantity_requested]"
-                   id="qty-{{ $idx }}"
-                   class="form-control"
-                   min="0.01" step="0.01"
-                   value="{{ $ri->quantity_requested }}"
-                   oninput="validateQty(this, {{ $idx }})" required>
-            <div id="qty-warn-{{ $idx }}" style="color:var(--danger);font-size:11px;margin-top:2px;display:none">
-                Exceeds available stock.
-            </div>
-        </td>
-                                <td><button type="button" class="remove-row" onclick="removeRisRow('ris-row-{{ $idx }}')"><i class="fas fa-times"></i></button></td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                                @endif
+                            </div>
+                            <button type="button" class="remove-row" title="Remove item" onclick="removeRisRow('ris-card-{{ $idx }}')"><i class="fas fa-times"></i></button>
+                        </div>
+
+                        <input type="hidden" name="items[{{ $idx }}][id]" value="{{ $ri->id }}">
+                        @if($locked)
+                            {{-- Disabled inputs are not submitted, so mirror the values --}}
+                            <input type="hidden" name="items[{{ $idx }}][catalog_item_id]" value="{{ $ri->catalog_item_id }}">
+                            <input type="hidden" name="items[{{ $idx }}][quantity_requested]" value="{{ $ri->quantity_requested }}">
+                        @endif
+
+                        <div class="form-group">
+                            <label class="form-label">Item Description <span class="req">*</span></label>
+                            <select name="items[{{ $idx }}][catalog_item_id]"
+                                    class="ris-item-select form-control"
+                                    id="item-select-{{ $idx }}"
+                                    data-selected="{{ $ri->catalog_item_id }}"
+                                    onchange="fillRisItem(this, {{ $idx }})"
+                                    {{ $locked ? 'disabled' : '' }} required>
+                                <option value="{{ $ri->catalog_item_id }}" selected>{{ $ri->description ?? ($ri->item?->description ?? '—') }}</option>
+                            </select>
+                            @if($locked)
+                                <small style="color:var(--text-muted);font-size:11px">Item is locked because this line has already been dispatched.</small>
+                            @endif
+                        </div>
+
+                        <div class="form-row cols-2">
+                            <div class="form-group">
+                                <label class="form-label">Requested Quantity <span class="req">*</span></label>
+                                <input type="number"
+                                       name="items[{{ $idx }}][quantity_requested]"
+                                       id="qty-{{ $idx }}"
+                                       class="form-control"
+                                       min="{{ $locked ? number_format($ri->quantity_issued, 2, '.', '') : '0.01' }}" step="0.01"
+                                       value="{{ $ri->quantity_requested }}"
+                                       {{ $locked ? 'disabled' : '' }} required>
+                                @if($locked)
+                                    <small style="color:var(--text-muted);font-size:11px">
+                                        Cannot be reduced below the {{ number_format($ri->quantity_issued, 2) }} already issued.
+                                    </small>
+                                @endif
+                                @error('items.' . $idx . '.quantity_requested')
+                                <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
+                                    <i class="fas fa-exclamation-triangle"></i> {{ $message }}
+                                </small>
+                                @enderror
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Account Code</label>
+                                <input type="text" name="items[{{ $idx }}][account_code]"
+                                       id="account-code-{{ $idx }}" class="form-control" readonly tabindex="-1"
+                                       placeholder="Auto from Item Categories"
+                                       value="{{ $ri->account_code ?? '' }}">
+                            </div>
+                        </div>
+
+                        <div class="ris-item-meta">
+                            <span>Unit <strong>{{ $ri->unit ?? ($ri->item?->unit ?? '—') }}</strong></span>
+                            <span>Requested <strong>{{ number_format($ri->quantity_requested, 2) }}</strong></span>
+                            @if($ri->dispatchItems->isNotEmpty())
+                                <span>Dispatched From <strong>{{ $ri->dispatchItems->pluck('item.warehouse.name')->unique()->filter()->implode(', ') ?: '—' }}</strong></span>
+                            @endif
+                        </div>
+                    </div>
+                    @endforeach
                 </div>
             </div>
         </div>
@@ -213,233 +220,176 @@
 @push('scripts')
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
-let risRowCount    = {{ $requisition->items->count() }};
-let warehouseItems = [];   // populated once the API responds
+let risRowCount = {{ $requisition->items->count() }};
+let rowState    = {};   // idx → { items, selectedItemId }
 
-const ITEMS_API_URL      = '{{ route("requisitions.items_by_warehouse") }}';
-const INITIAL_WAREHOUSE  = '{{ $requisition->warehouse_id }}';
+const ITEMS_API_URL = '{{ route("requisitions.description_items") }}';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function formatExpiry(expiryDate, expiryYear) {
-    if (expiryDate) {
-        const d = new Date(expiryDate + 'T00:00:00');
-        return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-    if (expiryYear) { return 'Year: ' + expiryYear; }
-    return '—';
-}
-
-function expiryStyle(expiryDate) {
-    if (!expiryDate) { return 'color:var(--text-muted)'; }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const exp      = new Date(expiryDate + 'T00:00:00');
-    const diffDays = Math.floor((exp - today) / 86400000);
-    if (diffDays < 0)   { return 'color:var(--danger);font-weight:700'; }
-    if (diffDays <= 30) { return 'color:var(--danger);font-weight:600'; }
-    if (diffDays <= 90) { return 'color:var(--warning);font-weight:600'; }
-    return 'color:var(--success);font-weight:600';
-}
-
-function formatPeso(value) {
+function formatQty(value) {
     const n = parseFloat(value) || 0;
-    return '₱\u00a0' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return n.toLocaleString('en-PH', { maximumFractionDigits: 2 });
 }
 
-/** Show/hide the over-stock warning and mark the input invalid. */
-function validateQty(input, idx) {
-    const max     = parseFloat(input.max);
-    const val     = parseFloat(input.value);
-    const warnEl  = document.getElementById('qty-warn-' + idx);
-    const isOver  = !isNaN(max) && max >= 0 && !isNaN(val) && val > max;
-    if (warnEl) { warnEl.style.display = isOver ? 'block' : 'none'; }
-    input.style.borderColor = isOver ? 'var(--danger)' : '';
-}
-
-/** Build the <option> list from the current warehouseItems array. */
-function buildOptions(selectedId) {
-    return warehouseItems.map(i => {
+function buildOptionsFor(idx, selectedId) {
+    return (rowState[idx]?.items || []).map(i => {
         const sel = String(i.id) === String(selectedId) ? ' selected' : '';
+        const acctInfo  = i.account_code ? ` · <code>${i.account_code}</code>` : '';
+        const stockInfo = i.total_stock > 0
+            ? ` · ${formatQty(i.total_stock)} ${i.unit || ''} available`
+            : '';
         return `<option value="${i.id}"
             data-unit="${i.unit}"
-            data-stock="${i.quantity}"
-            data-sn="${i.stock_number || ''}"
-            data-unit-cost="${i.unit_cost || 0}"
-            data-expiry="${i.expiry_date || ''}"
-            data-expiry-year="${i.expiry_year || ''}"
-            ${sel}>${i.description}</option>`;
+            data-total-stock="${i.total_stock}"
+            data-account-code="${i.account_code || ''}"
+            ${sel}>${i.name}${acctInfo}${stockInfo}</option>`;
     }).join('');
 }
 
-// ─── Warehouse API loader ─────────────────────────────────────────────────────
-function loadWarehouseItems(warehouseId, callback) {
-    const notice  = document.getElementById('items-notice');
-    notice.style.display = 'flex';
+/** Load the description-level item list. */
+function loadRowItems(idx, selectItemId) {
+    const sel  = document.getElementById('item-select-' + idx);
+    if (!sel) { return; }
 
-    fetch(`${ITEMS_API_URL}?warehouse_id=${encodeURIComponent(warehouseId)}`, {
+    sel.innerHTML = '<option value="">— Loading items… —</option>';
+    sel.disabled  = true;
+
+    fetch(ITEMS_API_URL, {
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
     })
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
     .then(data => {
-        warehouseItems = data;
-        notice.style.display = 'none';
-        if (callback) callback();
-    })
-    .catch(() => {
-        notice.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i> Failed to load items. Please refresh.';
-    });
-}
-
-/** After the API loads, rebuild every existing row's dropdown and fill cost/expiry. */
-function enrichExistingRows() {
-    document.querySelectorAll('.ris-item-select[data-selected]').forEach(sel => {
-        const idx        = sel.id.replace('item-select-', '');
-        const selectedId = sel.dataset.selected;
-
-        // Rebuild the dropdown with full options
-        sel.innerHTML = '<option value="">— Select Item —</option>' + buildOptions(selectedId);
-
-        // Now fill the cost/expiry from the API data
-        const match = warehouseItems.find(i => String(i.id) === String(selectedId));
-        if (match) {
-            // Unit cost
-            const costInput = document.getElementById('unit-cost-' + idx);
-            if (costInput && (!costInput.value || parseFloat(costInput.value) === 0)) {
-                costInput.value = match.unit_cost > 0 ? parseFloat(match.unit_cost).toFixed(2) : '';
-            }
-
-            // Expiry
-            const expiryEl = document.getElementById('expiry-' + idx);
-            if (expiryEl && expiryEl.textContent.trim() === '—') {
-                expiryEl.textContent = formatExpiry(match.expiry_date, match.expiry_year);
-                expiryEl.setAttribute('style', expiryStyle(match.expiry_date) + ';font-size:12px');
-            }
-
-            // Stock
-            const stockEl = document.getElementById('stock-' + idx);
-            if (stockEl) {
-                stockEl.textContent = parseFloat(match.quantity).toFixed(2);
-                stockEl.style.color = match.quantity > 0 ? 'var(--success)' : 'var(--danger)';
-            }
-
-            // Cap qty to available stock
-            const qtyInput = document.getElementById('qty-' + idx);
-            if (qtyInput) {
-                qtyInput.max = match.quantity;
-                validateQty(qtyInput, idx);
+        rowState[idx].items = data;
+        sel.innerHTML = '<option value="">— Select Item —</option>' + buildOptionsFor(idx, selectItemId);
+        sel.disabled  = false;
+        if (selectItemId) {
+            sel.value = String(selectItemId);
+            if (!sel.value) {
+                // Fall back to keeping the original option if the item is gone
+                sel.disabled = true;
             }
         }
+    })
+    .catch(() => {
+        sel.innerHTML = '<option value="">— Failed to load items —</option>';
+        sel.disabled  = false;
     });
 }
 
-// ─── Warehouse change handler ─────────────────────────────────────────────────
-document.getElementById('warehouse-select').addEventListener('change', function () {
-    const warehouseId = this.value;
-    if (!warehouseId) { warehouseItems = []; return; }
-    loadWarehouseItems(warehouseId, enrichExistingRows);
-});
-
 // ─── Row management ───────────────────────────────────────────────────────────
-function addRisRow() {
-    const idx   = risRowCount++;
-    const tbody = document.getElementById('ris-body');
-    const tr    = document.createElement('tr');
-    tr.id = 'ris-row-' + idx;
+function renumberItems() {
+    document.querySelectorAll('#ris-items .ris-item-card .ris-item-num').forEach((el, i) => {
+        el.textContent = i + 1;
+    });
+}
 
-    tr.innerHTML = `
-        <td><span id="sn-${idx}" style="font-size:12px;color:var(--text-muted)">—</span></td>
-        <td>
-            <select name="items[${idx}][item_id]" class="ris-item-select"
-                    id="item-select-${idx}"
-                    onchange="fillRisItem(this, ${idx})" required>
-                <option value="">— Select Item —</option>
-                ${buildOptions(null)}
-            </select>
-        </td>
-        <td><span id="unit-${idx}">—</span></td>
-        <td><span id="stock-${idx}" style="font-weight:600">—</span></td>
-        <td><span id="expiry-${idx}" style="font-size:12px">—</span></td>
-        <td style="text-align:right">
-            <input type="number" id="unit-cost-${idx}" name="items[${idx}][unit_cost]"
-                   class="form-control" style="text-align:right;background:#f7fafc;min-width:90px"
-                   readonly tabindex="-1" placeholder="—" step="0.01" min="0">
-        </td>
-        <td>
-            <input type="number" name="items[${idx}][quantity_requested]"
-                   id="qty-${idx}" class="form-control" min="0.01" step="0.01" required
-                   oninput="validateQty(this, ${idx})">
-            <div id="qty-warn-${idx}" style="color:var(--danger);font-size:11px;margin-top:2px;display:none">
-                Exceeds available stock.
-            </div>
-        </td>
-        <td>
-            <button type="button" class="remove-row" onclick="removeRisRow('ris-row-${idx}')">
+function addRisRow() {
+    const idx = risRowCount++;
+    const container = document.getElementById('ris-items');
+    const card      = document.createElement('div');
+    card.className = 'ris-item-card';
+    card.id = 'ris-card-' + idx;
+
+    card.innerHTML = `
+        <div class="ris-item-head">
+            <div><i class="fas fa-box" style="color:var(--primary)"></i> Item <span class="ris-item-num">${idx + 1}</span></div>
+            <button type="button" class="remove-row" title="Remove item" onclick="removeRisRow('ris-card-${idx}')">
                 <i class="fas fa-times"></i>
             </button>
-        </td>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Item Description <span class="req">*</span></label>
+            <select name="items[${idx}][catalog_item_id]" class="ris-item-select form-control"
+                    id="item-select-${idx}" onchange="fillRisItem(this, ${idx})" required>
+                <option value="">— Select Item —</option>
+            </select>
+        </div>
+
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="form-label">Requested Quantity <span class="req">*</span></label>
+                <input type="number" name="items[${idx}][quantity_requested]"
+                       id="qty-${idx}" class="form-control" min="0.01" step="0.01" required
+                       oninput="checkStock(${idx})">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Account Code</label>
+                <input type="text" name="items[${idx}][account_code]"
+                       id="account-code-${idx}" class="form-control" readonly tabindex="-1"
+                       placeholder="Auto from Item Categories">
+            </div>
+        </div>
+
+        <div class="ris-item-meta">
+            <span>Unit <strong id="unit-${idx}">—</strong></span>
+            <span>Available <strong id="stock-${idx}">—</strong></span>
+        </div>
     `;
-    tbody.appendChild(tr);
+    container.appendChild(card);
+
+    rowState[idx] = { items: [], selectedItemId: null };
+    loadRowItems(idx);
 }
 
 function removeRisRow(id) {
-    if (document.querySelectorAll('#ris-body tr').length > 1) {
+    if (document.querySelectorAll('#ris-items .ris-item-card').length > 1) {
         document.getElementById(id)?.remove();
+        renumberItems();
     }
 }
 
-/** Called when an item is selected in any row. */
 function fillRisItem(sel, idx) {
     const opt    = sel.options[sel.selectedIndex];
     const itemId = opt.value;
 
-    document.getElementById('sn-' + idx).textContent = opt.dataset.sn || '—';
+    rowState[idx].selectedItemId = itemId;
+
     document.getElementById('unit-' + idx).textContent = opt.dataset.unit || '—';
 
-    const stock   = parseFloat(opt.dataset.stock || 0);
+    const acct = document.getElementById('account-code-' + idx);
+    if (acct) { acct.value = opt.dataset.accountCode || ''; }
+
     const stockEl = document.getElementById('stock-' + idx);
-    stockEl.textContent = stock.toFixed(2);
+    const stock   = parseFloat(opt.dataset.totalStock || 0);
+    stockEl.textContent = stock > 0 ? formatQty(stock) : '—';
     stockEl.style.color = stock > 0 ? 'var(--success)' : 'var(--danger)';
 
-    // Cap qty to available stock
     const qtyInput = document.getElementById('qty-' + idx);
-    if (qtyInput) {
-        qtyInput.max = stock;
-        validateQty(qtyInput, idx);
-    }
+    if (qtyInput) { qtyInput.max = stock; }
+    checkStock(idx);
+}
 
-    // Unit cost
-    const costInput = document.getElementById('unit-cost-' + idx);
-    if (costInput) {
-        if (itemId) {
-            const match    = warehouseItems.find(i => String(i.id) === String(itemId));
-            const unitCost = match ? parseFloat(match.unit_cost) || 0 : 0;
-            costInput.value = unitCost > 0 ? unitCost.toFixed(2) : '';
-        } else {
-            costInput.value = '';
-        }
-    }
+function checkStock(idx) {
+    const qtyInput = document.getElementById('qty-' + idx);
+    if (!qtyInput) { return; }
 
-    // Expiry date
-    const expiryEl = document.getElementById('expiry-' + idx);
-    if (!itemId) {
-        expiryEl.textContent = '—';
-        expiryEl.setAttribute('style', 'font-size:12px');
-        return;
-    }
-    const match = warehouseItems.find(i => String(i.id) === String(itemId));
-    if (match) {
-        expiryEl.textContent = formatExpiry(match.expiry_date, match.expiry_year);
-        expiryEl.setAttribute('style', expiryStyle(match.expiry_date) + ';font-size:12px');
+    const opt = document.getElementById('item-select-' + idx)?.selectedOptions?.[0];
+    const stock = opt ? parseFloat(opt.dataset.totalStock || 0) : 0;
+    const qty   = parseFloat(qtyInput.value) || 0;
+
+    qtyInput.classList.toggle('is-invalid', stock > 0 && qty > stock);
+}
+
+// ─── Bootstrap: wire up the server-rendered item cards ────────────────────────
+document.querySelectorAll('#ris-items .ris-item-select').forEach(sel => {
+    const idx    = sel.id.replace('item-select-', '');
+    const itemId = sel.dataset.selected;
+
+    rowState[idx] = { items: [], selectedItemId: itemId };
+
+    if (sel.disabled) {
+        // Locked (already dispatched) lines keep their server-rendered option.
+        rowState[idx].items = [{
+            id: itemId,
+            description: sel.options[sel.selectedIndex]?.text,
+            unit: '',
+            total_stock: 0,
+            record_count: 1,
+        }];
     } else {
-        expiryEl.textContent = '—';
-        expiryEl.setAttribute('style', 'font-size:12px');
+        loadRowItems(idx, itemId);
     }
-}
-
-// ─── Bootstrap: load items for the current warehouse on page load ─────────────
-if (INITIAL_WAREHOUSE) {
-    loadWarehouseItems(INITIAL_WAREHOUSE, enrichExistingRows);
-}
+});
 </script>
 @endpush
 @endsection

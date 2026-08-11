@@ -47,14 +47,6 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Warehouse</label>
-                        <select name="warehouse_id" class="form-control" required>
-                            @foreach($warehouses as $c)
-                            <option value="{{ $c->id }}" {{ old('warehouse_id', $deliverySubsidy->warehouse_id)==$c->id?'selected':'' }}>{{ $c->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
@@ -109,24 +101,32 @@
                 <div class="table-wrapper">
                     <table class="line-items-table" id="items-table">
                         <thead>
-                            <tr><th>Item</th><th>Unit</th><th>Qty</th><th>Unit Cost (₱)</th><th>Amount (₱)</th><th></th></tr>
+                            <tr><th>Item</th><th>Unit</th><th>Qty</th><th>Unit Cost (₱)</th><th>Amount (₱)</th><th>Warehouse <span style="color:red">*</span></th><th></th></tr>
                         </thead>
                         <tbody id="items-body">
                             @foreach($deliverySubsidy->items as $idx => $poi)
                             <tr id="row-{{ $idx }}">
                                 <input type="hidden" name="items[{{ $idx }}][dsi_id]" value="{{ $poi->id }}">
                                 <td>
-                                    <select name="items[{{ $idx }}][item_id]" class="item-select" onchange="fillUnit(this, {{ $idx }})" required>
+                                    <select name="items[{{ $idx }}][item_id]" class="item-select" onchange="fillUnit(this, {{ $idx }})">
                                         <option value="">— Select Item —</option>
                                         @foreach($items as $item)
-                                        <option value="{{ $item->id }}" data-unit="{{ $item->unit }}" {{ $poi->item_id == $item->id ? 'selected' : '' }}>{{ $item->description }}</option>
+                                        <option value="{{ $item->id }}" data-unit="{{ $item->unit }}" data-warehouse="{{ $item->warehouse_id }}" {{ $poi->item_id == $item->id ? 'selected' : '' }}>{{ $item->description }}</option>
                                         @endforeach
                                     </select>
                                 </td>
-                                <td><input type="text" id="unit-{{ $idx }}" class="form-control" readonly value="{{ $poi->item->unit ?? '' }}" style="background:#f7fafc"></td>
+                                <td><input type="text" id="unit-{{ $idx }}" class="form-control" readonly value="{{ $poi->item->unit ?? $poi->unit ?? '' }}" style="background:#f7fafc"></td>
                                 <td><input type="number" name="items[{{ $idx }}][quantity]" class="qty-input" min="0.01" step="0.01" value="{{ $poi->quantity }}" onchange="calcRow({{ $idx }})" required></td>
-                                <td><input type="number" name="items[{{ $idx }}][unit_cost]" class="cost-input" min="0" step="0.01" value="{{ $poi->unit_cost }}" onchange="calcRow({{ $idx }})" required></td>
-                                <td><input type="text" id="amount-{{ $idx }}" class="form-control" readonly value="{{ number_format($poi->amount, 2) }}" style="background:#f7fafc;text-align:right"></td>
+                                <td><input type="number" name="items[{{ $idx }}][unit_cost]" class="cost-input" min="0" step="0.01" value="{{ $poi->unit_cost ?? '' }}" onchange="calcRow({{ $idx }})" placeholder="set at dispatch"></td>
+                                <td><input type="text" id="amount-{{ $idx }}" class="form-control" readonly value="{{ $poi->amount !== null ? number_format($poi->amount, 2) : '' }}" style="background:#f7fafc;text-align:right"></td>
+                                <td>
+                                    <select name="items[{{ $idx }}][warehouse_id]" class="form-control">
+                                        <option value="">— Select Warehouse —</option>
+                                        @foreach($warehouses as $wh)
+                                        <option value="{{ $wh->id }}" {{ (int) old("items.{$idx}.warehouse_id", $poi->warehouse_id ?? $deliverySubsidy->warehouse_id) === (int) $wh->id ? 'selected' : '' }}>{{ $wh->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </td>
                                 <td><button type="button" class="remove-row" onclick="removeRow('row-{{ $idx }}')"><i class="fas fa-times"></i></button></td>
                             </tr>
                             @endforeach
@@ -162,10 +162,17 @@ let rowCount = {{ $deliverySubsidy->items->count() }};
             'unit'         => $i->unit,
             'description'  => $i->description,
             'stock_number' => $i->stock_number,
+            'warehouse_id' => $i->warehouse_id,
         ];
     })->values()->toJson();
+
+    $warehouseOptionsHtml = '<option value="">— Select Warehouse —</option>';
+    foreach ($warehouses as $wh) {
+        $warehouseOptionsHtml .= '<option value="' . $wh->id . '">' . htmlspecialchars($wh->name) . '</option>';
+    }
 @endphp
-const allItems = {!! $itemsJson !!};
+const allItems         = {!! $itemsJson !!};
+const warehouseOptions = {!! json_encode($warehouseOptionsHtml) !!};
 
 function addRow() {
     const idx = rowCount++;
@@ -173,14 +180,15 @@ function addRow() {
     const tr = document.createElement('tr');
     tr.id = 'row-' + idx;
     tr.innerHTML = `
-        <td><select name="items[${idx}][item_id]" class="item-select" onchange="fillUnit(this, ${idx})" required>
+        <td><select name="items[${idx}][item_id]" class="item-select" onchange="fillUnit(this, ${idx})">
             <option value="">— Select Item —</option>
-            ${allItems.map(i => `<option value="${i.id}" data-unit="${i.unit}">${i.description}</option>`).join('')}
+            ${allItems.map(i => `<option value="${i.id}" data-unit="${i.unit}" data-warehouse="${i.warehouse_id}">${i.description}</option>`).join('')}
         </select></td>
         <td><input type="text" id="unit-${idx}" class="form-control" readonly style="background:#f7fafc"></td>
         <td><input type="number" name="items[${idx}][quantity]" class="qty-input" min="0.01" step="0.01" onchange="calcRow(${idx})" required></td>
-        <td><input type="number" name="items[${idx}][unit_cost]" class="cost-input" min="0" step="0.01" onchange="calcRow(${idx})" required></td>
+        <td><input type="number" name="items[${idx}][unit_cost]" class="cost-input" min="0" step="0.01" onchange="calcRow(${idx})" placeholder="set at dispatch"></td>
         <td><input type="text" id="amount-${idx}" class="form-control" readonly style="background:#f7fafc;text-align:right"></td>
+        <td><select name="items[${idx}][warehouse_id]" class="form-control">${warehouseOptions}</select></td>
         <td><button type="button" class="remove-row" onclick="removeRow('row-${idx}')"><i class="fas fa-times"></i></button></td>
     `;
     tbody.appendChild(tr);
@@ -190,6 +198,11 @@ function fillUnit(sel, idx) {
     const opt = sel.options[sel.selectedIndex];
     const u = document.getElementById('unit-' + idx);
     if (u) u.value = opt.dataset.unit || '';
+
+    // Default the row's warehouse to the selected item's warehouse
+    const row = document.getElementById('row-' + idx);
+    const whSelect = row ? row.querySelector('select[name$="[warehouse_id]"]') : null;
+    if (whSelect && opt.dataset.warehouse) whSelect.value = opt.dataset.warehouse;
 }
 
 function calcRow(idx) {

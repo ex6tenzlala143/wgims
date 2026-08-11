@@ -118,7 +118,7 @@ class StockTransferController extends Controller
             'items.*.quantity'  => 'required|numeric|min:0.0001',
             'items.*.unit_cost' => 'required|numeric|min:0.01',
         ], [
-            'to_warehouse_id.different' => 'Source and destination warehouse must be different.',
+            'to_warehouse_id.different' => 'Source warehouse and destination warehouse must be different.',
         ]);
 
         $fromWarehouse = Warehouse::findOrFail($request->from_warehouse_id);
@@ -388,7 +388,7 @@ class StockTransferController extends Controller
             ->where('quantity', '>', 0)
             ->where('is_active', true)
             ->orderBy('description')
-            ->get(['id', 'description', 'unit', 'category', 'unit_cost', 'quantity', 'stock_number']);
+            ->get(['id', 'description', 'unit', 'category', 'unit_cost', 'engas_unit_cost', 'quantity', 'stock_number']);
 
         return response()->json($items);
     }
@@ -507,5 +507,72 @@ class StockTransferController extends Controller
         return redirect()
             ->route('transfers.show', $transfer)
             ->with('success', 'Transfer updated and stock adjusted.');
+    }
+
+    /**
+     * Admin: delete a transfer and reverse its inventory movement exactly once.
+     *
+     * Every dispatched line moved stock out of the source item and into the
+     * destination item. Deleting reverses that:
+     *   source item.quantity  += dispatched qty  (stock returns to the source)
+     *   dest   item.quantity  -= dispatched qty  (stock leaves the destination,
+     *                                              clamped so it never goes negative)
+     * and removes the matching transfer_out / transfer_in stock-card entries so
+     * the card never shows a movement for a deleted transfer.
+     *
+     * The transfer is hard-deleted, so a second DELETE request cannot re-run the
+     * reversal (route-model binding 404s).
+     */
+    public function destroy(StockTransfer $transfer)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+
+        DB::transaction(function () use ($transfer) {
+            $transfer->load(['items.sourceItem', 'items.destinationItem']);
+
+            $affectedItemIds = [];
+
+            foreach ($transfer->items as $sti) {
+                // Remove this line's stock-card movements (harmless when none).
+                StockCardEntry::where('reference_type', 'transfer_out')
+                    ->where('reference_id', $transfer->id)
+                    ->where('item_id', $sti->item_id)
+                    ->delete();
+
+                StockCardEntry::where('reference_type', 'transfer_in')
+                    ->where('reference_id', $transfer->id)
+                    ->where('item_id', $sti->destination_item_id)
+                    ->delete();
+
+                $dispatched = (float) $sti->quantity;
+                if ($dispatched <= 0) {
+                    continue;
+                }
+
+                // Dispatch deducted stock at the source → add it back on delete
+                if ($sti->sourceItem) {
+                    $sti->sourceItem->increment('quantity', $dispatched);
+                    $affectedItemIds[$sti->item_id] = true;
+                }
+
+                // Dispatch added stock at the destination → remove it on delete
+                if ($sti->destinationItem) {
+                    $newQty = max(0, $sti->destinationItem->quantity - $dispatched);
+                    $sti->destinationItem->update(['quantity' => $newQty]);
+                    $affectedItemIds[$sti->destination_item_id] = true;
+                }
+            }
+
+            $transfer->items()->delete();
+            $transfer->delete();
+
+            // Rebuild running stock-card balances for the remaining ledger entries
+            foreach (array_keys($affectedItemIds) as $itemId) {
+                StockCardEntry::recalculateBalancesForItem($itemId);
+            }
+        });
+
+        return redirect()->route('transfers.index')
+            ->with('success', "Transfer {$transfer->transfer_number} deleted and stock reversed.");
     }
 }

@@ -23,4 +23,35 @@ class StockCardEntry extends Model
     {
         return $this->belongsTo(Item::class);
     }
+
+    /**
+     * Recompute the running balance columns for every stock-card entry of one
+     * item, in chronological order. Receipts add stock and set the running unit
+     * cost; issues subtract stock. Stored balances are refreshed so that editing
+     * or deleting an older entry never leaves later entries stale.
+     */
+    public static function recalculateBalancesForItem(int $itemId): void
+    {
+        $entries = static::where('item_id', $itemId)
+            ->orderBy('entry_date')
+            ->orderBy('id')
+            ->get();
+
+        $runningQty      = 0.0;
+        $runningUnitCost = 0.0;
+
+        foreach ($entries as $entry) {
+            $runningQty += (float) $entry->receipt_qty - (float) $entry->issue_qty;
+
+            if ((float) $entry->receipt_qty > 0 && (float) $entry->receipt_unit_cost > 0) {
+                $runningUnitCost = (float) $entry->receipt_unit_cost;
+            }
+
+            $entry->update([
+                'balance_qty'        => round($runningQty, 4),
+                'balance_unit_cost'  => $runningUnitCost,
+                'balance_total_cost' => round($runningQty * $runningUnitCost, 2),
+            ]);
+        }
+    }
 }

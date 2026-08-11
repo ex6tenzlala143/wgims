@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemCategoryController;
+use App\Http\Controllers\ItemCatalogItemController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\DeliverySubsidyController;
 use App\Http\Controllers\ReportController;
@@ -35,6 +36,11 @@ Route::middleware('auth')->group(function () {
         Route::put('/item-categories/{itemCategory}',           [ItemCategoryController::class, 'update'])->name('item_categories.update');
         Route::delete('/item-categories/{itemCategory}',        [ItemCategoryController::class, 'destroy'])->name('item_categories.destroy');
         Route::patch('/item-categories/{itemCategory}/toggle',  [ItemCategoryController::class, 'toggleActive'])->name('item_categories.toggle');
+
+        // Item names (description + account code) managed under each category
+        Route::post('/item-categories/catalog-items',                            [ItemCatalogItemController::class, 'store'])->name('item_catalog_items.store');
+        Route::put('/item-categories/catalog-items/{catalogItem}',               [ItemCatalogItemController::class, 'update'])->name('item_catalog_items.update');
+        Route::delete('/item-categories/catalog-items/{catalogItem}',            [ItemCatalogItemController::class, 'destroy'])->name('item_catalog_items.destroy');
     });
 
     // ── Items ─────────────────────────────────────────────────────────────────
@@ -66,6 +72,7 @@ Route::middleware('auth')->group(function () {
     // Edit / Delete — admin only
     Route::middleware('admin.write')->group(function () {
         Route::get('/delivery-subsidies/{deliverySubsidy}/edit',                    [DeliverySubsidyController::class, 'edit'])->name('delivery_subsidies.edit');
+        Route::get('/delivery-subsidies/{deliverySubsidy}/edit-data',               [DeliverySubsidyController::class, 'editData'])->name('delivery_subsidies.edit_data');
         Route::put('/delivery-subsidies/{deliverySubsidy}',                         [DeliverySubsidyController::class, 'update'])->name('delivery_subsidies.update');
         Route::delete('/delivery-subsidies/{deliverySubsidy}',                      [DeliverySubsidyController::class, 'destroy'])->name('delivery_subsidies.destroy');
         // Admin-only: edit/update individual delivery records + audit log
@@ -95,8 +102,10 @@ Route::middleware('auth')->group(function () {
     Route::middleware(['admin', 'admin.write'])->group(function () {
         Route::delete('/requisitions/{requisition}',              [RequisitionController::class, 'destroy'])->name('requisitions.destroy');
     });
-    // API: items available in a warehouse (used by the RIS create/edit form)
+    // API: items available in a warehouse (used by the RIS dispatch/approve form)
     Route::get('/api/requisition-items', [RequisitionController::class, 'getItemsByWarehouse'])->name('requisitions.items_by_warehouse');
+    // API: description-level item list for the create/edit form (no warehouse chosen yet)
+    Route::get('/api/requisition-description-items', [RequisitionController::class, 'getAvailableItems'])->name('requisitions.description_items');
 
     // ── Stock Cards ───────────────────────────────────────────────────────────
     // Specific routes BEFORE the {category} wildcard
@@ -120,10 +129,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/transfers/{transfer}/dispatch', [StockTransferController::class, 'processDispatch'])->name('transfers.process_dispatch');
     });
     Route::get('/transfers/{transfer}',          [StockTransferController::class, 'show'])->name('transfers.show');
-    // Edit / Update — admin only
+    // Edit / Update / Delete — admin only
     Route::middleware('admin')->group(function () {
         Route::get('/transfers/{transfer}/edit', [StockTransferController::class, 'edit'])->name('transfers.edit');
         Route::put('/transfers/{transfer}',      [StockTransferController::class, 'update'])->name('transfers.update');
+        Route::delete('/transfers/{transfer}',   [StockTransferController::class, 'destroy'])->name('transfers.destroy');
     });
 
     // ── Suppliers ─────────────────────────────────────────────────────────────

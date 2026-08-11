@@ -58,4 +58,9 @@ class ItemCategory extends Model
     {
         return $this->hasMany(Item::class, 'category', 'key');
     }
+
+    public function catalogItems()
+    {
+        return $this->hasMany(ItemCatalogItem::class);
+    }
 }

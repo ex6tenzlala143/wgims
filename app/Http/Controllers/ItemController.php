@@ -226,6 +226,10 @@ class ItemController extends Controller
             return redirect()->route('items.index')
                 ->with('error', "Cannot delete \"{$item->description}\" — it is referenced by one or more Requisitions.");
         }
+        if ($item->requisitionDispatchItems()->exists()) {
+            return redirect()->route('items.index')
+                ->with('error', "Cannot delete \"{$item->description}\" — it has already been dispatched against a Requisition.");
+        }
 
         $item->stockCardEntries()->delete();
         $item->delete();
