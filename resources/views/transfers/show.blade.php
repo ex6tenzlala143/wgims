@@ -25,10 +25,13 @@
         @endif
         @if(auth()->user()->canWrite())
         <form action="{{ route('transfers.destroy', $transfer) }}" method="POST"
-            onsubmit="return confirm('Delete transfer {{ $transfer->transfer_number }}?\n\nThis will permanently delete the transfer and reverse all dispatched stock quantities — stock returns to the source warehouse.')">
+            onsubmit="return confirm({{ $transfer->isRelatedToDeletedSubsidy()
+                ? "'This Stock Transfer is linked to a deleted Subsidy. Deleting this transfer will reverse its inventory movement. Are you sure?'"
+                : "'Delete transfer {$transfer->transfer_number}?\\n\\nThis will permanently delete the transfer and reverse all dispatched stock quantities — stock returns to the source warehouse.'"
+            }})">
             @csrf @method('DELETE')
             <button type="submit" class="btn btn-danger">
-                <i class="fas fa-trash"></i> Delete Transfer
+                <i class="fas fa-trash"></i> {{ $transfer->isRelatedToDeletedSubsidy() ? 'Review & Delete Transfer' : 'Delete Transfer' }}
             </button>
         </form>
         @endif
@@ -40,6 +43,61 @@
         </a>
     </div>
 </div>
+
+@if($transfer->isRelatedToDeletedSubsidy())
+@php
+    $qtyTransferred = $transfer->items->sum('quantity');
+@endphp
+<div class="card" style="border:2px solid var(--danger);margin-bottom:16px">
+    <div class="card-body" style="background:#fff5f5">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+            <span class="badge badge-danger" style="font-size:14px;padding:8px 14px">
+                <i class="fas fa-exclamation-triangle"></i> RELATED TO DELETED SUBSIDY
+            </span>
+            <span style="font-size:13px;color:var(--text-muted)">
+                This transfer traces back to a Subsidy that has been <strong style="color:var(--danger)">{{ $transfer->sourceSubsidyStatusLabel() }}</strong>.
+                It was preserved for review — deleting it will reverse the inventory movement.
+            </span>
+        </div>
+        <table style="width:100%;font-size:14px;border-collapse:collapse">
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted);width:32%">Original Subsidy/RIS Reference</td>
+                <td style="padding:5px 0;font-weight:700">{{ $transfer->sourceSubsidyReference() ?? '—' }}</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Subsidy Number (DR No.)</td>
+                <td style="padding:5px 0;font-weight:600">{{ $transfer->sourceDrReference() ?? '—' }}</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Subsidy Status</td>
+                <td style="padding:5px 0">
+                    <span class="badge badge-danger">{{ $transfer->sourceSubsidyStatusLabel() }}</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Stock Transfer Number</td>
+                <td style="padding:5px 0;font-weight:700">{{ $transfer->transfer_number }}</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Source Warehouse</td>
+                <td style="padding:5px 0">{{ $transfer->fromWarehouse->name }}</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Destination Warehouse</td>
+                <td style="padding:5px 0">{{ $transfer->toWarehouse->name }}</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Transferred Quantity</td>
+                <td style="padding:5px 0;font-weight:600">{{ number_format($qtyTransferred, 4) }}</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Date</td>
+                <td style="padding:5px 0">{{ $transfer->transfer_date->format('F d, Y') }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+@endif
 
 <div class="form-row cols-2" style="margin-bottom:16px">
     {{-- Header info --}}

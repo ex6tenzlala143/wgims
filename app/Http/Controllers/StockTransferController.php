@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ScopesWarehouse;
+use App\Models\DeliverySubsidy;
 use App\Models\Item;
 use App\Models\StockCardEntry;
 use App\Models\StockTransfer;
+use App\Models\StockTransferAuditLog;
 use App\Models\StockTransferItem;
 use App\Models\SystemNotification;
 use App\Models\User;
@@ -27,7 +29,7 @@ class StockTransferController extends Controller
     public function index(Request $request)
     {
         $user  = Auth::user();
-        $query = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'transferredBy'])
+        $query = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'transferredBy', 'deliverySubsidy'])
             ->withCount('items')
             ->withSum('items as total_requested', 'quantity_requested')
             ->withSum('items as total_transferred', 'quantity')
@@ -49,6 +51,25 @@ class StockTransferController extends Controller
         }
         if ($request->filled('date_to')) {
             $query->whereDate('transfer_date', '<=', $request->date_to);
+        }
+
+        // Free-text search: transfer number or original Subsidy/RIS reference
+        if ($request->filled('q')) {
+            $q = trim((string) $request->q);
+            $query->where(function ($qq) use ($q) {
+                $qq->where('transfer_number', 'like', "%{$q}%")
+                    ->orWhere('source_ris_number', 'like', "%{$q}%")
+                    ->orWhere('source_dr_number', 'like', "%{$q}%");
+            });
+        }
+
+        // Dedicated filter: transfers whose source Subsidy was deleted/archived
+        if ($request->filled('related_to_deleted_subsidy')) {
+            if ($request->related_to_deleted_subsidy === 'yes') {
+                $query->whereIn('source_subsidy_status', ['deleted', 'archived']);
+            } elseif ($request->related_to_deleted_subsidy === 'no') {
+                $query->whereNotIn('source_subsidy_status', ['deleted', 'archived']);
+            }
         }
 
         $transfers  = $query->paginate(20)->withQueryString();
@@ -145,14 +166,37 @@ class StockTransferController extends Controller
             DB::transaction(function () use ($request, $fromWarehouse, $toWarehouse, $user) {
                 $transferNumber = StockTransfer::generateTransferNumber();
 
+                // Trace this transfer back to the subsidy that delivered the source
+                // stock (the source item carries the subsidy's RIS number). The
+                // reference is snapshotted so it survives a later subsidy deletion.
+                $linkedSubsidy = null;
+                $linkedRis    = null;
+                foreach ($request->items as $line) {
+                    $sourceItem = Item::find($line['item_id'] ?? null);
+                    if (! $sourceItem || ! $sourceItem->ris_number) {
+                        continue;
+                    }
+                    $linkedSubsidy = DeliverySubsidy::where('ris_number', $sourceItem->ris_number)
+                        ->orderByDesc('id')
+                        ->first();
+                    if ($linkedSubsidy) {
+                        $linkedRis = $sourceItem->ris_number;
+                        break;
+                    }
+                }
+
                 $transfer = StockTransfer::create([
-                    'transfer_number'   => $transferNumber,
-                    'from_warehouse_id' => $fromWarehouse->id,
-                    'to_warehouse_id'   => $toWarehouse->id,
-                    'transfer_date'     => $request->transfer_date,
-                    'transferred_by'    => $user->id,
-                    'status'            => 'pending',   // starts as pending — dispatch fills it
-                    'remarks'           => $request->remarks,
+                    'transfer_number'      => $transferNumber,
+                    'delivery_subsidy_id'  => $linkedSubsidy?->id,
+                    'source_ris_number'    => $linkedRis,
+                    'source_dr_number'     => $linkedSubsidy?->dr_number,
+                    'source_subsidy_status'=> null,
+                    'from_warehouse_id'    => $fromWarehouse->id,
+                    'to_warehouse_id'      => $toWarehouse->id,
+                    'transfer_date'        => $request->transfer_date,
+                    'transferred_by'       => $user->id,
+                    'status'               => 'pending',   // starts as pending — dispatch fills it
+                    'remarks'              => $request->remarks,
                 ]);
 
                 foreach ($request->items as $line) {
@@ -287,6 +331,20 @@ class StockTransferController extends Controller
 
                 $sourceItem->update(['quantity' => $newSourceQty]);
                 $destItem->update(['quantity' => $newDestQty]);
+
+                // Carry the source-subsidy trail onto the destination stock:
+                // the destination item keeps the "FROM SUBSIDY" reference so a
+                // later subsidy deletion can flag it across warehouses. The
+                // subsidy id may be null if the subsidy was already deleted
+                // (nullOnDelete) — the RIS/DR/status snapshot still propagates.
+                if ($sourceItem->source_subsidy_status) {
+                    $destItem->applySubsidySnapshot(
+                        $sourceItem->source_subsidy_id,
+                        $sourceItem->source_subsidy_ris,
+                        $sourceItem->source_subsidy_dr,
+                        $sourceItem->source_subsidy_status
+                    );
+                }
 
                 // Accumulate dispatched quantity
                 $sti->increment('quantity', $dispatchQty);
@@ -520,16 +578,32 @@ class StockTransferController extends Controller
      * and removes the matching transfer_out / transfer_in stock-card entries so
      * the card never shows a movement for a deleted transfer.
      *
-     * The transfer is hard-deleted, so a second DELETE request cannot re-run the
-     * reversal (route-model binding 404s).
+     * Before reversing, the destination stock is checked for LATER movements
+     * (requisition issues, onward transfers…). If the transferred stock has
+     * already been used again, the deletion is refused so the ledger can never
+     * be left inconsistent — the admin is told exactly what to resolve first.
+     *
+     * The reversal itself is written to the transfer audit log BEFORE the
+     * transfer row is deleted, so the audit trail outlives the record.
      */
     public function destroy(StockTransfer $transfer)
     {
         abort_unless(Auth::user()->canWrite(), 403);
 
-        DB::transaction(function () use ($transfer) {
-            $transfer->load(['items.sourceItem', 'items.destinationItem']);
+        $transfer->load(['fromWarehouse', 'toWarehouse', 'items.sourceItem', 'items.destinationItem']);
 
+        // ── Dependency check (before any write / transaction) ────────────────
+        // The dispatched stock arrived at the destination warehouse. If it was
+        // used again after the transfer_in entry (issued against a requisition,
+        // or sent on to another warehouse), deleting this transfer would leave
+        // those later movements dangling — refuse and explain what to resolve.
+        $blockers = $this->destroyBlockers($transfer);
+        if (! empty($blockers)) {
+            return back()->with('error', 'This transfer cannot be deleted yet because the transferred stock has since been used by: '.implode('; ', $blockers).'. Resolve those transactions first, then delete this transfer.');
+        }
+
+        DB::transaction(function () use ($transfer) {
+            $reversal = [];
             $affectedItemIds = [];
 
             foreach ($transfer->items as $sti) {
@@ -549,24 +623,49 @@ class StockTransferController extends Controller
                     continue;
                 }
 
+                $reversal[] = [
+                    'description'          => $sti->sourceItem?->description ?? "Item #{$sti->item_id}",
+                    'quantity'             => $dispatched,
+                    'unit_cost'            => (float) $sti->unit_cost,
+                    'source_item_id'       => $sti->item_id,
+                    'destination_item_id'  => $sti->destination_item_id,
+                ];
+
+                $affectedItemIds[$sti->item_id] = true;
+                $affectedItemIds[$sti->destination_item_id] = true;
+
                 // Dispatch deducted stock at the source → add it back on delete
                 if ($sti->sourceItem) {
                     $sti->sourceItem->increment('quantity', $dispatched);
-                    $affectedItemIds[$sti->item_id] = true;
                 }
 
                 // Dispatch added stock at the destination → remove it on delete
                 if ($sti->destinationItem) {
                     $newQty = max(0, $sti->destinationItem->quantity - $dispatched);
                     $sti->destinationItem->update(['quantity' => $newQty]);
-                    $affectedItemIds[$sti->destination_item_id] = true;
                 }
             }
+
+            // Audit trail BEFORE the row disappears — the entry survives the delete.
+            StockTransferAuditLog::create([
+                'stock_transfer_id' => $transfer->id,
+                'transfer_number'   => $transfer->transfer_number,
+                'user_id'           => Auth::user()->id,
+                'action'            => 'reversed_deleted',
+                'changed_fields'    => [
+                    'transfer_number'        => $transfer->transfer_number,
+                    'source_warehouse'       => $transfer->fromWarehouse?->name,
+                    'destination_warehouse'  => $transfer->toWarehouse?->name,
+                    'transfer_date'          => $transfer->transfer_date?->toDateString(),
+                    'source_subsidy'         => $transfer->sourceSubsidyReference(),
+                    'reversed_lines'         => $reversal,
+                ],
+            ]);
 
             $transfer->items()->delete();
             $transfer->delete();
 
-            // Rebuild running stock-card balances for the remaining ledger entries
+            // Rebuild running stock-card balances for the affected items
             foreach (array_keys($affectedItemIds) as $itemId) {
                 StockCardEntry::recalculateBalancesForItem($itemId);
             }
@@ -574,5 +673,50 @@ class StockTransferController extends Controller
 
         return redirect()->route('transfers.index')
             ->with('success', "Transfer {$transfer->transfer_number} deleted and stock reversed.");
+    }
+
+    /**
+     * Collect every reason a transfer cannot be deleted yet: later stock-card
+     * movements on the destination item after its transfer_in entry.
+     *
+     * @return string[] Human-readable blockers (deduplicated).
+     */
+    private function destroyBlockers(StockTransfer $transfer): array
+    {
+        $blockers = [];
+
+        foreach ($transfer->items as $sti) {
+            if ((float) $sti->quantity <= 0) {
+                continue;
+            }
+
+            $destItemId = $sti->destination_item_id;
+            $lastInId   = StockCardEntry::where('reference_type', 'transfer_in')
+                ->where('reference_id', $transfer->id)
+                ->where('item_id', $destItemId)
+                ->max('id');
+
+            if (! $lastInId) {
+                continue;
+            }
+
+            $laterEntries = StockCardEntry::where('item_id', $destItemId)
+                ->where('id', '>', $lastInId)
+                ->orderBy('id')
+                ->get();
+
+            foreach ($laterEntries as $entry) {
+                $moved = (float) $entry->issue_qty > 0 ? $entry->issue_qty : $entry->receipt_qty;
+                $blockers[] = sprintf(
+                    '%s — %s (%s, %s)',
+                    $sti->destinationItem?->description ?? "Item #{$destItemId}",
+                    $entry->reference ?: '(no reference)',
+                    ucfirst(str_replace('_', ' ', (string) $entry->reference_type)),
+                    number_format($moved, 4).' unit(s)'
+                );
+            }
+        }
+
+        return array_values(array_unique($blockers));
     }
 }

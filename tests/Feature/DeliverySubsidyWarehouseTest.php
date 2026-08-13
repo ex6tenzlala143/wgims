@@ -578,7 +578,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->get(route('delivery_subsidies.show', $ds))
             ->assertOk()
             ->assertSee('editModal', false)
-            ->assertSee('Edit PO');
+            ->assertSee('Edit Subsidy');
     }
 
     public function test_show_page_displays_each_items_own_warehouse(): void

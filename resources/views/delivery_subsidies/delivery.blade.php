@@ -67,10 +67,10 @@
 <input type="hidden" name="condition_status"   id="condition-status-hidden" value="good">
 <input type="hidden" name="quantity_delivered" id="qty-delivered-hidden" value="0">
 
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">
+<div class="edit-layout">
 
     {{-- ── Left column ──────────────────────────────────────────────────── --}}
-    <div>
+    <div class="edit-main">
         {{-- Shipment header --}}
         <div class="card" style="margin-bottom:20px">
             <div class="card-header">
@@ -148,119 +148,114 @@
             {{-- Batch rows container --}}
             <div id="batches-{{ $poiIdx }}">
                 {{-- First (default) batch row --}}
-                <div class="batch-row" data-poi="{{ $poiIdx }}" style="padding:14px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto;gap:12px;align-items:end">
+                <div class="batch-row" data-poi="{{ $poiIdx }}">
                     {{-- Hidden po_item_id for this batch. Disabled for fully
                          delivered items so the row is excluded from the
                          submission payload entirely. --}}
                     <input type="hidden" name="items[{{ $poiIdx }}_0][ds_item_id]" value="{{ $poi->id }}"
                            {{ $isDone ? 'disabled' : '' }}>
 
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label" style="font-size:12px">
-                            Warehouse <span style="color:red">*</span>
-                        </label>
-                        <select name="items[{{ $poiIdx }}_0][warehouse_id]"
-                                class="form-control batch-wh"
-                                {{ $isDone ? 'disabled' : 'required' }}>
-                            <option value="">— Select warehouse —</option>
-                            @foreach($warehouses as $wh)
-                            <option value="{{ $wh->id }}"
-                                {{ (int) old("items.{$poiIdx}_0.warehouse_id", $poi->warehouse_id ?: ($poi->item?->warehouse_id ?? 0)) === (int) $wh->id ? 'selected' : '' }}>
-                                {{ $wh->name }}
-                            </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label" style="font-size:12px">
-                            Expiration Date
-                            <span style="font-size:10px;color:var(--text-muted);font-weight:normal">— this batch</span>
-                        </label>
-                        <input type="date"
-                               name="items[{{ $poiIdx }}_0][expiration_date]"
-                               class="form-control"
-                               value="{{ old("items.{$poiIdx}_0.expiration_date", $poi->item?->expiration_date ? $poi->item->expiration_date->format('Y-m-d') : '') }}"
-                               {{ $isDone ? 'disabled' : '' }}>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label" style="font-size:12px">
-                            Unit Cost (₱) <span style="color:red">*</span>
-                        </label>
-                        <input type="number"
-                               name="items[{{ $poiIdx }}_0][unit_cost]"
-                               class="form-control"
-                               min="0.01" step="0.01"
-                               value="{{ old("items.{$poiIdx}_0.unit_cost", $poi->unit_cost > 0 ? number_format($poi->unit_cost, 2, '.', '') : '') }}"
-                               placeholder="0.00"
-                               {{ $isDone ? 'disabled' : 'required' }}>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label" style="font-size:12px">
-                            ENGAS Unit Cost (₱) <span style="color:red">*</span>
-                        </label>
-                        <input type="number"
-                               name="items[{{ $poiIdx }}_0][engas_unit_cost]"
-                               class="form-control batch-engas"
-                               min="0" step="0.01"
-                               value="{{ old("items.{$poiIdx}_0.engas_unit_cost", $poi->item?->engas_unit_cost ? number_format($poi->item->engas_unit_cost, 2, '.', '') : '') }}"
-                               placeholder="0.00"
-                               {{ $isDone ? 'disabled' : 'required' }}
-                               oninput="recalcBatch(this)">
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                            ENGAS Total: <span class="engas-total" style="font-weight:700;color:var(--primary)">₱0.00</span>
-                        </div>
-                        @error("items.{$poiIdx}_0.engas_unit_cost")
-                            <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label" style="font-size:12px">
-                            Quantity <span style="color:red">*</span>
-                            @if(!$isDone)
-                                <span style="font-size:10px;color:var(--text-muted);font-weight:normal">max {{ number_format($lineRemaining, 2) }}</span>
-                            @else
-                                <span style="font-size:10px;color:var(--success);font-weight:normal">no more dispatchable</span>
-                            @endif
-                        </label>
-                        <input type="number"
-                               name="items[{{ $poiIdx }}_0][quantity_delivered]"
-                               class="form-control item-qty"
-                               min="0" step="0.01"
-                               max="{{ $lineRemaining }}"
-                               data-max="{{ $lineRemaining }}"
-                               value="{{ old("items.{$poiIdx}_0.quantity_delivered", 0) }}"
-                               placeholder="{{ $isDone ? 'Fully dispatched' : '0' }}"
-                               {{ $isDone ? 'disabled' : '' }}
-                               oninput="recalcBatch(this)"
-                               style="{{ $isDone ? 'background:#f7fafc;opacity:.6' : 'border:2px solid var(--primary);font-weight:700' }}">
-                        @error("items.{$poiIdx}_0.quantity_delivered")
-                            <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label" style="font-size:12px">
-                            DR No. <span style="color:red">*</span>
-                        </label>
-                        <input type="text"
-                               name="items[{{ $poiIdx }}_0][dr_number]"
-                               class="form-control batch-dr"
-                               value="{{ old("items.{$poiIdx}_0.dr_number") }}"
-                               placeholder="e.g. DR-2026-002"
-                               {{ $isDone ? 'disabled' : 'required' }}
-                               maxlength="100">
-                    </div>
-
-                    {{-- Remove button (hidden on first row, shown when cloned) --}}
-                    <div style="padding-bottom:2px">
+                    <div class="batch-row-head">
+                        <span class="ris-item-num">Batch 1</span>
                         <button type="button" class="btn btn-sm btn-danger remove-batch-btn"
                                 style="display:none" onclick="removeBatch(this)">
                             <i class="fas fa-times"></i>
                         </button>
+                    </div>
+
+                    {{-- Row 1: Warehouse · Expiration · Quantity --}}
+                    <div class="shipment-item-grid">
+                        <div class="form-group">
+                            <label class="form-label">Warehouse <span style="color:red">*</span></label>
+                            <select name="items[{{ $poiIdx }}_0][warehouse_id]"
+                                    class="form-control batch-wh"
+                                    {{ $isDone ? 'disabled' : 'required' }}>
+                                <option value="">— Select warehouse —</option>
+                                @foreach($warehouses as $wh)
+                                <option value="{{ $wh->id }}"
+                                    {{ (int) old("items.{$poiIdx}_0.warehouse_id", $poi->warehouse_id ?: ($poi->item?->warehouse_id ?? 0)) === (int) $wh->id ? 'selected' : '' }}>
+                                    {{ $wh->name }}
+                                </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Expiration Date <span class="hint">— this batch</span></label>
+                            <input type="date"
+                                   name="items[{{ $poiIdx }}_0][expiration_date]"
+                                   class="form-control"
+                                   value="{{ old("items.{$poiIdx}_0.expiration_date", $poi->item?->expiration_date ? $poi->item->expiration_date->format('Y-m-d') : '') }}"
+                                   {{ $isDone ? 'disabled' : '' }}>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                Quantity <span style="color:red">*</span>
+                                @if(!$isDone)
+                                    <span class="hint">max {{ number_format($lineRemaining, 2) }}</span>
+                                @else
+                                    <span class="hint" style="color:var(--success)">no more dispatchable</span>
+                                @endif
+                            </label>
+                            <input type="number"
+                                   name="items[{{ $poiIdx }}_0][quantity_delivered]"
+                                   class="form-control item-qty"
+                                   min="0" step="0.01"
+                                   max="{{ $lineRemaining }}"
+                                   data-max="{{ $lineRemaining }}"
+                                   value="{{ old("items.{$poiIdx}_0.quantity_delivered", 0) }}"
+                                   placeholder="{{ $isDone ? 'Fully dispatched' : '0' }}"
+                                   {{ $isDone ? 'disabled' : '' }}
+                                   oninput="recalcBatch(this)"
+                                   style="{{ $isDone ? 'background:#f7fafc;opacity:.6' : 'border:2px solid var(--primary);font-weight:700' }}">
+                            @error("items.{$poiIdx}_0.quantity_delivered")
+                                <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
+
+                    {{-- Row 2: Unit Cost · ENGAS Unit Cost · DR No. --}}
+                    <div class="shipment-item-grid">
+                        <div class="form-group">
+                            <label class="form-label">Unit Cost (₱) <span style="color:red">*</span></label>
+                            <input type="number"
+                                   name="items[{{ $poiIdx }}_0][unit_cost]"
+                                   class="form-control"
+                                   min="0.01" step="0.01"
+                                   value="{{ old("items.{$poiIdx}_0.unit_cost", $poi->unit_cost > 0 ? number_format($poi->unit_cost, 2, '.', '') : '') }}"
+                                   placeholder="0.00"
+                                   {{ $isDone ? 'disabled' : 'required' }}>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">ENGAS Unit Cost (₱) <span style="color:red">*</span></label>
+                            <input type="number"
+                                   name="items[{{ $poiIdx }}_0][engas_unit_cost]"
+                                   class="form-control batch-engas"
+                                   min="0" step="0.01"
+                                   value="{{ old("items.{$poiIdx}_0.engas_unit_cost", $poi->item?->engas_unit_cost ? number_format($poi->item->engas_unit_cost, 2, '.', '') : '') }}"
+                                   placeholder="0.00"
+                                   {{ $isDone ? 'disabled' : 'required' }}
+                                   oninput="recalcBatch(this)">
+                            <div class="hint" style="margin-top:4px">
+                                ENGAS Total: <span class="engas-total" style="font-weight:700;color:var(--primary)">₱0.00</span>
+                            </div>
+                            @error("items.{$poiIdx}_0.engas_unit_cost")
+                                <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">DR No. <span style="color:red">*</span></label>
+                            <input type="text"
+                                   name="items[{{ $poiIdx }}_0][dr_number]"
+                                   class="form-control batch-dr"
+                                   value="{{ old("items.{$poiIdx}_0.dr_number") }}"
+                                   placeholder="e.g. DR-2026-002"
+                                   {{ $isDone ? 'disabled' : 'required' }}
+                                   maxlength="100">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -288,8 +283,8 @@
     </div>
 
     {{-- ── Right sidebar ─────────────────────────────────────────────────── --}}
-    <div>
-        <div class="card" style="position:sticky;top:80px">
+    <div class="edit-side">
+        <div class="card sticky-card">
             <div class="card-header"><h3>Summary</h3></div>
             <div class="card-body">
                 <div style="margin-bottom:10px;font-size:13px">
@@ -367,7 +362,7 @@ function warehouseOptionsHtml(selectedId) {
     return html;
 }
 
-// Track how many batch rows exist per PO item (starts at 1 — the default row)
+// Track how many batch rows exist per subsidy item (starts at 1 — the default row)
 const batchCounts = {};
 
 function recalcTotal() {
@@ -461,11 +456,11 @@ function recalcBatch(el) {
 }
 
 /**
- * Add a new batch row for a given PO item.
- * @param {number} poiIdx     - index of the PO item in the Blade loop
+ * Add a new batch row for a given subsidy item.
+ * @param {number} poiIdx     - index of the subsidy item in the Blade loop
  * @param {number} poItemId   - delivery_subsidy_items.id
  * @param {string} defaultExpiry - pre-fill expiry from item master
- * @param {number} defaultCost   - pre-fill unit cost from PO line
+ * @param {number} defaultCost   - pre-fill unit cost from subsidy line
  * @param {number} defaultWh     - pre-fill warehouse
  * @param {number} maxQty        - remaining dispatchable quantity for this line
  * @param {number} defaultEngas  - pre-fill ENGAS unit cost from item master
@@ -478,104 +473,97 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
     const container = document.getElementById('batches-' + poiIdx);
 
     const div = document.createElement('div');
-    div.className = 'batch-row';
+    div.className = 'batch-row batch-row-cloned';
     div.dataset.poi = poiIdx;
-    div.style.cssText = 'padding:14px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto;gap:12px;align-items:end;background:#fffbeb';
 
     div.innerHTML = `
         <input type="hidden" name="items[${key}][ds_item_id]" value="${poItemId}">
 
-        <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" style="font-size:12px">
-                Warehouse <span style="color:red">*</span>
-            </label>
-            <select name="items[${key}][warehouse_id]"
-                    class="form-control batch-wh"
-                    required
-                    style="border-color:#f6ad55">
-                ${warehouseOptionsHtml(defaultWh || '')}
-            </select>
-        </div>
-
-        <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" style="font-size:12px">
-                Expiration Date
-                <span style="font-size:10px;color:var(--text-muted);font-weight:normal">— this batch</span>
-            </label>
-            <input type="date"
-                   name="items[${key}][expiration_date]"
-                   class="form-control"
-                   value="${defaultExpiry}"
-                   style="border-color:#f6ad55">
-        </div>
-
-        <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" style="font-size:12px">
-                Unit Cost (₱) <span style="color:red">*</span>
-            </label>
-            <input type="number"
-                   name="items[${key}][unit_cost]"
-                   class="form-control"
-                   min="0.01" step="0.01"
-                   value="${defaultCost > 0 ? defaultCost.toFixed(2) : ''}"
-                   placeholder="0.00"
-                   required
-                   style="border-color:#f6ad55">
-        </div>
-
-        <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" style="font-size:12px">
-                ENGAS Unit Cost (₱) <span style="color:red">*</span>
-            </label>
-            <input type="number"
-                   name="items[${key}][engas_unit_cost]"
-                   class="form-control batch-engas"
-                   min="0" step="0.01"
-                   value="${defaultEngas > 0 ? defaultEngas.toFixed(2) : ''}"
-                   placeholder="0.00"
-                   required
-                   oninput="recalcBatch(this)"
-                   style="border-color:#f6ad55">
-            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                ENGAS Total: <span class="engas-total" style="font-weight:700;color:var(--primary)">₱0.00</span>
-            </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" style="font-size:12px">
-                Quantity <span style="color:red">*</span>
-                <span style="font-size:10px;color:var(--text-muted);font-weight:normal">max ${maxQty.toFixed(2)}</span>
-            </label>
-            <input type="number"
-                   name="items[${key}][quantity_delivered]"
-                   class="form-control item-qty"
-                   min="0" step="0.01"
-                   max="${maxQty}"
-                   data-max="${maxQty}"
-                   value="0"
-                   placeholder="0"
-                   oninput="recalcBatch(this)"
-                   style="border:2px solid #f6ad55;font-weight:700">
-        </div>
-
-        <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" style="font-size:12px">
-                DR No. <span style="color:red">*</span>
-            </label>
-            <input type="text"
-                   name="items[${key}][dr_number]"
-                   class="form-control batch-dr"
-                   maxlength="100"
-                   placeholder="e.g. DR-2026-002"
-                   required
-                   style="border-color:#f6ad55">
-        </div>
-
-        <div style="padding-bottom:2px">
+        <div class="batch-row-head">
+            <span class="ris-item-num">Batch ${batchIdx + 1}</span>
             <button type="button" class="btn btn-sm btn-danger remove-batch-btn"
                     onclick="removeBatch(this)">
                 <i class="fas fa-times"></i>
             </button>
+        </div>
+
+        <div class="shipment-item-grid">
+            <div class="form-group">
+                <label class="form-label">Warehouse <span style="color:red">*</span></label>
+                <select name="items[${key}][warehouse_id]"
+                        class="form-control batch-wh"
+                        required
+                        style="border-color:#f6ad55">
+                    ${warehouseOptionsHtml(defaultWh || '')}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Expiration Date <span class="hint">— this batch</span></label>
+                <input type="date"
+                       name="items[${key}][expiration_date]"
+                       class="form-control"
+                       value="${defaultExpiry}"
+                       style="border-color:#f6ad55">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    Quantity <span style="color:red">*</span>
+                    <span class="hint">max ${maxQty.toFixed(2)}</span>
+                </label>
+                <input type="number"
+                       name="items[${key}][quantity_delivered]"
+                       class="form-control item-qty"
+                       min="0" step="0.01"
+                       max="${maxQty}"
+                       data-max="${maxQty}"
+                       value="0"
+                       placeholder="0"
+                       oninput="recalcBatch(this)"
+                       style="border:2px solid #f6ad55;font-weight:700">
+            </div>
+        </div>
+
+        <div class="shipment-item-grid">
+            <div class="form-group">
+                <label class="form-label">Unit Cost (₱) <span style="color:red">*</span></label>
+                <input type="number"
+                       name="items[${key}][unit_cost]"
+                       class="form-control"
+                       min="0.01" step="0.01"
+                       value="${defaultCost > 0 ? defaultCost.toFixed(2) : ''}"
+                       placeholder="0.00"
+                       required
+                       style="border-color:#f6ad55">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">ENGAS Unit Cost (₱) <span style="color:red">*</span></label>
+                <input type="number"
+                       name="items[${key}][engas_unit_cost]"
+                       class="form-control batch-engas"
+                       min="0" step="0.01"
+                       value="${defaultEngas > 0 ? defaultEngas.toFixed(2) : ''}"
+                       placeholder="0.00"
+                       required
+                       oninput="recalcBatch(this)"
+                       style="border-color:#f6ad55">
+                <div class="hint" style="margin-top:4px">
+                    ENGAS Total: <span class="engas-total" style="font-weight:700;color:var(--primary)">₱0.00</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">DR No. <span style="color:red">*</span></label>
+                <input type="text"
+                       name="items[${key}][dr_number]"
+                       class="form-control batch-dr"
+                       maxlength="100"
+                       placeholder="e.g. DR-2026-002"
+                       required
+                       style="border-color:#f6ad55">
+            </div>
         </div>
     `;
 

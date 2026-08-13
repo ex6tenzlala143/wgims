@@ -8,9 +8,13 @@ use App\Models\DeliveryItem;
 use App\Models\Item;
 use App\Models\ItemCatalogItem;
 use App\Models\DeliverySubsidy;
+use App\Models\DeliverySubsidyAuditLog;
 use App\Models\DeliverySubsidyItem;
+use App\Models\RequisitionDispatchItem;
 use App\Models\RequisitionItem;
 use App\Models\StockCardEntry;
+use App\Models\StockTransfer;
+use App\Models\StockTransferAuditLog;
 use App\Models\StockTransferItem;
 use App\Models\Supplier;
 use App\Models\SystemNotification;
@@ -20,6 +24,8 @@ use App\Services\DeliverySubsidyCascadeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class DeliverySubsidyController extends Controller
 {
@@ -150,7 +156,7 @@ class DeliverySubsidyController extends Controller
                 $drNumber = $request->ris_number . '-' . $suffix;
             }
 
-            $po = DeliverySubsidy::create([
+            $subsidy = DeliverySubsidy::create([
                 'dr_number' => $drNumber,
                 'supplier_id' => $request->supplier_id,
                 'warehouse_id' => null,
@@ -165,7 +171,7 @@ class DeliverySubsidyController extends Controller
 
             foreach ($request->items as $line) {
                 DeliverySubsidyItem::create([
-                    'delivery_subsidy_id' => $po->id,
+                    'delivery_subsidy_id' => $subsidy->id,
                     'item_id' => ! empty($line['item_id']) ? (int) $line['item_id'] : null,
                     'catalog_item_id' => ! empty($line['catalog_item_id']) ? (int) $line['catalog_item_id'] : null,
                     'account_code' => $line['account_code'] ?? null,
@@ -186,9 +192,9 @@ class DeliverySubsidyController extends Controller
             $notifRows = $adminIds->map(fn ($id) => [
                 'user_id'    => $id,
                 'title'      => 'New Delivery/Subsidy',
-                'message'    => "DR #{$po->dr_number} has been created.",
+                'message'    => "DR #{$subsidy->dr_number} has been created.",
                 'type'       => 'info',
-                'link'       => route('delivery_subsidies.show', $po->id),
+                'link'       => route('delivery_subsidies.show', $subsidy->id),
                 'is_read'    => false,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -211,6 +217,7 @@ class DeliverySubsidyController extends Controller
         $deliverySubsidy->load([
             'supplier', 'warehouse', 'creator',
             'items.item', 'items.warehouse',
+            'items.deliveryItems.warehouse',
             'deliveries.items.item',
             'deliveries.items.warehouse',
             'deliveries.items.deliverySubsidyItem',
@@ -219,7 +226,7 @@ class DeliverySubsidyController extends Controller
 
         $data = compact('deliverySubsidy');
 
-        // The "Edit PO" button opens the shared edit modal — give it the same
+        // The "Edit Subsidy" button opens the shared edit modal — give it the same
         // option lists the modal needs to build its item autocomplete.
         if ($user->canWrite()) {
             $data = array_merge($data, $this->createFormData($user));
@@ -283,6 +290,247 @@ class DeliverySubsidyController extends Controller
             'has_deliveries'     => $deliverySubsidy->deliveries()->count() > 0,
             'items'              => $items,
         ]);
+    }
+
+    /**
+     * JSON payload for the "Correct Subsidy" modal — the request header plus
+     * every ordered line with its delivered quantity and whether it is locked
+     * (has already been delivered, so only the requested quantity may change).
+     *
+     * GET /delivery-subsidies/{deliverySubsidy}/correction-data
+     */
+    public function correctionData(DeliverySubsidy $deliverySubsidy)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+
+        $deliverySubsidy->load(['supplier', 'items.item', 'items.deliveryItems']);
+
+        $items = $deliverySubsidy->items->map(function ($dsi) {
+            return [
+                'dsi_id'          => $dsi->id,
+                'item_id'         => $dsi->item_id,
+                'catalog_item_id' => $dsi->catalog_item_id,
+                'description'     => $dsi->item?->description ?? $dsi->description,
+                'unit'            => $dsi->item?->unit ?? $dsi->unit ?? '',
+                'category'        => $dsi->item?->category ?? $dsi->category,
+                'account_code'    => $dsi->account_code ?? '',
+                'expiration_date' => $dsi->expiration_date?->format('Y-m-d')
+                    ?? ($dsi->item?->expiration_date?->format('Y-m-d') ?? ''),
+                'quantity'        => (float) $dsi->quantity,
+                'qty_delivered'   => (float) $dsi->qty_delivered,
+                'locked'          => (float) $dsi->qty_delivered > 0,
+            ];
+        });
+
+        return response()->json([
+            'id'                 => $deliverySubsidy->id,
+            'ris_number'         => $deliverySubsidy->ris_number,
+            'dr_number'          => $deliverySubsidy->dr_number,
+            'supplier_id'        => $deliverySubsidy->supplier_id,
+            'supplier_name'      => $deliverySubsidy->supplier->name ?? '',
+            'date'               => $deliverySubsidy->date?->format('Y-m-d'),
+            'place_of_delivery'  => $deliverySubsidy->place_of_delivery,
+            'remarks'            => $deliverySubsidy->remarks,
+            'status'             => $deliverySubsidy->status,
+            'is_completed'       => $deliverySubsidy->status === 'fully_delivered',
+            'has_deliveries'     => $deliverySubsidy->deliveries()->count() > 0,
+            'quantity_requested' => (float) $deliverySubsidy->quantity_requested,
+            'total_delivered'    => $deliverySubsidy->totalDelivered(),
+            'items'              => $items->values(),
+            'catalog_items'      => $items->contains(fn ($i) => ! $i['locked'])
+                ? $this->catalogItemsForCorrection()
+                : [],
+            'totals'             => [
+                'requested' => (float) $deliverySubsidy->quantity_requested,
+                'delivered' => $deliverySubsidy->totalDelivered(),
+                'remaining' => max(0, (float) $deliverySubsidy->quantity_requested - $deliverySubsidy->totalDelivered()),
+            ],
+        ]);
+    }
+
+    /**
+     * Apply a correction to a delivered/completed subsidy. Only the request
+     * itself changes: header fields (date, place of delivery, remarks) and the
+     * per-line requested quantity (plus the item on lines that have never been
+     * delivered). Shipments, delivered quantities, DR numbers, warehouse
+     * assignments, unit costs and stock cards are NEVER touched here — this
+     * mirrors the RIS "Correct RIS" feature.
+     *
+     * The requested → delivered → outstanding figures and the subsidy status
+     * are recomputed, and every change is written to the audit log.
+     *
+     * PUT /delivery-subsidies/{deliverySubsidy}/correct
+     */
+    public function correct(Request $request, DeliverySubsidy $deliverySubsidy)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+
+        $request->validate([
+            'date'              => 'required|date',
+            'place_of_delivery' => 'nullable|string|max:255',
+            'remarks'           => 'nullable|string|max:1000',
+            'items'                   => 'required|array|min:1',
+            'items.*.dsi_id'          => 'required|integer|exists:delivery_subsidy_items,id',
+            'items.*.item_id'         => 'nullable|exists:items,id',
+            'items.*.catalog_item_id' => 'nullable|exists:item_catalog_items,id',
+            'items.*.account_code'    => 'nullable|string|max:50',
+            'items.*.description'     => 'required|string|max:255',
+            'items.*.unit'            => 'required|string',
+            'items.*.category'        => 'required|string|in:' . implode(',', array_keys(Item::getCategories())),
+            'items.*.quantity'        => 'required|numeric|min:0.01',
+            'items.*.expiration_date' => 'nullable|date',
+        ]);
+
+        $existingItems = $deliverySubsidy->items()->get()->keyBy('id');
+
+        // Every submitted line must belong to this subsidy.
+        foreach ($request->items as $idx => $line) {
+            if (! $existingItems->has((int) $line['dsi_id'])) {
+                throw ValidationException::withMessages([
+                    "items.{$idx}.dsi_id" => 'Invalid line item for this subsidy.',
+                ]);
+            }
+        }
+
+        $oldStatus    = $deliverySubsidy->status;
+        $oldRequested = (float) $deliverySubsidy->quantity_requested;
+        $changes      = [];
+
+        DB::transaction(function () use ($request, $deliverySubsidy, $existingItems, &$changes, &$oldStatus, &$oldRequested) {
+            // ── Header ──────────────────────────────────────────────────────
+            // ris_number / supplier_id / dr_number are the historical identity
+            // of the request and are deliberately frozen here (mirrors the RIS
+            // correction, which never changes the RIS/DR reference).
+            $headerData = [];
+            foreach (['date', 'place_of_delivery', 'remarks'] as $field) {
+                $oldVal = $deliverySubsidy->{$field} instanceof \DateTimeInterface
+                    ? $deliverySubsidy->{$field}->format('Y-m-d')
+                    : $deliverySubsidy->{$field};
+                $newVal = $request->{$field};
+                $headerData[$field] = $newVal;
+                if ((string) $oldVal !== (string) $newVal) {
+                    $changes[$field] = ['old' => $oldVal, 'new' => $newVal];
+                }
+            }
+
+            // ── Lines: requested quantity (item change only when undelivered) ──
+            foreach ($request->items as $idx => $line) {
+                $dsi    = $existingItems->get((int) $line['dsi_id']);
+                $oldQty = (float) $dsi->quantity;
+                $newQty = round((float) $line['quantity'], 4);
+                $locked = (float) $dsi->qty_delivered > 0;
+
+                // Inventory protection: the request can never drop below what is
+                // already delivered. Resolve an over-delivery via the shipment
+                // edit instead.
+                if ($newQty + 0.0001 < (float) $dsi->qty_delivered) {
+                    throw ValidationException::withMessages([
+                        "items.{$idx}.quantity" =>
+                            'Requested quantity ('.number_format($newQty, 2).') cannot be less than the '
+                            .number_format((float) $dsi->qty_delivered, 2).' already delivered. '
+                            .'Correct the shipment(s) first, then fix the request.',
+                    ]);
+                }
+
+                // A delivered line is locked: only its requested quantity may
+                // change. Attempting to re-point it at another item is rejected.
+                if ($locked) {
+                    $submittedCat  = $line['catalog_item_id'] ?? null;
+                    $submittedItem = $line['item_id'] ?? null;
+                    if ($submittedCat && (int) $submittedCat !== (int) $dsi->catalog_item_id) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.catalog_item_id" => 'This item has already been delivered and cannot be changed. Correct the request quantity only.',
+                        ]);
+                    }
+                    if ($submittedItem && (int) $submittedItem !== (int) $dsi->item_id) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.item_id" => 'This item has already been delivered and cannot be changed. Correct the request quantity only.',
+                        ]);
+                    }
+                }
+
+                $data    = ['quantity' => $newQty];
+                $oldDesc = $dsi->description;
+
+                if (! $locked) {
+                    $data += [
+                        'item_id'         => $line['item_id'] ?? null,
+                        'catalog_item_id' => $line['catalog_item_id'] ?? null,
+                        'account_code'    => $line['account_code'] ?? null,
+                        'description'     => $line['description'],
+                        'unit'            => $line['unit'],
+                        'category'        => $line['category'],
+                        'expiration_date' => $line['expiration_date'] ?? null,
+                    ];
+                }
+
+                $dsi->update($data);
+
+                if (abs($newQty - $oldQty) > 0.0001) {
+                    $changes["items.{$dsi->id}.quantity"] = ['old' => $oldQty, 'new' => $newQty];
+                }
+                if (! $locked && $dsi->description !== $oldDesc) {
+                    $changes["items.{$dsi->id}.item"] = ['old' => $oldDesc, 'new' => $dsi->description];
+                }
+            }
+
+            // Recompute the header requested total from the corrected lines so
+            // the header and the lines can never drift apart (no duplicate totals).
+            $newRequested = round((float) $deliverySubsidy->items()->sum('quantity'), 4);
+            $headerData['quantity_requested'] = $newRequested;
+
+            $deliverySubsidy->update($headerData);
+
+            // Recompute requested → delivered → outstanding → status. Shipments
+            // and inventory records are untouched — only the request is
+            // reclassified.
+            $deliverySubsidy->refresh();
+            $deliverySubsidy->updateDeliveryStatus();
+
+            if (abs($newRequested - $oldRequested) > 0.0001) {
+                $changes['quantity_requested'] = ['old' => $oldRequested, 'new' => $newRequested];
+            }
+            if ($deliverySubsidy->status !== $oldStatus) {
+                $changes['status'] = ['old' => $oldStatus, 'new' => $deliverySubsidy->status];
+            }
+
+            (new DeliverySubsidyCascadeService())->recordAudit(
+                $deliverySubsidy->id,
+                $changes,
+                [],
+                'correction'
+            );
+        });
+
+        return response()->json(['redirect' => route('delivery_subsidies.show', $deliverySubsidy->id)]);
+    }
+
+    /** Description-level item list for the subsidy correction modal (same data as the create form). */
+    private function catalogItemsForCorrection(): array
+    {
+        $catalogItems = ItemCatalogItem::with('category')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $stock = Item::where('is_active', true)
+            ->where('quantity', '>', 0)
+            ->get(['description', 'unit', 'quantity'])
+            ->groupBy(fn ($i) => mb_strtolower(trim($i->description)));
+
+        return $catalogItems->map(function ($catalog) use ($stock) {
+            $records = $stock->get(mb_strtolower(trim($catalog->name)), collect());
+
+            return [
+                'id'           => $catalog->id,
+                'description'  => $catalog->name,
+                'name'         => $catalog->name,
+                'account_code' => $catalog->account_code ?: $catalog->category?->account_code,
+                'category'     => $catalog->category?->key ?? '',
+                'unit'         => $records->first()?->unit ?? '',
+                'total_stock'  => (float) $records->sum('quantity'),
+            ];
+        })->values()->all();
     }
 
     public function update(Request $request, DeliverySubsidy $deliverySubsidy)
@@ -474,45 +722,411 @@ class DeliverySubsidyController extends Controller
     {
         abort_unless(Auth::user()->canWrite(), 403);
 
-        DB::transaction(function () use ($deliverySubsidy) {
+        $markedTransferCount = 0;
+        $lineageIds = [];
+        $descendantIds = [];
+
+        DB::transaction(function () use ($deliverySubsidy, &$markedTransferCount, &$lineageIds, &$descendantIds) {
+            // ── Flag every related Stock Transfer BEFORE the subsidy disappears ──
+            // The transfer keeps its inventory movement and is only *marked*, never
+            // auto-deleted: the administrator reviews it and decides afterwards.
+            // The snapshot columns (source_ris_number / source_dr_number) survive
+            // the hard delete because the FK is nullOnDelete.
+            $markedTransferCount = $this->markTransfersWithSubsidyState($deliverySubsidy, 'deleted', 'subsidy_deleted');
+
             // Eager-load to avoid N+1 inside the nested loops
             $deliverySubsidy->loadMissing('deliveries.items.item');
 
             $affectedItemIds = [];
 
-            foreach ($deliverySubsidy->deliveries as $delivery) {
-                foreach ($delivery->items as $di) {
-                    if ($di->item) {
-                        // Reverse the exact movement this delivery line created:
-                        // dispatching added stock to the warehouse, so deleting
-                        // subtracts that same quantity back. Clamped to zero so a
-                        // stock card / other transaction can never push it negative.
-                        $newQty = max(0, $di->item->quantity - $di->quantity_delivered);
-                        $di->item->update(['quantity' => $newQty]);
-                        $affectedItemIds[$di->item_id] = true;
+                foreach ($deliverySubsidy->deliveries as $delivery) {
+                    foreach ($delivery->items as $di) {
+                        if ($di->item) {
+                            // Reverse the exact movement this delivery line created:
+                            // dispatching added stock to the warehouse, so deleting
+                            // subtracts that same quantity back. Clamped to zero so a
+                            // stock card / other transaction can never push it negative.
+                            $newQty = max(0, $di->item->quantity - $di->quantity_delivered);
+                            $di->item->update(['quantity' => $newQty]);
+
+                            // Snapshot the subsidy before the row is gone so the item
+                            // carries a permanent "FROM DELETED SUBSIDY" trail.
+                            $di->item->applySubsidySnapshot(
+                                $deliverySubsidy->id,
+                                $deliverySubsidy->ris_number,
+                                $deliverySubsidy->dr_number,
+                                'deleted'
+                            );
+
+                            $affectedItemIds[$di->item_id] = true;
+                        }
+                        // Remove this delivery line's stock-card receipt entirely —
+                        // never leave a movement on the card for a deleted shipment.
+                        StockCardEntry::where('reference_type', 'delivery')
+                            ->where('reference_id', $delivery->id)
+                            ->where('item_id', $di->item_id)
+                            ->delete();
                     }
-                    // Remove this delivery line's stock-card receipt entirely —
-                    // never leave a movement on the card for a deleted shipment.
-                    StockCardEntry::where('reference_type', 'delivery')
-                        ->where('reference_id', $delivery->id)
-                        ->where('item_id', $di->item_id)
-                        ->delete();
+                    $delivery->items()->delete();
+                    $delivery->delete();
                 }
-                $delivery->items()->delete();
-                $delivery->delete();
-            }
+
+                // Flag every destination item that received this subsidy's stock
+                // through a Stock Transfer (multi-hop included), so the "FROM
+                // DELETED SUBSIDY" marker appears on the stock that moved to
+                // other warehouses too. The transfer's own movement is never
+                // reversed here — the preserved, flagged transfer is what the
+                // administrator reviews.
+                $rootIds = array_keys($affectedItemIds);
+                $lineageIds = $this->transferLineageItemIds($rootIds);
+                $descendantIds = array_values(array_diff($lineageIds, $rootIds));
+
+                foreach ($descendantIds as $descendantId) {
+                    $item = Item::find($descendantId);
+                    if ($item) {
+                        $item->applySubsidySnapshot(
+                            $deliverySubsidy->id,
+                            $deliverySubsidy->ris_number,
+                            $deliverySubsidy->dr_number,
+                            'deleted'
+                        );
+                    }
+                }
+
             $deliverySubsidy->items()->delete();
             $deliverySubsidy->delete();
+
+            // Hard-delete the inventory records that existed ONLY because of
+            // this subsidy. An affected item that has been fully reversed
+            // (quantity back to 0) and is no longer referenced by any other
+            // transaction is removed entirely, so it stops cluttering the
+            // Items page and the inventory reports. Items with any remaining
+            // stock or any other reference — other deliveries, subsidies,
+            // requisitions, stock cards, transfers or purchase orders — are
+            // always preserved.
+            foreach (array_keys($affectedItemIds) as $itemId) {
+                $item = Item::find($itemId);
+                if (! $item || (float) $item->quantity > 0) {
+                    continue;
+                }
+
+                $stillReferenced = DeliveryItem::where('item_id', $itemId)->exists()
+                    || DeliverySubsidyItem::where('item_id', $itemId)->exists()
+                    || RequisitionItem::where('item_id', $itemId)->exists()
+                    || RequisitionDispatchItem::where('item_id', $itemId)->exists()
+                    || StockCardEntry::where('item_id', $itemId)->exists()
+                    || StockTransferItem::where('item_id', $itemId)->orWhere('destination_item_id', $itemId)->exists()
+                    || (Schema::hasTable('purchase_orders') && DB::table('purchase_orders')->where('item_id', $itemId)->exists());
+
+                if (! $stillReferenced) {
+                    $item->delete();
+                }
+            }
 
             // Rebuild running stock-card balances so the entries that remain
             // (from other transactions) keep correct cumulative figures.
             foreach (array_keys($affectedItemIds) as $itemId) {
-                StockCardEntry::recalculateBalancesForItem($itemId);
+                if (Item::whereKey($itemId)->exists()) {
+                    StockCardEntry::recalculateBalancesForItem($itemId);
+                }
             }
         });
 
+        $success = "DR #{$deliverySubsidy->dr_number} deleted and stock reversed. "
+            . ($markedTransferCount > 0
+                ? "{$markedTransferCount} related stock transfer(s) were preserved and flagged as \"Related to Deleted Subsidy\" for review."
+                : '');
+
+        $warning = $this->downstreamUsageWarning($lineageIds, $descendantIds);
+
         return redirect()->route('delivery_subsidies.index')
-            ->with('success', "DR #{$deliverySubsidy->dr_number} deleted and stock reversed.");
+            ->with('success', $success)
+            ->with('warning', $warning);
+    }
+
+    /**
+     * Build the safety warning for deleted Subsidy stock that has already been
+     * consumed by another transaction: a requisition issue from any lineage item,
+     * or a second+ hop onward transfer of the moved stock. That stock is
+     * preserved — never auto-reversed — and the administrator is told to review
+     * the related transactions first. The flagged direct transfer itself is not
+     * part of the warning: it is the preserved review item the admin already sees.
+     */
+    private function downstreamUsageWarning(array $lineageIds, array $descendantIds): ?string
+    {
+        $transferNumbers = [];
+        $requisitionNumbers = [];
+
+        foreach ($lineageIds as $itemId) {
+            // Stock issued through a requisition dispatch.
+            $requisitionNumbers = array_merge(
+                $requisitionNumbers,
+                RequisitionDispatchItem::where('item_id', $itemId)
+                    ->with('requisitionItem.requisition')
+                    ->get()
+                    ->map(fn ($di) => $di->requisitionItem?->requisition?->ris_number)
+                    ->filter()
+                    ->unique()
+                    ->all()
+            );
+        }
+
+        // Stock sent onward to yet another warehouse (2nd+ hop): only transfers
+        // whose SOURCE is a descendant count — the direct root→destination hop
+        // is the transfer the admin already reviews.
+        foreach ($descendantIds as $itemId) {
+            $onward = StockTransferItem::with('transfer')
+                ->where('item_id', $itemId)
+                ->where('quantity', '>', 0)
+                ->get();
+
+            foreach ($onward as $sti) {
+                if ($sti->transfer) {
+                    $transferNumbers[] = $sti->transfer->transfer_number;
+                }
+            }
+        }
+
+        $transferNumbers = array_values(array_unique($transferNumbers));
+        $requisitionNumbers = array_values(array_unique($requisitionNumbers));
+
+        if (empty($transferNumbers) && empty($requisitionNumbers)) {
+            return null;
+        }
+
+        $parts = [];
+        if ($transferNumbers) {
+            $parts[] = 'transferred onward (' . implode(', ', $transferNumbers) . ')';
+        }
+        if ($requisitionNumbers) {
+            $parts[] = 'issued through a requisition (' . implode(', ', $requisitionNumbers) . ')';
+        }
+
+        return "This stock originated from a deleted Subsidy and has already been " . implode(' and ', $parts)
+            . ". Review the related transactions before reversing — the affected stock has been preserved and flagged, not reversed.";
+    }
+
+    /**
+     * Admin: archive a Subsidy (freeze it without deleting). Related Stock
+     * Transfers are flagged 'archived' so the administrator can find them.
+     */
+    public function archive(DeliverySubsidy $deliverySubsidy)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+
+        if (! $deliverySubsidy->isArchived()) {
+            DB::transaction(function () use ($deliverySubsidy) {
+                $deliverySubsidy->update(['is_archived' => true]);
+
+                $this->markTransfersWithSubsidyState($deliverySubsidy, 'archived', 'subsidy_archived');
+
+                $this->markItemsWithSubsidyState($deliverySubsidy, 'archived');
+
+                DeliverySubsidyAuditLog::create([
+                    'delivery_subsidy_id' => $deliverySubsidy->id,
+                    'user_id'             => Auth::user()->id,
+                    'action'              => 'archive',
+                    'changed_fields'      => [
+                        'is_archived' => ['old' => false, 'new' => true],
+                    ],
+                ]);
+            });
+        }
+
+        return redirect()->route('delivery_subsidies.index')
+            ->with('success', "RIS #{$deliverySubsidy->ris_number} archived. Related stock transfers are now flagged for review.");
+    }
+
+    /**
+     * Admin: restore an archived Subsidy. Transfers flagged 'archived' by it
+     * return to their normal state (the flag is cleared so they blend back into
+     * the active list).
+     */
+    public function restore(DeliverySubsidy $deliverySubsidy)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+
+        if ($deliverySubsidy->isArchived()) {
+            DB::transaction(function () use ($deliverySubsidy) {
+                $deliverySubsidy->update(['is_archived' => false]);
+
+                foreach ($this->relatedStockTransfers($deliverySubsidy) as $transfer) {
+                    if ($transfer->source_subsidy_status !== 'archived') {
+                        continue;
+                    }
+
+                    $transfer->update(['source_subsidy_status' => null]);
+
+                    StockTransferAuditLog::create([
+                        'stock_transfer_id' => $transfer->id,
+                        'transfer_number'   => $transfer->transfer_number,
+                        'user_id'           => Auth::user()->id,
+                        'action'            => 'subsidy_restored',
+                        'changed_fields'    => [
+                            'ris_number'     => $deliverySubsidy->ris_number,
+                            'dr_number'      => $deliverySubsidy->dr_number,
+                            'subsidy_status' => null,
+                        ],
+                    ]);
+                }
+
+                $this->markItemsWithSubsidyState($deliverySubsidy, 'active');
+
+                DeliverySubsidyAuditLog::create([
+                    'delivery_subsidy_id' => $deliverySubsidy->id,
+                    'user_id'             => Auth::user()->id,
+                    'action'              => 'restore',
+                    'changed_fields'      => [
+                        'is_archived' => ['old' => true, 'new' => false],
+                    ],
+                ]);
+            });
+        }
+
+        return redirect()->route('delivery_subsidies.index')
+            ->with('success', "RIS #{$deliverySubsidy->ris_number} restored. Related stock transfer flags were cleared.");
+    }
+
+    /**
+     * All Stock Transfers that trace back to this Subsidy: linked directly by
+     * FK, or matched by the RIS/DR snapshot on transfers whose subsidy row is
+     * already gone.
+     */
+    private function relatedStockTransfers(DeliverySubsidy $deliverySubsidy): \Illuminate\Database\Eloquent\Collection
+    {
+        $risNumber = (string) $deliverySubsidy->ris_number;
+        $drNumber  = (string) $deliverySubsidy->dr_number;
+
+        return StockTransfer::query()
+            ->where(function ($q) use ($deliverySubsidy, $risNumber, $drNumber) {
+                $q->where('delivery_subsidy_id', $deliverySubsidy->id);
+
+                if ($risNumber !== '') {
+                    $q->orWhere(function ($q2) use ($risNumber) {
+                        $q2->whereNull('delivery_subsidy_id')
+                           ->where('source_ris_number', $risNumber);
+                    });
+                }
+
+                if ($drNumber !== '') {
+                    $q->orWhere(function ($q2) use ($drNumber) {
+                        $q2->whereNull('delivery_subsidy_id')
+                           ->where('source_dr_number', $drNumber);
+                    });
+                }
+            })
+            ->get();
+    }
+
+    /**
+     * Flag every Stock Transfer related to the given Subsidy with a new source
+     * state ('deleted' | 'archived'), snapshot the RIS/DR references, and write
+     * an audit entry on each transfer so the trail outlives the subsidy record.
+     *
+     * Returns the number of transfers flagged.
+     */
+    private function markTransfersWithSubsidyState(DeliverySubsidy $deliverySubsidy, string $state, string $auditAction): int
+    {
+        $transfers = $this->relatedStockTransfers($deliverySubsidy);
+
+        foreach ($transfers as $transfer) {
+            $transfer->forceFill([
+                'source_subsidy_status' => $state,
+                'source_ris_number'     => $transfer->source_ris_number ?: $deliverySubsidy->ris_number,
+                'source_dr_number'      => $transfer->source_dr_number ?: $deliverySubsidy->dr_number,
+            ])->save();
+
+            StockTransferAuditLog::create([
+                'stock_transfer_id' => $transfer->id,
+                'transfer_number'   => $transfer->transfer_number,
+                'user_id'           => Auth::user()->id,
+                'action'            => $auditAction,
+                'changed_fields'    => [
+                    'ris_number'     => $deliverySubsidy->ris_number,
+                    'dr_number'      => $deliverySubsidy->dr_number,
+                    'subsidy_status' => $state,
+                    'marked_at'      => now()->toDateTimeString(),
+                ],
+            ]);
+        }
+
+        return $transfers->count();
+    }
+
+    /**
+     * All inventory Items delivered by this Subsidy (via its delivery lines).
+     */
+    private function relatedItems(DeliverySubsidy $deliverySubsidy): \Illuminate\Database\Eloquent\Collection
+    {
+        return Item::whereHas('deliverySubsidyItems', function ($q) use ($deliverySubsidy) {
+            $q->where('delivery_subsidy_id', $deliverySubsidy->id);
+        })->get();
+    }
+
+    /**
+     * Sync the source-subsidy snapshot on every Item delivered by the given
+     * Subsidy AND on every Item that received that stock through a Stock
+     * Transfer (including multi-hop chains), so the marker follows the stock
+     * across warehouses. 'active' only re-activates items this subsidy
+     * previously marked 'archived' — a restore must never clobber another
+     * subsidy's flag.
+     */
+    private function markItemsWithSubsidyState(DeliverySubsidy $deliverySubsidy, string $state): void
+    {
+        $lineageIds = $this->transferLineageItemIds(
+            $this->relatedItems($deliverySubsidy)->pluck('id')->all()
+        );
+
+        foreach (Item::whereIn('id', $lineageIds)->get() as $item) {
+            if ($state === 'active' && $item->source_subsidy_status !== 'archived') {
+                continue;
+            }
+
+            $item->applySubsidySnapshot(
+                $deliverySubsidy->id,
+                $deliverySubsidy->ris_number,
+                $deliverySubsidy->dr_number,
+                $state
+            );
+        }
+    }
+
+    /**
+     * Every Item id reachable from the given root ids through Stock Transfers,
+     * including multi-hop chains (a destination item may itself be transferred
+     * onward). BFS with a cycle guard. The source is identified by following
+     * the transfer chain — never by warehouse — so stock that moved to another
+     * warehouse is still traced back to the deleted Subsidy.
+     */
+    private function transferLineageItemIds(array $rootIds): array
+    {
+        $lineage = [];
+        $visited = [];
+        $pending = array_values($rootIds);
+
+        while ($pending) {
+            $current = array_shift($pending);
+
+            if (in_array($current, $visited, true)) {
+                continue;
+            }
+
+            $visited[] = $current;
+            $lineage[] = $current;
+
+            $children = StockTransferItem::where('item_id', $current)
+                ->whereNotNull('destination_item_id')
+                ->pluck('destination_item_id')
+                ->all();
+
+            foreach ($children as $childId) {
+                if (! in_array($childId, $visited, true)) {
+                    $pending[] = $childId;
+                }
+            }
+        }
+
+        return $lineage;
     }
 
     public function delivery(DeliverySubsidy $deliverySubsidy)
@@ -520,6 +1134,10 @@ class DeliverySubsidyController extends Controller
         $user = Auth::user();
         if (! $this->canAccessDeliverySubsidy($user, $deliverySubsidy)) {
             abort(403);
+        }
+        if ($deliverySubsidy->isArchived()) {
+            return redirect()->route('delivery_subsidies.show', $deliverySubsidy)
+                ->with('error', 'This Subsidy is archived. Restore it before recording new deliveries.');
         }
         $deliverySubsidy->load(['items.item', 'items.warehouse', 'supplier', 'warehouse']);
 
@@ -537,6 +1155,9 @@ class DeliverySubsidyController extends Controller
         $user = Auth::user();
         if (! $this->canAccessDeliverySubsidy($user, $deliverySubsidy)) {
             abort(403);
+        }
+        if ($deliverySubsidy->isArchived()) {
+            return back()->with('error', 'This Subsidy is archived. Restore it before recording new deliveries.');
         }
 
         // Build per-item validation rules. A line is treated as a real dispatch
@@ -756,6 +1377,13 @@ class DeliverySubsidyController extends Controller
                     'ris_number' => $deliverySubsidy->ris_number,
                 ]);
 
+                $item->applySubsidySnapshot(
+                    $deliverySubsidy->id,
+                    $deliverySubsidy->ris_number,
+                    $deliverySubsidy->dr_number,
+                    'active'
+                );
+
                 StockCardEntry::create([
                     'item_id'             => $item->id,
                     'entry_date'          => $request->delivery_date,
@@ -919,10 +1547,25 @@ class DeliverySubsidyController extends Controller
             return back()->withInput()->withErrors($editErrors);
         }
 
-        DB::transaction(function () use ($request, $deliverySubsidy, $delivery) {
+        $cascadeSvc     = new DeliverySubsidyCascadeService();
+        $cascadeSummary = [];
+
+        DB::transaction(function () use ($request, $deliverySubsidy, $delivery, $cascadeSvc, $cascadeSummary) {
             $affectedItemIds = [];
 
-            foreach ($request->items as $line) {
+            // Snapshot header values before any edits so the audit trail shows
+            // exactly what changed on this shipment.
+            $oldHeader = [
+                'delivery_date'      => $delivery->delivery_date?->toDateString(),
+                'dr_number'          => $delivery->dr_number,
+                'batch_number'       => $delivery->batch_number,
+                'condition_status'   => $delivery->condition_status,
+                'remarks'            => $delivery->remarks,
+                'quantity_delivered' => $delivery->quantity_delivered,
+            ];
+            $changedFields = [];
+
+            foreach ($request->items as $idx => $line) {
                 /** @var DeliveryItem $di */
                 $di = DeliveryItem::with(['item', 'deliverySubsidyItem'])->findOrFail($line['di_id']);
 
@@ -948,6 +1591,16 @@ class DeliverySubsidyController extends Controller
                 if (! $dsItem) {
                     continue;
                 }
+
+                // Per-line values before mutation (expiry lives on the item).
+                $oldDiValues = [
+                    'quantity_delivered' => $oldQty,
+                    'unit_cost'          => $oldCost,
+                    'engas_unit_cost'    => $di->engas_unit_cost,
+                    'expiration_date'    => $oldItem?->expiration_date?->toDateString(),
+                    'warehouse_id'       => $di->warehouse_id,
+                    'dr_number'          => $di->dr_number,
+                ];
 
                 $oldItemId = $oldItem ? $oldItem->id : null;
                 $movedWarehouse = $oldItem && $newWarehouseId > 0 && (int) $oldItem->warehouse_id !== $newWarehouseId;
@@ -979,6 +1632,9 @@ class DeliverySubsidyController extends Controller
                             'unit_cost'  => $newCost,
                             'ris_number' => $deliverySubsidy->ris_number,
                         ]);
+                        if ($newEngas !== null) {
+                            $item->update(['engas_unit_cost' => $newEngas]);
+                        }
                         $affectedItemIds[$item->id] = true;
                     } else {
                         // Cannot resolve a target item — keep the stock on the
@@ -995,6 +1651,9 @@ class DeliverySubsidyController extends Controller
                             'unit_cost'  => $newCost,
                             'ris_number' => $deliverySubsidy->ris_number,
                         ];
+                        if ($newEngas !== null) {
+                            $itemUpdate['engas_unit_cost'] = $newEngas;
+                        }
                         if ($newExpiry) {
                             $itemUpdate['expiration_date'] = $newExpiry;
                         }
@@ -1005,14 +1664,23 @@ class DeliverySubsidyController extends Controller
                 if (! $item) {
                     continue;
                 }
+
+                $item->applySubsidySnapshot(
+                    $deliverySubsidy->id,
+                    $deliverySubsidy->ris_number,
+                    $deliverySubsidy->dr_number,
+                    'active'
+                );
                 $affectedItemIds[$item->id] = true;
 
-                // Cascade unit cost changes to related RIS and stock transfer records
-                if (abs($delta) > 0.0001 || abs($oldCost - $newCost) > 0.001) {
-                    RequisitionItem::where('item_id', $item->id)
-                        ->update(['unit_cost' => $newCost]);
-                    StockTransferItem::where('item_id', $item->id)
-                        ->update(['unit_cost' => $newCost]);
+                // Cascade cost/ENGAS changes to every snapshot referencing this
+                // item — requisition lines, dispatch records, and the full
+                // transfer chain — so reports never show stale values.
+                $oldEngas = $oldItem?->engas_unit_cost;
+                if (abs($delta) > 0.0001
+                    || abs($oldCost - $newCost) > 0.001
+                    || ($newEngas !== null && abs((float) ($oldEngas ?? 0) - $newEngas) > 0.001)) {
+                    $cascadeSvc->cascadeItemCost($item, $newCost, $newEngas, $cascadeSummary);
                 }
 
                 // Adjust delivery/subsidy item qty_delivered (never negative)
@@ -1089,6 +1757,24 @@ class DeliverySubsidyController extends Controller
                         'from_to'             => $deliverySubsidy->supplier->name ?? '',
                     ]);
                 }
+
+                // Record what actually changed on this line for the audit trail.
+                $newDiValues = [
+                    'quantity_delivered' => $newQty,
+                    'unit_cost'          => $newCost,
+                    'engas_unit_cost'    => $newEngas,
+                    'expiration_date'    => $newExpiry,
+                    'warehouse_id'       => $newWarehouseId,
+                    'dr_number'          => $newDr,
+                ];
+                foreach ($newDiValues as $field => $newValue) {
+                    if ((string) $oldDiValues[$field] !== (string) $newValue) {
+                        $changedFields["items.{$idx}.{$field}"] = [
+                            'old' => $oldDiValues[$field],
+                            'new' => $newValue,
+                        ];
+                    }
+                }
             }
 
             // Rebuild every affected item's running stock-card balances so later
@@ -1116,6 +1802,23 @@ class DeliverySubsidyController extends Controller
 
             $deliverySubsidy->update(['total_amount' => round($dispatchedTotal, 2)]);
             $deliverySubsidy->updateDeliveryStatus();
+
+            // Header-level diffs complete the audit record for this edit.
+            $headerFields = [
+                'delivery_date'      => ['old' => $oldHeader['delivery_date'],      'new' => $request->delivery_date],
+                'dr_number'          => ['old' => $oldHeader['dr_number'],          'new' => $request->dr_number ?? $oldHeader['dr_number']],
+                'batch_number'       => ['old' => $oldHeader['batch_number'],       'new' => $request->batch_number],
+                'condition_status'   => ['old' => $oldHeader['condition_status'],   'new' => $request->condition_status],
+                'remarks'            => ['old' => $oldHeader['remarks'],            'new' => $request->remarks],
+                'quantity_delivered' => ['old' => $oldHeader['quantity_delivered'], 'new' => $newHeaderQty],
+            ];
+            foreach ($headerFields as $field => $pair) {
+                if ((string) $pair['old'] !== (string) $pair['new']) {
+                    $changedFields[$field] = $pair;
+                }
+            }
+
+            $cascadeSvc->recordAudit($deliverySubsidy->id, $changedFields, $cascadeSummary);
         });
 
         return redirect()

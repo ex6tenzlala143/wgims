@@ -6,7 +6,11 @@ use App\Models\Delivery;
 use App\Models\DeliverySubsidy;
 use App\Models\DeliverySubsidyItem;
 use App\Models\Item;
+use App\Models\Requisition;
+use App\Models\RequisitionItem;
 use App\Models\StockCardEntry;
+use App\Models\StockTransfer;
+use App\Models\StockTransferItem;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -238,7 +242,9 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             ->assertRedirect(route('delivery_subsidies.index'));
 
         $this->assertEquals(10, (float) $itemA->fresh()->quantity);
-        $this->assertEquals(0, (float) $itemB->fresh()->quantity);
+        // The WH-B variant existed only for this subsidy → it is removed entirely.
+        $this->assertNull($itemB->fresh());
+        $this->assertDatabaseMissing('items', ['id' => $itemB->id]);
 
         $this->assertEquals(0, StockCardEntry::where('item_id', $itemA->id)
             ->where('reference_type', 'delivery')->where('reference_id', $this->deliveryId('DR-MULTI-WH-1'))->count());
@@ -311,7 +317,9 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
 
         // No orphan stock-card rows remain.
         $this->assertEquals(0, StockCardEntry::where('item_id', $item->id)->count());
-        $this->assertEquals(0, (float) $item->fresh()->quantity);
+        // The item existed only for this subsidy → it is removed entirely.
+        $this->assertNull($item->fresh());
+        $this->assertDatabaseMissing('items', ['id' => $item->id]);
     }
 
     public function test_second_delete_does_not_double_reverse(): void
@@ -343,6 +351,130 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             ->assertNotFound();
 
         $this->assertEquals(100, (float) $item->fresh()->quantity);
+    }
+
+    public function test_deleting_subsidy_removes_item_created_solely_for_it(): void
+    {
+        $wh = $this->makeWarehouse('Warehouse A', 'WHA');
+
+        // Catalog-based line (no item_id) → no Item record exists before delivery.
+        $ds = $this->createSubsidy([
+            ['description' => 'Emergency Ration Pack', 'quantity' => 60],
+        ], 'RIS-ORPHAN-1');
+
+        $line = $ds->items()->firstOrFail();
+        $this->dispatch($ds, 'DR-ORPHAN-1', [[
+            'ds_item_id' => $line->id, 'warehouse_id' => $wh->id,
+            'quantity_delivered' => 60, 'unit_cost' => 250,
+            'expiration_date' => '2027-01-01', 'dr_number' => 'DR-ORPHAN-1-A',
+        ]]);
+
+        $item = Item::where('warehouse_id', $wh->id)->where('description', 'Emergency Ration Pack')->firstOrFail();
+        $this->assertEquals(60, (float) $item->quantity);
+
+        $this->actingAs($this->admin())
+            ->delete(route('delivery_subsidies.destroy', $ds))
+            ->assertRedirect(route('delivery_subsidies.index'));
+
+        // The item was created only by this subsidy → it is hard-deleted.
+        $this->assertDatabaseMissing('items', ['id' => $item->id]);
+        $this->assertDatabaseMissing('delivery_items', ['item_id' => $item->id]);
+        $this->assertDatabaseMissing('delivery_subsidy_items', ['item_id' => $item->id]);
+        $this->assertDatabaseMissing('stock_card_entries', ['item_id' => $item->id]);
+    }
+
+    public function test_deleting_subsidy_keeps_item_referenced_by_a_requisition(): void
+    {
+        $wh = $this->makeWarehouse('Warehouse A', 'WHA');
+
+        $ds = $this->createSubsidy([
+            ['description' => 'Emergency Ration Pack', 'quantity' => 60],
+        ], 'RIS-ORPHAN-2');
+
+        $line = $ds->items()->firstOrFail();
+        $this->dispatch($ds, 'DR-ORPHAN-2', [[
+            'ds_item_id' => $line->id, 'warehouse_id' => $wh->id,
+            'quantity_delivered' => 60, 'unit_cost' => 250,
+            'expiration_date' => '2027-01-01', 'dr_number' => 'DR-ORPHAN-2-A',
+        ]]);
+
+        $item = Item::where('warehouse_id', $wh->id)->where('description', 'Emergency Ration Pack')->firstOrFail();
+
+        // A requisition line also references the same item.
+        $requisition = Requisition::create([
+            'ris_number'     => 'RIS-REQ-9001',
+            'dr_number'      => '',
+            'warehouse_id'   => $wh->id,
+            'created_by'     => $this->admin()->id,
+            'purpose'        => 'Test',
+            'date_requested' => '2026-08-15',
+            'status'         => 'pending',
+        ]);
+        RequisitionItem::create([
+            'requisition_id'     => $requisition->id,
+            'item_id'            => $item->id,
+            'description'        => 'Emergency Ration Pack',
+            'unit'               => 'piece',
+            'account_code'       => '1040202000-01',
+            'warehouse_id'       => $wh->id,
+            'quantity_requested' => 5,
+            'quantity_issued'    => 0,
+            'unit_cost'          => 250,
+        ]);
+
+        $this->actingAs($this->admin())
+            ->delete(route('delivery_subsidies.destroy', $ds))
+            ->assertRedirect(route('delivery_subsidies.index'));
+
+        // Referenced by a requisition → the item must survive the deletion.
+        $this->assertDatabaseHas('items', ['id' => $item->id]);
+        $this->assertEquals(0, (float) $item->fresh()->quantity);
+    }
+
+    public function test_deleting_subsidy_keeps_item_referenced_by_a_stock_transfer(): void
+    {
+        $wh   = $this->makeWarehouse('Warehouse A', 'WHA');
+        $whB  = $this->makeWarehouse('Warehouse B', 'WHB');
+        $source = $this->makeItem($whB, 'Ration Source', 100, 10);
+
+        $ds = $this->createSubsidy([
+            ['description' => 'Emergency Ration Pack', 'quantity' => 60],
+        ], 'RIS-ORPHAN-3');
+
+        $line = $ds->items()->firstOrFail();
+        $this->dispatch($ds, 'DR-ORPHAN-3', [[
+            'ds_item_id' => $line->id, 'warehouse_id' => $wh->id,
+            'quantity_delivered' => 60, 'unit_cost' => 250,
+            'expiration_date' => '2027-01-01', 'dr_number' => 'DR-ORPHAN-3-A',
+        ]]);
+
+        $item = Item::where('warehouse_id', $wh->id)->where('description', 'Emergency Ration Pack')->firstOrFail();
+
+        // The delivered item becomes the destination of a stock transfer.
+        $transfer = StockTransfer::create([
+            'transfer_number'    => 'TRF-2026-9001',
+            'from_warehouse_id'  => $whB->id,
+            'to_warehouse_id'    => $wh->id,
+            'transfer_date'      => '2026-08-05',
+            'transferred_by'     => $this->admin()->id,
+            'status'             => 'pending',
+        ]);
+        StockTransferItem::create([
+            'stock_transfer_id'   => $transfer->id,
+            'item_id'             => $source->id,
+            'destination_item_id' => $item->id,
+            'quantity'            => 5,
+            'quantity_requested'  => 5,
+            'unit_cost'           => 250,
+        ]);
+
+        $this->actingAs($this->admin())
+            ->delete(route('delivery_subsidies.destroy', $ds))
+            ->assertRedirect(route('delivery_subsidies.index'));
+
+        // Referenced as a transfer destination → the item must survive.
+        $this->assertDatabaseHas('items', ['id' => $item->id]);
+        $this->assertEquals(0, (float) $item->fresh()->quantity);
     }
 
     private function deliveryId(string $dr): ?int

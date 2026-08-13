@@ -22,3 +22,14 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Database backups and SQL dumps (may contain real production data)
+/database/backups/
+*.sql
+*.sql.gz
+*.sql.zip
+
+# Test scripts (temporary testing files)
+test_*.php
+verify_*.php
+backup_*.bat

@@ -66,7 +66,8 @@
                 @endphp
                 <tr>
                     <td><code style="font-size:12px">{{ $item->stock_number }}</code></td>
-                    <td><strong>{{ $item->description }}</strong>@if($item->ris_number)<br><small style="color:var(--text-muted)">{{ $item->ris_number }}</small>@endif</td>
+                    <td><strong>{{ $item->description }}</strong>@if($item->ris_number)<br><small style="color:var(--text-muted)">{{ $item->ris_number }}</small>@endif
+                        @include('partials.subsidy-source-badge', ['status' => $item->source_subsidy_status, 'ris' => $item->sourceSubsidyReference(), 'dr' => $item->sourceDrReference(), 'prefix' => 'FROM'])</td>
                     <td>{{ $item->unit }}</td>
                     @if(auth()->user()->hasAdminAccess())<td>{{ $item->warehouse->name ?? '-' }}</td>@endif
                     <td style="text-align:right">{{ number_format($totalReceived, 2) }}</td>

@@ -377,8 +377,11 @@ class InventoryDeletionReversalTest extends TestCase
         $this->assertDatabaseMissing('deliveries', ['id' => $delivery->id]);
 
         $this->assertEquals(100, (float) $itemA->fresh()->quantity);
-        $this->assertEquals(0, (float) $itemB->fresh()->quantity);
-        $this->assertEquals(0, (float) $itemC->fresh()->quantity);
+        // Items B and C existed only for this subsidy (0 stock before) → removed entirely.
+        $this->assertNull($itemB->fresh());
+        $this->assertNull($itemC->fresh());
+        $this->assertDatabaseMissing('items', ['id' => $itemB->id]);
+        $this->assertDatabaseMissing('items', ['id' => $itemC->id]);
 
         $this->assertEquals(0, StockCardEntry::where('reference_type', 'delivery')->where('reference_id', $delivery->id)->count());
     }

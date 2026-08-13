@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ScopesWarehouse;
 use App\Models\Item;
 use App\Models\ItemCatalogItem;
 use App\Models\Requisition;
+use App\Models\RequisitionAuditLog;
 use App\Models\RequisitionDispatchItem;
 use App\Models\RequisitionItem;
 use App\Models\StockCardEntry;
@@ -24,7 +25,7 @@ class RequisitionController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $query = Requisition::with(['warehouse', 'creator', 'items.warehouse', 'items.dispatchItems.item.warehouse'])
+        $query = Requisition::with(['warehouse', 'creator', 'items.warehouse', 'items.item', 'items.dispatchItems.item.warehouse'])
             ->withSum('items as total_requested', 'quantity_requested')
             ->withSum('items as total_issued', 'quantity_issued');
 
@@ -54,6 +55,17 @@ class RequisitionController extends Controller
 
         if ($request->status) {
             $query->where('status', $request->status);
+        }
+        if ($request->related_to_deleted_subsidy === 'yes') {
+            $query->where(function ($q) {
+                $q->whereHas('items.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']))
+                  ->orWhereHas('items.dispatchItems.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']));
+            });
+        } elseif ($request->related_to_deleted_subsidy === 'no') {
+            $query->where(function ($q) {
+                $q->whereDoesntHave('items.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']))
+                  ->whereDoesntHave('items.dispatchItems.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']));
+            });
         }
         if ($search = $request->search) {
             $query->where(function ($q) use ($search) {
@@ -442,12 +454,15 @@ class RequisitionController extends Controller
         $requisition->load('items.dispatchItems.item');
 
         DB::transaction(function () use ($requisition) {
+            $affectedItemIds = [];
+
             // Reverse each dispatch independently — each one may have come from a
             // different warehouse/stock record.
             foreach ($requisition->items as $ri) {
                 foreach ($ri->dispatchItems as $di) {
                     if ($di->quantity_issued > 0 && $di->item) {
                         $di->item->increment('quantity', $di->quantity_issued);
+                        $affectedItemIds[$di->item->id] = true;
                     }
                 }
             }
@@ -459,10 +474,281 @@ class RequisitionController extends Controller
 
             $requisition->items()->delete();
             $requisition->delete();
+
+            // Rebuild running balances so later stock-card entries stay
+            // consistent after their upstream issuance rows were removed.
+            foreach (array_keys($affectedItemIds) as $itemId) {
+                StockCardEntry::recalculateBalancesForItem($itemId);
+            }
         });
 
         return redirect()->route('requisitions.index')
             ->with('success', "RIS #{$risNumber} deleted and any issued stock has been reversed.");
+    }
+
+    /**
+     * API: data for the "Correct RIS" modal. Returns the header fields and every
+     * line item (with its issued quantity and whether it is locked), plus the
+     * description-level catalog so undispatched lines can be re-pointed.
+     * GET /requisitions/{requisition}/correction-data
+     */
+    public function correctionData(Request $request, Requisition $requisition)
+    {
+        $user = Auth::user();
+        abort_unless($user->canWrite(), 403);
+        abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
+
+        $requisition->load(['items.item', 'items.dispatchItems']);
+
+        $items = $requisition->items->map(function ($ri) {
+            return [
+                'id'                 => $ri->id,
+                'catalog_item_id'    => $ri->catalog_item_id,
+                'description'        => $ri->description ?? $ri->item?->description,
+                'unit'               => $ri->unit ?? $ri->item?->unit ?? '',
+                'account_code'       => $ri->account_code ?? '',
+                'quantity_requested' => (float) $ri->quantity_requested,
+                'quantity_issued'    => (float) $ri->quantity_issued,
+                'locked'             => $ri->quantity_issued > 0 || $ri->dispatchItems->isNotEmpty(),
+            ];
+        });
+
+        return response()->json([
+            'ris_number'    => $requisition->ris_number,
+            'status'        => $requisition->status,
+            'is_completed'  => $requisition->status === 'approved',
+            'entity_name'   => $requisition->entity_name,
+            'fund_cluster'  => $requisition->fund_cluster,
+            'office'        => $requisition->office,
+            'division'      => $requisition->division,
+            'province'      => $requisition->province,
+            'municipality'  => $requisition->municipality,
+            'responsibility_center_code' => $requisition->responsibility_center_code,
+            'purpose'       => $requisition->purpose,
+            'date_requested'=> $requisition->date_requested?->format('Y-m-d'),
+            'requested_by_name'        => $requisition->requested_by_name,
+            'requested_by_designation' => $requisition->requested_by_designation,
+            'items'         => $items->values(),
+            'catalog_items' => $items->contains(fn ($i) => ! $i['locked'])
+                ? $this->catalogItemsForCorrection()
+                : [],
+            'totals' => [
+                'requested' => $requisition->totalRequested(),
+                'issued'    => $requisition->totalIssued(),
+                'remaining' => $requisition->totalRemaining(),
+            ],
+        ]);
+    }
+
+    /**
+     * Apply a correction to an issued/completed RIS. Only the request itself is
+     * changed: header fields and per-line requested quantities (plus the item on
+     * lines that have never been dispatched). Dispatches, stock cards, DR numbers
+     * and inventory balances are NEVER touched here — resolving an over-issuance
+     * is done through the separate "Edit Dispatch" correction instead.
+     *
+     * The requested→issued→outstanding figures and the RIS status are recomputed,
+     * and every change is written to the correction audit log.
+     * PUT /requisitions/{requisition}/correct
+     */
+    public function correct(Request $request, Requisition $requisition)
+    {
+        $user = Auth::user();
+        abort_unless($user->canWrite(), 403);
+        abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
+
+        $request->validate([
+            'entity_name'    => 'nullable|string|max:255',
+            'fund_cluster'   => 'nullable|string|max:255',
+            'office'         => 'nullable|string|max:255',
+            'division'       => 'nullable|string|max:255',
+            'province'       => 'nullable|string|max:255',
+            'municipality'   => 'nullable|string|max:255',
+            'responsibility_center_code' => 'nullable|string|max:255',
+            'purpose'        => 'required|string',
+            'date_requested' => 'required|date',
+            'requested_by_name'        => 'nullable|string|max:255',
+            'requested_by_designation' => 'nullable|string|max:255',
+            'items' => 'required|array|min:1',
+            'items.*.id'               => 'required|integer|exists:requisition_items,id',
+            'items.*.catalog_item_id'  => 'nullable|exists:item_catalog_items,id',
+            'items.*.quantity_requested' => 'required|numeric|min:0.01',
+        ]);
+
+        $existingItems = $requisition->items()->with('dispatchItems')->get()->keyBy('id');
+
+        // Every submitted line must belong to this requisition.
+        foreach ($request->items as $idx => $line) {
+            if (! $existingItems->has((int) $line['id'])) {
+                throw ValidationException::withMessages([
+                    "items.{$idx}.id" => 'Invalid line item for this RIS.',
+                ]);
+            }
+        }
+
+        $oldStatus = $requisition->status;
+        $oldTotal  = $requisition->totalRequested();
+        $changes   = [];
+
+        DB::transaction(function () use ($request, $requisition, $existingItems, $user, &$changes, &$oldTotal, &$oldStatus) {
+            // ── Header ──────────────────────────────────────────────────────
+            $headerMap = [
+                'entity_name', 'fund_cluster', 'office', 'division', 'province',
+                'municipality', 'responsibility_center_code', 'purpose',
+                'date_requested', 'requested_by_name', 'requested_by_designation',
+            ];
+
+            $headerData = [];
+            foreach ($headerMap as $field) {
+                $oldVal = $requisition->{$field} instanceof \DateTimeInterface
+                    ? $requisition->{$field}->format('Y-m-d')
+                    : $requisition->{$field};
+                $newVal = $request->{$field};
+                $headerData[$field] = $newVal;
+                if ((string) $oldVal !== (string) $newVal) {
+                    $changes[$field] = ['old' => $oldVal, 'new' => $newVal];
+                }
+            }
+
+            // ── Lines: requested quantity (item change only when undispatched) ─
+            $catalogItems = ItemCatalogItem::with('category')
+                ->whereIn('id', collect($request->items)->pluck('catalog_item_id')->filter()->unique())
+                ->get()
+                ->keyBy('id');
+
+            $representatives = [];
+            foreach ($catalogItems as $catalog) {
+                $representatives[$catalog->id] = Item::where('is_active', true)
+                    ->whereRaw('LOWER(TRIM(description)) = ?', [mb_strtolower(trim($catalog->name))])
+                    ->orderByDesc('quantity')
+                    ->orderBy('id')
+                    ->first();
+            }
+
+            foreach ($request->items as $idx => $line) {
+                $ri     = $existingItems->get((int) $line['id']);
+                $oldQty = (float) $ri->quantity_requested;
+                $newQty = round((float) $line['quantity_requested'], 4);
+                $locked = $ri->quantity_issued > 0 || $ri->dispatchItems->isNotEmpty();
+
+                // Inventory protection: the request can never drop below what is
+                // already issued. Resolve an over-issuance via "Edit Dispatch".
+                if ($newQty + 0.0001 < $ri->quantity_issued) {
+                    throw ValidationException::withMessages([
+                        "items.{$idx}.quantity_requested" =>
+                            'Requested quantity ('.number_format($newQty, 2).') cannot be less than the '
+                            .number_format($ri->quantity_issued, 2).' already issued. '
+                            .'Correct the issued dispatch(s) first, then fix the request.',
+                    ]);
+                }
+
+                $newCatalogId = $line['catalog_item_id'] ?? null;
+                if ($locked && $newCatalogId && (int) $newCatalogId !== (int) $ri->catalog_item_id) {
+                    throw ValidationException::withMessages([
+                        "items.{$idx}.catalog_item_id" =>
+                            'The item cannot be changed on a line that has already been dispatched.',
+                    ]);
+                }
+
+                $data = ['quantity_requested' => $newQty];
+                $oldDesc = $ri->description;
+
+                if (! $locked && $newCatalogId) {
+                    $catalog = $catalogItems->get((int) $newCatalogId);
+                    if ($catalog && $catalog->is_active) {
+                        $rep = $representatives[$catalog->id] ?? null;
+                        $data += [
+                            'catalog_item_id' => $catalog->id,
+                            'item_id'         => $rep?->id,
+                            'description'     => $catalog->name,
+                            'unit'            => $rep?->unit,
+                            'account_code'    => $catalog->account_code ?: $catalog->category?->account_code,
+                        ];
+                    }
+                }
+
+                $ri->update($data);
+
+                if (abs($newQty - $oldQty) > 0.0001) {
+                    $changes["items.{$ri->id}.quantity_requested"] = ['old' => $oldQty, 'new' => $newQty];
+                }
+                if (isset($data['description']) && $data['description'] !== $oldDesc) {
+                    $changes["items.{$ri->id}.item"] = ['old' => $oldDesc, 'new' => $data['description']];
+                }
+            }
+
+            $requisition->update($headerData);
+
+            // Reload the lines from the DB: totalRequested()/updateFulfilmentStatus()
+            // would otherwise reuse the relation captured before the updates above.
+            $requisition->load('items');
+
+            // Recompute requested → issued → outstanding → status. Dispatches and
+            // inventory records are untouched — only the request is reclassified.
+            $requisition->updateFulfilmentStatus();
+
+            $newTotal = (float) $existingItems->sum('quantity_requested');
+            if (abs($newTotal - $oldTotal) > 0.0001) {
+                $changes['total_requested'] = ['old' => $oldTotal, 'new' => round($newTotal, 4)];
+            }
+            if ($requisition->status !== $oldStatus) {
+                $changes['status'] = ['old' => $oldStatus, 'new' => $requisition->status];
+            }
+
+            if (! empty($changes)) {
+                RequisitionAuditLog::create([
+                    'requisition_id' => $requisition->id,
+                    'user_id'        => $user->id,
+                    'action'         => 'correction',
+                    'changed_fields' => $changes,
+                ]);
+            }
+        });
+
+        return response()->json(['redirect' => route('requisitions.show', $requisition->id)]);
+    }
+
+    /** Description-level item list for the correction modal (same data as the create form). */
+    private function catalogItemsForCorrection(): array
+    {
+        $catalogItems = ItemCatalogItem::with('category')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $stock = Item::where('is_active', true)
+            ->where('quantity', '>', 0)
+            ->get(['description', 'unit', 'quantity'])
+            ->groupBy(fn ($i) => mb_strtolower(trim($i->description)));
+
+        return $catalogItems->map(function ($catalog) use ($stock) {
+            $records = $stock->get(mb_strtolower(trim($catalog->name)), collect());
+
+            return [
+                'id'           => $catalog->id,
+                'description'  => $catalog->name,
+                'name'         => $catalog->name,
+                'account_code' => $catalog->account_code ?: $catalog->category?->account_code,
+                'unit'         => $records->first()?->unit ?? '',
+                'total_stock'  => (float) $records->sum('quantity'),
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Audit log view: who corrected the RIS, when, and every field that changed.
+     * GET /requisitions/{requisition}/audit-log
+     */
+    public function auditLog(Requisition $requisition)
+    {
+        $user = Auth::user();
+        abort_unless($user->canWrite(), 403);
+        abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
+
+        $requisition->load(['items', 'warehouse']);
+        $logs = $requisition->auditLogs()->with('user')->paginate(20);
+
+        return view('requisitions.audit_log', compact('requisition', 'logs'));
     }
 
     public function approve(Requisition $requisition)
@@ -584,7 +870,7 @@ class RequisitionController extends Controller
 
                 // Record this dispatch. The exact stock record (item_id) pins the
                 // warehouse, unit cost and other stock info — no warehouse stored.
-                RequisitionDispatchItem::create([
+                $dispatch = RequisitionDispatchItem::create([
                     'requisition_item_id' => $riItem->id,
                     'item_id'             => $item->id,
                     'quantity_issued'     => $wanted,
@@ -603,6 +889,7 @@ class RequisitionController extends Controller
                     'reference'          => $requisition->ris_number,
                     'reference_type'     => 'issuance',
                     'reference_id'       => $requisition->id,
+                    'dispatch_item_id'   => $dispatch->id,
                     'receipt_qty'        => 0,
                     'receipt_unit_cost'  => 0,
                     'receipt_total_cost' => 0,
@@ -662,6 +949,262 @@ class RequisitionController extends Controller
 
         return redirect()->route('requisitions.show', $requisition)
             ->with('success', 'Requisition processed successfully.');
+    }
+
+    /**
+     * API: data for the "Edit Issued Item" modal. Returns the dispatch's current
+     * values, the warehouses the user may dispatch from, and the stock records
+     * available in the dispatch's current warehouse (including the record it
+     * currently references, even if it is now out of stock).
+     */
+    public function dispatchEditData(Request $request, RequisitionDispatchItem $dispatch)
+    {
+        if (! Auth::user()->canApprove()) {
+            abort(403);
+        }
+
+        $dispatch->load(['requisitionItem.requisition', 'item.warehouse']);
+        $user          = Auth::user();
+        $allowedIds    = $this->getUserWarehouseIds($user);
+        $currentWhId   = (int) ($dispatch->item?->warehouse_id ?? 0);
+
+        if ($currentWhId <= 0 || ($allowedIds !== null && ! in_array($currentWhId, $allowedIds, true))) {
+            abort(403);
+        }
+
+        $warehouses = $user->hasAdminAccess()
+            ? Warehouse::where('is_active', true)->orderBy('name')->get()
+            : $user->warehouses()->where('is_active', true)->orderBy('name')->get();
+
+        // Same selection rule as getItemsByWarehouse, but the dispatch's current
+        // record is always included so the existing selection can be restored.
+        $stockRecords = Item::where('warehouse_id', $currentWhId)
+            ->where('is_active', true)
+            ->where(function ($q) use ($dispatch) {
+                $q->where(function ($inner) {
+                    $inner->where('quantity', '>', 0)->whereNotNull('stock_number');
+                })->orWhere('id', $dispatch->item_id);
+            })
+            ->orderBy('description')
+            ->orderBy('unit_cost')
+            ->get(['id', 'description', 'unit', 'quantity', 'stock_number',
+                   'expiration_date', 'unit_cost', 'engas_unit_cost']);
+
+        return response()->json([
+            'id'                  => $dispatch->id,
+            'requisition_item_id' => $dispatch->requisition_item_id,
+            'requisition_id'      => $dispatch->requisitionItem->requisition_id,
+            'ris_number'          => $dispatch->requisitionItem->requisition->ris_number,
+            'description'         => $dispatch->item?->description,
+            'item_id'             => $dispatch->item_id,
+            'warehouse_id'        => $currentWhId,
+            'quantity_issued'     => $dispatch->quantity_issued,
+            'unit_cost'           => $dispatch->unit_cost,
+            'engas_unit_cost'     => $dispatch->engas_unit_cost,
+            'expiration_date'     => $dispatch->expiration_date?->format('Y-m-d'),
+            'dr_number'           => $dispatch->dr_number,
+            'warehouses'          => $warehouses->map(fn ($w) => [
+                'id'   => $w->id,
+                'name' => $w->name,
+                'code' => $w->code,
+            ])->values(),
+            'stock_records'       => $stockRecords->map(fn ($i) => [
+                'id'              => $i->id,
+                'description'     => $i->description,
+                'unit'            => $i->unit,
+                'quantity'        => $i->quantity,
+                'stock_number'    => $i->stock_number,
+                'expiry_date'     => $i->expiration_date?->format('Y-m-d'),
+                'unit_cost'       => $i->unit_cost,
+                'engas_unit_cost' => $i->engas_unit_cost,
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Apply edits to a single dispatched item and correct every connected
+     * inventory record without double-counting or losing stock.
+     *
+     * The old deduction is reversed from the OLD exact stock record and the new
+     * deduction is applied to the NEW exact record — the delta never borrows
+     * from another unit-cost/FIFO record. Stock cards, the line cache, the RIS
+     * totals and the fulfilment status are all refreshed in the same transaction.
+     */
+    public function updateDispatch(Request $request, RequisitionDispatchItem $dispatch)
+    {
+        if (! Auth::user()->canApprove()) {
+            abort(403);
+        }
+
+        $request->validate([
+            'warehouse_id'    => 'required|integer|exists:warehouses,id',
+            'item_id'         => 'required|integer|exists:items,id',
+            'quantity_issued' => 'required|numeric|min:0.0001',
+            'unit_cost'       => 'required|numeric|min:0',
+            'engas_unit_cost' => 'nullable|numeric|min:0',
+            'expiration_date' => 'nullable|date',
+            'dr_number'       => 'required|string|max:100',
+        ]);
+
+        $dispatch->load(['requisitionItem', 'requisitionItem.requisition', 'item']);
+        $requisitionId = $dispatch->requisitionItem->requisition_id;
+
+        DB::transaction(function () use ($request, $dispatch, &$requisitionId) {
+            $user        = Auth::user();
+            $ri          = $dispatch->requisitionItem;
+            $requisition = $ri->requisition;
+
+            $oldItemId = (int) $dispatch->item_id;
+            $oldQty    = (float) $dispatch->quantity_issued;
+
+            $warehouseId = (int) $request->warehouse_id;
+            $newItemId   = (int) $request->item_id;
+            $newQty      = round((float) $request->quantity_issued, 4);
+            $newUnitCost = round((float) $request->unit_cost, 2);
+            $newEngas    = ($request->engas_unit_cost !== null && $request->engas_unit_cost !== '')
+                ? round((float) $request->engas_unit_cost, 2)
+                : null;
+
+            // A non-admin dispatcher can only issue from their own warehouses.
+            $allowedIds = $this->getUserWarehouseIds($user);
+            if ($allowedIds !== null && ! in_array($warehouseId, $allowedIds, true)) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => 'You are not assigned to this warehouse.',
+                ]);
+            }
+
+            // Lock and re-fetch the EXACT stock record the dispatch must point to.
+            $newItem = Item::whereKey($newItemId)
+                ->where('warehouse_id', $warehouseId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $newItem) {
+                throw ValidationException::withMessages([
+                    'item_id' => 'The selected stock record does not belong to the selected warehouse.',
+                ]);
+            }
+
+            // The line can never exceed its requested quantity. The old dispatch's
+            // quantity is credited back before the new value is counted.
+            $lineTotalAfter = $ri->quantity_issued - $oldQty + $newQty;
+            if ($lineTotalAfter > $ri->quantity_requested + 0.0001) {
+                throw ValidationException::withMessages([
+                    'quantity_issued' =>
+                        'Cannot issue more than the outstanding quantity '
+                        .'('.number_format(max(0, $ri->quantity_requested - ($ri->quantity_issued - $oldQty)), 2)
+                        .') for "'.$newItem->description.'".',
+                ]);
+            }
+
+            // Stock must exist on the exact new record — when it is the same
+            // record, the old quantity is credited back first.
+            $availableOnRecord = (float) $newItem->quantity
+                + ($oldItemId === $newItemId ? $oldQty : 0.0);
+
+            if ($newQty > $availableOnRecord + 0.0001) {
+                throw ValidationException::withMessages([
+                    'quantity_issued' =>
+                        'Insufficient stock on the selected record "'.$newItem->description.'"'
+                        .' ('.$newItem->stock_number.' · ₱'.number_format($newItem->unit_cost, 2).'): '
+                        .'only '.number_format($availableOnRecord, 2).' available. '
+                        .'No other unit-cost record will be used.',
+                ]);
+            }
+
+            $oldItem = $oldItemId === $newItemId
+                ? $newItem
+                : Item::whereKey($oldItemId)->lockForUpdate()->first();
+
+            // ── Reverse the old deduction, apply the new one ────────────────
+            if ($oldItemId === $newItemId) {
+                $newItem->update(['quantity' => round((float) $newItem->quantity + $oldQty - $newQty, 4)]);
+            } else {
+                $oldItem->update(['quantity' => round((float) $oldItem->quantity + $oldQty, 4)]);
+                $newItem->update(['quantity' => round((float) $newItem->quantity - $newQty, 4)]);
+            }
+
+            // ── Update the dispatch row (warehouse follows the stock record) ─
+            $dispatch->update([
+                'item_id'         => $newItemId,
+                'quantity_issued' => $newQty,
+                'unit_cost'       => $newUnitCost,
+                'engas_unit_cost' => $newEngas,
+                'expiration_date' => $request->expiration_date ?: null,
+                'dr_number'       => $request->dr_number,
+            ]);
+
+            // ── Stock-card entries: update in place on the same record, move
+            //    them when the record changes. Never double-count or drop an
+            //    entry for another dispatch of the same item. ───────────────
+            $entry = StockCardEntry::where('dispatch_item_id', $dispatch->id)->first();
+
+            if ($oldItemId === $newItemId) {
+                if ($entry) {
+                    $entry->update(['issue_qty' => $newQty]);
+                } else {
+                    // Legacy safety net: entries created before dispatch linking
+                    $entry = StockCardEntry::where('reference_type', 'issuance')
+                        ->where('reference_id', $requisition->id)
+                        ->where('item_id', $oldItemId)
+                        ->first();
+                    if ($entry) {
+                        $entry->update([
+                            'dispatch_item_id' => $dispatch->id,
+                            'issue_qty'        => $newQty,
+                        ]);
+                    }
+                }
+            } else {
+                if ($entry) {
+                    $entry->delete();
+                } else {
+                    // Legacy safety net: delete the matching unlinked issuance
+                    StockCardEntry::where('reference_type', 'issuance')
+                        ->where('reference_id', $requisition->id)
+                        ->where('item_id', $oldItemId)
+                        ->first()
+                        ?->delete();
+                }
+
+                StockCardEntry::create([
+                    'item_id'            => $newItemId,
+                    'entry_date'         => now()->toDateString(),
+                    'reference'          => $requisition->ris_number,
+                    'reference_type'     => 'issuance',
+                    'reference_id'       => $requisition->id,
+                    'dispatch_item_id'   => $dispatch->id,
+                    'receipt_qty'        => 0,
+                    'receipt_unit_cost'  => 0,
+                    'receipt_total_cost' => 0,
+                    'issue_qty'          => $newQty,
+                    'balance_qty'        => 0,
+                    'balance_unit_cost'  => $newItem->unit_cost,
+                    'balance_total_cost' => 0,
+                    'from_to'            => $requisition->office ?? $newItem->warehouse->name ?? '',
+                ]);
+            }
+
+            StockCardEntry::recalculateBalancesForItem($newItemId);
+            if ($oldItemId !== $newItemId) {
+                StockCardEntry::recalculateBalancesForItem($oldItemId);
+            }
+
+            // ── Refresh the line cache (keeps totals + breakdowns consistent) ─
+            $ri->update([
+                'quantity_issued' => round($lineTotalAfter, 4),
+                'stock_available' => (float) $newItem->quantity >= $ri->quantity_requested,
+                'dr_number'       => $request->dr_number ?: $ri->dr_number,
+                'engas_unit_cost' => $newEngas ?? $ri->engas_unit_cost,
+                'expiration_date' => $request->expiration_date ?: $ri->expiration_date,
+                'unit_cost'       => $newUnitCost,
+            ]);
+
+            $requisition->load('items');
+            $requisition->updateFulfilmentStatus();
+        });
+
+        return response()->json(['redirect' => route('requisitions.show', $requisitionId)]);
     }
 
     public function signatories(Requisition $requisition)

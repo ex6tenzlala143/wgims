@@ -38,6 +38,11 @@ class Requisition extends Model
         return $this->hasMany(RequisitionItem::class);
     }
 
+    public function auditLogs()
+    {
+        return $this->hasMany(RequisitionAuditLog::class)->latest();
+    }
+
     /**
      * Human-readable list of the warehouses this requisition draws from.
      * Includes the warehouse of every dispatch, plus any line-level warehouse.
@@ -86,6 +91,47 @@ class Requisition extends Model
         }
 
         return $ids;
+    }
+
+    /**
+     * Whether this requisition draws from any item whose source Subsidy has
+     * been deleted or archived (checked on both requested lines and their
+     * dispatch records).
+     */
+    public function isRelatedToDeletedSubsidy(): bool
+    {
+        return $this->deletedSubsidySnapshot() !== null;
+    }
+
+    /**
+     * First source-subsidy snapshot found across this requisition's requested
+     * lines and dispatch records, or null when none is flagged.
+     *
+     * @return array{status: string, ris: ?string, dr: ?string}|null
+     */
+    public function deletedSubsidySnapshot(): ?array
+    {
+        foreach ($this->items as $ri) {
+            if ($ri->item && in_array($ri->item->source_subsidy_status, ['deleted', 'archived'], true)) {
+                return [
+                    'status' => $ri->item->source_subsidy_status,
+                    'ris'    => $ri->item->sourceSubsidyReference(),
+                    'dr'     => $ri->item->sourceDrReference(),
+                ];
+            }
+
+            foreach ($ri->dispatchItems as $di) {
+                if ($di->item && in_array($di->item->source_subsidy_status, ['deleted', 'archived'], true)) {
+                    return [
+                        'status' => $di->item->source_subsidy_status,
+                        'ris'    => $di->item->sourceSubsidyReference(),
+                        'dr'     => $di->item->sourceDrReference(),
+                    ];
+                }
+            }
+        }
+
+        return null;
     }
 
     public function getStatusBadgeClass(): string

@@ -292,10 +292,7 @@
         box-shadow: 0 1px 0 var(--border);
     }
     .modal-body .table-wrapper {
-        min-height: 340px;
-        max-height: calc(100vh - 520px);
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
     }
     .modal-body .line-items-table th,
     .modal-body .line-items-table td { padding: 18px 16px; }

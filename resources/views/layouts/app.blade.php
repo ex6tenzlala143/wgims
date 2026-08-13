@@ -44,7 +44,9 @@
 
             --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
             --shadow-md: 0 12px 32px rgba(15, 23, 42, 0.16);
-            --topbar-height: 64px;
+
+            --sidebar-width: 260px;
+            --topbar-height: 60px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,155 +57,155 @@
             color: var(--text);
             min-height: 100vh;
             overflow-x: auto;
+            display: flex;
         }
 
-        /* ── Top navigation ───────────────────────────────────────────────── */
-        .topnav {
+        /* ── Sidebar ──────────────────────────────────────────────────────── */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--surface);
+            height: 100vh;
             position: fixed;
             top: 0;
             left: 0;
-            right: 0;
-            z-index: 1300;
-            background: var(--nav-bg);
-            border-bottom: 1px solid var(--border);
-            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            transition: transform 0.3s;
+            border-right: 1px solid var(--border);
+            overflow: hidden;
         }
-        .topnav-inner {
-            max-width: 1700px;
-            margin: 0 auto;
-            height: var(--topbar-height);
+        .sidebar-brand {
+            padding: 16px 16px 12px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            gap: 18px;
-            padding: 0 20px;
+            gap: 10px;
+            flex-shrink: 0;
         }
+        .sidebar-brand img { height: 42px; width: auto; object-fit: contain; }
+        .sidebar-brand .brand-text { line-height: 1.25; min-width: 0; }
+        .sidebar-brand .brand-text strong { display: block; font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.3; }
+        .sidebar-brand .brand-text small { font-size: 11px; color: var(--text-muted); }
 
-        .brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-        .brand img { height: 38px; width: auto; object-fit: contain; }
-        .brand-text { line-height: 1.25; }
-        .brand-text strong { display: block; font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
-        .brand-text small { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+        .sidebar-nav {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px 0;
+            min-height: 0;
+        }
+        .sidebar-nav::-webkit-scrollbar { width: 4px; }
+        .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+        .nav-section { padding: 16px 20px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.15s;
+            border-radius: 8px;
+            margin: 2px 10px;
+        }
+        .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+        .nav-item.active { background: var(--nav-active-bg); color: var(--nav-active-text); font-weight: 600; }
+        .nav-item i { width: 20px; text-align: center; font-size: 17px; flex-shrink: 0; color: var(--primary); }
+        .nav-item.active i { color: var(--primary); }
+
+        .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .user-details { flex: 1; min-width: 0; }
+        .user-details strong { display: block; color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .user-details small { color: var(--text-muted); font-size: 11px; }
+        .logout-btn { color: var(--text-muted); font-size: 16px; cursor: pointer; background: none; border: none; padding: 6px; border-radius: 6px; transition: all 0.15s; }
+        .logout-btn:hover { color: var(--danger); background: var(--danger-bg); }
+
+        /* ── Topbar (page title + actions, NOT a nav menu) ────────────────── */
+        .main-wrapper {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: auto;
+            min-width: 0;
+        }
+        .topbar {
+            height: var(--topbar-height);
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .topbar-title { font-size: 17px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .topbar-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
         #menu-toggle {
             display: none;
-            width: 40px;
-            height: 40px;
-            align-items: center;
-            justify-content: center;
             background: none;
             border: none;
-            border-radius: 10px;
-            color: var(--text-muted);
-            font-size: 18px;
             cursor: pointer;
-            transition: background 0.15s, color 0.15s;
+            font-size: 20px;
+            color: var(--text-muted);
+            padding: 4px;
+            border-radius: 8px;
             flex-shrink: 0;
         }
-        #menu-toggle:hover { background: var(--surface-hover); color: var(--text); }
+        #menu-toggle:hover { color: var(--text); background: var(--surface-hover); }
 
-        .main-nav { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-        .main-nav::-webkit-scrollbar { display: none; }
-
-        .nav-link {
+        .warehouse-label {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 9px 14px;
-            border-radius: 10px;
-            background: none;
-            border: none;
-            font-family: inherit;
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--nav-text);
-            text-decoration: none;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: background 0.15s, color 0.15s;
-        }
-        .nav-link i.fa-lg { font-size: 16px; }
-        .nav-link:hover { background: var(--nav-hover); color: var(--text); }
-        .nav-link.active { background: var(--nav-active-bg); color: var(--nav-active-text); font-weight: 600; }
-        .nav-link .chev { margin-left: 2px; font-size: 10px; transition: transform 0.2s; }
-        .nav-drop.open > .nav-link .chev { transform: rotate(180deg); }
-
-        .nav-drop { position: relative; }
-
-        .drop-panel {
-            position: absolute;
-            top: calc(100% + 10px);
-            left: 0;
-            min-width: 232px;
-            padding: 8px;
-            background: var(--surface);
+            gap: 7px;
+            font-size: 13px;
+            color: var(--text-muted);
+            padding: 6px 12px;
             border: 1px solid var(--border);
-            border-radius: 12px;
-            box-shadow: var(--shadow-md);
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-6px);
-            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+            border-radius: 999px;
+            background: var(--surface-soft);
+            white-space: nowrap;
         }
-        .nav-drop.open .drop-panel { opacity: 1; visibility: visible; transform: translateY(0); }
-        /* Desktop: panels are viewport-fixed (escapes the horizontal-scroll container's clip on .main-nav)
-           and are positioned under the trigger button by JS. Hover/click opening is handled in JS. */
-        .main-nav .drop-panel {
-            position: fixed;
-            top: auto;
-            left: auto;
-            z-index: 100;
-        }
+        .warehouse-label i { color: var(--primary); }
 
-        .drop-title {
-            padding: 7px 12px 5px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-        }
-        .drop-link {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            padding: 9px 12px;
-            border-radius: 8px;
-            color: var(--text);
-            text-decoration: none;
-            font-size: 13.5px;
-            font-weight: 500;
-            transition: background 0.12s, color 0.12s;
-        }
-        .drop-link i { width: 18px; text-align: center; color: var(--primary); font-size: 15px; flex-shrink: 0; }
-        .drop-link:hover { background: var(--surface-hover); color: var(--nav-active-text); }
-        .drop-link.active { background: var(--nav-active-bg); color: var(--nav-active-text); font-weight: 600; }
-        .drop-link .chev { margin-left: auto; font-size: 11px; color: var(--text-muted); transition: transform 0.2s; }
-        .drop-sep { height: 1px; background: var(--border); margin: 6px 8px; }
-
-        /* ── Top nav actions (right side) ─────────────────────────────────── */
-        .topnav-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
-
-        .icon-btn {
-            width: 38px;
-            height: 38px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+        .notif-wrap { position: relative; }
+        .notif-btn {
+            position: relative;
             background: none;
             border: none;
-            border-radius: 10px;
-            color: var(--text-muted);
-            font-size: 16px;
             cursor: pointer;
-            position: relative;
-            transition: background 0.15s, color 0.15s;
+            color: var(--text-muted);
+            font-size: 18px;
+            padding: 6px;
+            border-radius: 8px;
         }
-        .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
-
+        .notif-btn:hover { color: var(--text); background: var(--surface-hover); }
         .notif-badge {
             position: absolute;
-            top: 2px;
-            right: 2px;
+            top: 0;
+            right: 0;
             background: var(--danger);
             color: #fff;
             border-radius: 50%;
@@ -216,8 +218,6 @@
             justify-content: center;
             padding: 0 4px;
         }
-
-        .notif-wrap { position: relative; }
         .notif-dropdown {
             position: absolute;
             top: calc(100% + 10px);
@@ -255,57 +255,7 @@
         .notif-footer { padding: 10px 16px; text-align: center; border-top: 1px solid var(--border); }
         .notif-footer a { color: var(--primary); font-size: 13px; text-decoration: none; }
 
-        .warehouse-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            font-size: 13px;
-            color: var(--text-muted);
-            padding: 6px 12px;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            background: var(--surface-soft);
-            white-space: nowrap;
-        }
-        .warehouse-label i { color: var(--primary); }
-
-        .user-menu { position: relative; }
-        .user-btn {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 5px 8px;
-            background: none;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-family: inherit;
-            transition: background 0.15s;
-        }
-        .user-btn:hover { background: var(--surface-hover); }
-        .user-avatar {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 13px;
-            flex-shrink: 0;
-        }
-        .user-btn .meta { text-align: left; line-height: 1.2; min-width: 0; }
-        .user-btn .meta strong { display: block; font-size: 13px; font-weight: 600; color: var(--text); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .user-btn .meta small { font-size: 11px; color: var(--text-muted); }
-        .user-btn .chev { font-size: 10px; color: var(--text-muted); transition: transform 0.2s; }
-        .user-menu.open .user-btn .chev { transform: rotate(180deg); }
-        .user-menu .user-drop { left: auto; right: 0; min-width: 230px; }
-        .user-menu.open .user-drop { opacity: 1; visibility: visible; transform: translateY(0); }
-
-        /* ── Main content (full width, no sidebar) ────────────────────────── */
-        .main-wrapper { display: flex; flex-direction: column; min-height: 100vh; padding-top: calc(var(--topbar-height) + 1px); }
+        /* ── Page content ─────────────────────────────────────────────────── */
         .page-content { flex: 1; padding: 24px; overflow-x: auto; min-width: 0; }
         .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
         .page-header h1 { font-size: 22px; font-weight: 700; }
@@ -445,6 +395,94 @@
             border-top: 1px dashed var(--border);
         }
         .ris-item-total .total-cost { font-weight: 800; color: var(--primary); white-space: nowrap; }
+
+        /* ── Edit / large form layout (wide main column, compact summary) ──── */
+        .edit-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            gap: 24px;
+            align-items: start;
+        }
+        .edit-main { min-width: 0; }
+        .edit-side { min-width: 0; }
+        .edit-side .sticky-card { position: sticky; top: 80px; }
+        @media (max-width: 1499px) {
+            .edit-layout { grid-template-columns: minmax(0, 1fr); }
+            .edit-side .sticky-card { position: static; }
+        }
+
+        /* ── Shipment line-item cards (Edit Shipment) ──────────────────────── */
+        .shipment-item-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .shipment-item-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 16px;
+            padding: 14px 20px;
+            background: var(--surface-soft);
+            border-bottom: 1px solid var(--border);
+        }
+        .shipment-item-desc { flex: 1 1 280px; min-width: 0; }
+        .shipment-item-desc strong { font-size: 14px; }
+        .shipment-item-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 2px 20px;
+            padding: 16px 20px 0;
+        }
+        .shipment-item-grid + .shipment-item-grid { padding-top: 0; }
+        .shipment-item-grid .form-group { margin-bottom: 14px; }
+        /* ── Batch rows (Record Shipment) ──────────────────────────────────── */
+        .batch-row {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 4px;
+        }
+        .batch-row-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 14px 20px 0;
+        }
+        .batch-row-cloned { background: #fffbeb; }
+
+        .shipment-item-total {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px 28px;
+            padding: 12px 20px;
+            border-top: 1px dashed var(--border);
+            background: var(--surface-soft);
+        }
+        .total-cell { display: inline-flex; align-items: baseline; gap: 7px; }
+        .total-cell .tlabel { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
+        .total-cell .tvalue { font-size: 15px; font-weight: 800; color: var(--text); }
+        .total-cell .tvalue.engas { color: var(--primary); }
+        .shipment-grand {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px 40px;
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--surface-soft);
+        }
+        @media (max-width: 991px) {
+            .shipment-item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 639px) {
+            .shipment-item-grid { grid-template-columns: 1fr; }
+        }
+
         .ris-warn {
             font-size: 11.5px;
             color: var(--danger);
@@ -520,99 +558,43 @@
 
         /* ── Print ────────────────────────────────────────────────────────── */
         @media print {
-            .topnav, .no-print { display: none !important; }
-            .main-wrapper { padding-top: 0; }
+            .sidebar, .topbar, .no-print { display: none !important; }
+            .main-wrapper { margin-left: 0; }
             .page-content { padding: 0; }
             body { background: #fff; }
         }
 
-        /* ── Responsive: hamburger + slide-down menu ──────────────────────── */
+        /* ── Responsive: sidebar slides off-canvas + hamburger ────────────── */
         @media (max-width: 1024px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15); }
+            .main-wrapper { margin-left: 0; }
+            .form-row.cols-2, .form-row.cols-3, .form-row.cols-4 { grid-template-columns: 1fr; }
             #menu-toggle { display: inline-flex; }
+            .warehouse-label { display: none; }
+        }
 
-            .main-nav {
-                position: fixed;
-                top: var(--topbar-height);
-                left: 0;
-                right: 0;
-                bottom: 0;
-                z-index: 350;
-                flex-direction: column;
-                align-items: stretch;
-                gap: 2px;
-                padding: 12px 16px 24px;
-                background: var(--nav-bg);
-                border-top: 1px solid var(--border);
-                box-shadow: var(--shadow-md);
-                display: none;
-                overflow-y: auto;
-            }
-            body.nav-open .main-nav { display: flex; }
-            body.nav-open::after {
+        /* Overlay when sidebar is open on small screens / zoomed */
+        @media (max-width: 1024px) {
+            body.sidebar-open::after {
                 content: '';
                 position: fixed;
                 inset: 0;
-                background: rgba(0, 0, 0, 0.35);
-                z-index: 340;
-                pointer-events: none;
+                background: rgba(0, 0, 0, 0.3);
+                z-index: 99;
             }
-
-            .main-nav > .nav-link { width: 100%; justify-content: flex-start; font-size: 15px; padding: 12px 14px; }
-
-            .nav-drop { width: 100%; }
-            .nav-drop > .nav-link { width: 100%; justify-content: flex-start; font-size: 15px; padding: 12px 14px; }
-            .nav-drop > .nav-link .chev { margin-left: auto; }
-            .nav-drop .drop-panel {
-                position: static;
-                display: none;
-                visibility: hidden;
-                opacity: 1;
-                transform: none;
-                box-shadow: none;
-                border: none;
-                border-left: 3px solid var(--primary);
-                border-radius: 0 8px 8px 0;
-                background: var(--surface-soft);
-                margin: 2px 0 4px 10px;
-                padding: 6px;
-            }
-            .nav-drop.open .drop-panel { display: block; visibility: visible; }
-            .drop-link { padding: 11px 12px; font-size: 14px; }
-
-            .warehouse-label { display: none; }
-            .user-btn .meta { display: none; }
-            .user-btn .chev { display: none; }
         }
 
         @media (max-width: 640px) {
-            .brand-text { display: none; }
             .page-content { padding: 16px; }
-        }
-
-        @media (max-width: 1279px) and (min-width: 1025px) {
-            .brand-text small { display: none; }
-            .nav-link { padding: 9px 10px; }
+            .topbar { padding: 0 14px; }
         }
     </style>
     @stack('styles')
 </head>
 <body>
     @php
-        $navUser      = auth()->user();
-        $isAdmin      = $navUser->isAdmin();
-        $adminAccess  = $navUser->hasAdminAccess();
-        $centerUser   = $navUser->isCenterUser();
-
-        $invActive = request()->routeIs('items*')
-            || request()->routeIs('item_categories*')
-            || request()->routeIs('warehouses*')
-            || request()->routeIs('stock_cards*')
-            || request()->routeIs('inventory_balance_report*')
-            || request()->routeIs('transfers*');
-        $txnActive = request()->routeIs('delivery_subsidies*') || request()->routeIs('requisitions*');
-        $repActive = request()->routeIs('rpci_report*') || request()->routeIs('rsmi_report*');
-        $admActive = request()->routeIs('suppliers*') || request()->routeIs('users*');
-
+        $navUser = auth()->user();
         $topbarWarehouses = $navUser->relationLoaded('warehouses')
             ? $navUser->warehouses->pluck('name')
             : $navUser->warehouses()->pluck('name');
@@ -621,94 +603,104 @@
         }
     @endphp
 
-    <!-- Top navigation -->
-    <header class="topnav" id="topnav">
-        <div class="topnav-inner">
-            <button id="menu-toggle" onclick="toggleMobileNav()" aria-label="Toggle menu" aria-expanded="false">
-                <i class="fas fa-bars" id="menu-toggle-icon"></i>
-            </button>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <img src="{{ asset('images/logo.png') }}" alt="DSWD Logo" style="height:42px;width:auto;object-fit:contain;">
+            <div class="brand-text">
+                <strong>Welfare Goods Inventory</strong>
+                <small>WGIMSv2 · DSWD</small>
+            </div>
+        </div>
 
-            <a href="{{ route('dashboard') }}" class="brand" title="Dashboard">
-                <img src="{{ asset('images/logo.png') }}" alt="DSWD Logo">
-                <span class="brand-text">
-                    <strong>Welfare Goods Inventory</strong>
-                    <small>WGIMSv2 · DSWD</small>
-                </span>
+        <nav class="sidebar-nav">
+            <div class="nav-section">Core System</div>
+            <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard*') ? 'active' : '' }}">
+                <i class="fas fa-th-large"></i> Dashboard
             </a>
 
-            <nav class="main-nav" id="main-nav" aria-label="Main navigation">
-                <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard*') ? 'active' : '' }}">
-                    <i class="fas fa-th-large"></i> Dashboard
-                </a>
+            <div class="nav-section">Inventory</div>
+            <a href="{{ route('items.index') }}" class="nav-item {{ request()->routeIs('items*') ? 'active' : '' }}">
+                <i class="fas fa-cubes"></i> Items
+            </a>
+            <a href="{{ route('delivery_subsidies.index') }}" class="nav-item {{ request()->routeIs('delivery_subsidies*') ? 'active' : '' }}">
+                <i class="fas fa-truck-loading"></i> Subsidies / Deliveries
+            </a>
+            <a href="{{ route('requisitions.index') }}" class="nav-item {{ request()->routeIs('requisitions*') ? 'active' : '' }}">
+                <i class="fas fa-clipboard-check"></i> Requisitions / Augmentations
+            </a>
+            <a href="{{ route('transfers.index') }}" class="nav-item {{ request()->routeIs('transfers*') ? 'active' : '' }}">
+                <i class="fas fa-arrows-alt-h"></i> Stock Transfers
+            </a>
+            <a href="{{ route('stock_cards.summary') }}" class="nav-item {{ request()->routeIs('stock_cards*') ? 'active' : '' }}">
+                <i class="fas fa-book-open"></i> Stock Cards
+            </a>
 
-                {{-- Inventory --}}
-                <div class="nav-drop" id="drop-inventory">
-                    <button type="button" class="nav-link {{ $invActive ? 'active' : '' }}" onclick="toggleDrop(this)">
-                        <i class="fas fa-boxes-stacked"></i> Inventory <i class="fas fa-chevron-down chev"></i>
-                    </button>
-                    <div class="drop-panel">
-                        <div class="drop-title">Inventory</div>
-                        <a href="{{ route('items.index') }}" class="drop-link {{ request()->routeIs('items*') ? 'active' : '' }}"><i class="fas fa-cubes"></i> Items</a>
-                        @if($isAdmin)
-                        <a href="{{ route('item_categories.index') }}" class="drop-link {{ request()->routeIs('item_categories*') ? 'active' : '' }}"><i class="fas fa-tags"></i> Item Categories</a>
-                        @endif
-                        @if($adminAccess || $centerUser)
-                        <a href="{{ route('warehouses.index') }}" class="drop-link {{ request()->routeIs('warehouses*') ? 'active' : '' }}"><i class="fas fa-warehouse"></i> Warehouses</a>
-                        @endif
-                        <a href="{{ route('stock_cards.summary') }}" class="drop-link {{ request()->routeIs('stock_cards*') ? 'active' : '' }}"><i class="fas fa-book-open"></i> Stock Cards</a>
-                        @if($adminAccess)
-                        <a href="{{ route('inventory_balance_report') }}" class="drop-link {{ request()->routeIs('inventory_balance_report*') ? 'active' : '' }}"><i class="fas fa-scale-balanced"></i> Inventory Balance</a>
-                        @endif
-                        <a href="{{ route('transfers.index') }}" class="drop-link {{ request()->routeIs('transfers*') ? 'active' : '' }}"><i class="fas fa-arrows-alt-h"></i> Stock Transfers</a>
-                    </div>
+            <div class="nav-section">Procurement</div>
+            <a href="{{ route('suppliers.index') }}" class="nav-item {{ request()->routeIs('suppliers*') ? 'active' : '' }}">
+                <i class="fas fa-handshake"></i> Suppliers
+            </a>
+
+            <div class="nav-section">Reports</div>
+            <a href="{{ route('rpci_report') }}" class="nav-item {{ request()->routeIs('rpci_report*') ? 'active' : '' }}">
+                <i class="fas fa-chart-simple"></i> RPCI Report
+            </a>
+            <a href="{{ route('rsmi_report') }}" class="nav-item {{ request()->routeIs('rsmi_report*') ? 'active' : '' }}">
+                <i class="fas fa-file-lines"></i> RSMI Report
+            </a>
+            @if($navUser->hasAdminAccess())
+            <a href="{{ route('inventory_balance_report') }}" class="nav-item {{ request()->routeIs('inventory_balance_report*') ? 'active' : '' }}">
+                <i class="fas fa-scale-balanced"></i> Inventory Balance
+            </a>
+            @endif
+
+            <div class="nav-section">Administration</div>
+            @if($navUser->isAdmin())
+            <a href="{{ route('item_categories.index') }}" class="nav-item {{ request()->routeIs('item_categories*') ? 'active' : '' }}">
+                <i class="fas fa-tags"></i> Item Categories
+            </a>
+            @endif
+            @if($navUser->hasAdminAccess() || $navUser->isCenterUser())
+            <a href="{{ route('warehouses.index') }}" class="nav-item {{ request()->routeIs('warehouses*') ? 'active' : '' }}">
+                <i class="fas fa-warehouse"></i> Warehouses
+            </a>
+            @endif
+            @if($navUser->isAdmin())
+            <a href="{{ route('users.index') }}" class="nav-item {{ request()->routeIs('users*') ? 'active' : '' }}">
+                <i class="fas fa-users-gear"></i> Users
+            </a>
+            @endif
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">{{ strtoupper(substr($navUser->name, 0, 1)) }}</div>
+                <div class="user-details">
+                    <strong title="{{ $navUser->name }}">{{ $navUser->name }}</strong>
+                    <small>{{ $navUser->getRoleLabel() }}</small>
                 </div>
+                <form action="{{ route('logout') }}" method="POST" style="display:inline">
+                    @csrf
+                    <button type="submit" class="logout-btn" title="Sign out"><i class="fas fa-right-from-bracket"></i></button>
+                </form>
+            </div>
+        </div>
+    </aside>
 
-                {{-- Transactions --}}
-                <div class="nav-drop" id="drop-transactions">
-                    <button type="button" class="nav-link {{ $txnActive ? 'active' : '' }}" onclick="toggleDrop(this)">
-                        <i class="fas fa-arrow-right-arrow-left"></i> Transactions <i class="fas fa-chevron-down chev"></i>
-                    </button>
-                    <div class="drop-panel">
-                        <div class="drop-title">Transactions</div>
-                        <a href="{{ route('delivery_subsidies.index') }}" class="drop-link {{ request()->routeIs('delivery_subsidies*') ? 'active' : '' }}"><i class="fas fa-truck-loading"></i> Subsidies / Deliveries</a>
-                        <a href="{{ route('requisitions.index') }}" class="drop-link {{ request()->routeIs('requisitions*') ? 'active' : '' }}"><i class="fas fa-clipboard-check"></i> Requisitions (RIS)</a>
-                    </div>
-                </div>
-
-                {{-- Reports --}}
-                <div class="nav-drop" id="drop-reports">
-                    <button type="button" class="nav-link {{ $repActive ? 'active' : '' }}" onclick="toggleDrop(this)">
-                        <i class="fas fa-chart-line"></i> Reports <i class="fas fa-chevron-down chev"></i>
-                    </button>
-                    <div class="drop-panel">
-                        <div class="drop-title">Reports</div>
-                        <a href="{{ route('rpci_report') }}" class="drop-link {{ request()->routeIs('rpci_report*') ? 'active' : '' }}"><i class="fas fa-chart-simple"></i> RPCI Report</a>
-                        <a href="{{ route('rsmi_report') }}" class="drop-link {{ request()->routeIs('rsmi_report*') ? 'active' : '' }}"><i class="fas fa-file-lines"></i> RSMI Report</a>
-                    </div>
-                </div>
-
-                {{-- Administration --}}
-                <div class="nav-drop" id="drop-admin">
-                    <button type="button" class="nav-link {{ $admActive ? 'active' : '' }}" onclick="toggleDrop(this)">
-                        <i class="fas fa-gears"></i> Administration <i class="fas fa-chevron-down chev"></i>
-                    </button>
-                    <div class="drop-panel">
-                        <div class="drop-title">Administration</div>
-                        <a href="{{ route('suppliers.index') }}" class="drop-link {{ request()->routeIs('suppliers*') ? 'active' : '' }}"><i class="fas fa-handshake"></i> Suppliers</a>
-                        @if($isAdmin)
-                        <a href="{{ route('users.index') }}" class="drop-link {{ request()->routeIs('users*') ? 'active' : '' }}"><i class="fas fa-users-gear"></i> Users</a>
-                        @endif
-                    </div>
-                </div>
-            </nav>
-
-            <div class="topnav-actions">
+    <!-- Main wrapper -->
+    <div class="main-wrapper">
+        <!-- Topbar -->
+        <header class="topbar">
+            <button id="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="topbar-title">@yield('page-title', 'Dashboard')</div>
+            <div class="topbar-actions">
                 @if($topbarWarehouses->isNotEmpty())
                 <span class="warehouse-label"><i class="fas fa-building"></i> {{ $topbarWarehouses->implode(', ') }}</span>
                 @endif
-
                 <div class="notif-wrap" id="notif-wrap">
-                    <button class="icon-btn" onclick="toggleNotifications()" id="notif-btn" aria-label="Notifications">
+                    <button class="notif-btn" onclick="toggleNotifications()" id="notif-btn" aria-label="Notifications">
                         <i class="fas fa-bell"></i>
                         <span class="notif-badge" id="notif-count" style="display:none">0</span>
                     </button>
@@ -728,44 +720,19 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="user-menu" id="user-menu">
-                    <button class="user-btn" onclick="toggleUserMenu()" aria-label="Account menu">
-                        <div class="user-avatar">{{ strtoupper(substr($navUser->name, 0, 1)) }}</div>
-                        <span class="meta">
-                            <strong title="{{ $navUser->name }}">{{ $navUser->name }}</strong>
-                            <small>{{ $navUser->getRoleLabel() }}</small>
-                        </span>
-                        <i class="fas fa-chevron-down chev"></i>
-                    </button>
-                    <div class="drop-panel user-drop" id="user-drop">
-                        <div class="drop-title">Signed in as</div>
-                        <div style="padding:2px 12px 8px;font-size:13px;color:var(--text-muted)">
-                            <strong style="color:var(--text);display:block">{{ $navUser->name }}</strong>
-                            {{ $navUser->getRoleLabel() }}
-                        </div>
-                        <div class="drop-sep"></div>
-                        <a href="{{ route('notifications.index') }}" class="drop-link"><i class="fas fa-bell"></i> Notifications</a>
-                        <form action="{{ route('logout') }}" method="POST" style="margin:0">
-                            @csrf
-                            <button type="submit" class="drop-link" style="width:100%;border:none;background:none;cursor:pointer;font-family:inherit;text-align:left">
-                                <i class="fas fa-right-from-bracket"></i> Sign out
-                            </button>
-                        </form>
-                    </div>
-                </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <!-- Main wrapper (full width) -->
-    <div class="main-wrapper">
+        <!-- Page content -->
         <main class="page-content">
             @if(session('success'))
             <div class="alert alert-success"><i class="fas fa-check-circle"></i> {{ session('success') }}</div>
             @endif
             @if(session('error'))
             <div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> {{ session('error') }}</div>
+            @endif
+            @if(session('warning'))
+            <div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> {{ session('warning') }}</div>
             @endif
             @if($errors->any())
             <div class="alert alert-danger">
@@ -782,122 +749,51 @@
         </main>
     </div>
 
+    @include('partials.subsidy-details-modal')
+
     <script>
-        // ── Dropdowns (top nav) ────────────────────────────────────────────
-        function positionDrop(drop) {
-            var panel   = drop.querySelector('.drop-panel');
-            var trigger = drop.querySelector(':scope > .nav-link');
-            if (!panel || !trigger || window.innerWidth <= 1024) return;
-            var r = trigger.getBoundingClientRect();
-            var pw = panel.offsetWidth || 232;
-            var left = r.left;
-            if (left + pw > window.innerWidth - 12) left = Math.max(12, window.innerWidth - pw - 12);
-            panel.style.left = left + 'px';
-            panel.style.top  = (r.bottom + 10) + 'px';
+        function toggleSidebar() {
+            var sidebar = document.getElementById('sidebar');
+            var open = sidebar.classList.toggle('open');
+            document.body.classList.toggle('sidebar-open', open);
+            var toggle = document.getElementById('menu-toggle');
+            if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
 
-        function openDrop(drop) {
-            positionDrop(drop);
-            drop.classList.add('open');
+        function closeSidebar() {
+            var sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.classList.remove('open');
+            document.body.classList.remove('sidebar-open');
+            var toggle = document.getElementById('menu-toggle');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
         }
 
-        function toggleDrop(trigger) {
-            var drop = trigger.closest('.nav-drop');
-            var wasOpen = drop.classList.contains('open');
-            closeAllDrops();
-            closeNotifications();
-            closeUserMenu();
-            if (!wasOpen) openDrop(drop);
-        }
-
-        function closeAllDrops() {
-            document.querySelectorAll('.nav-drop.open').forEach(function (d) { d.classList.remove('open'); });
-        }
-
-        function repositionOpenDrops() {
-            document.querySelectorAll('.nav-drop.open').forEach(positionDrop);
-        }
-
-        (function initNavDrops() {
-            var drops = document.querySelectorAll('#main-nav .nav-drop');
-            if (window.matchMedia('(hover: hover)').matches) {
-                var timer = null;
-                drops.forEach(function (d) {
-                    d.addEventListener('mouseenter', function () {
-                        if (window.innerWidth <= 1024) return;
-                        clearTimeout(timer);
-                        closeAllDrops();
-                        closeNotifications();
-                        closeUserMenu();
-                        openDrop(d);
-                    });
-                    d.addEventListener('mouseleave', function () {
-                        if (window.innerWidth <= 1024) return;
-                        clearTimeout(timer);
-                        timer = setTimeout(function () { d.classList.remove('open'); }, 160);
-                    });
-                });
+        // Close sidebar when clicking outside it (overlay), and close the
+        // notifications panel when clicking anywhere else.
+        document.addEventListener('click', function(e) {
+            var sidebar = document.getElementById('sidebar');
+            var toggle  = document.getElementById('menu-toggle');
+            if (
+                sidebar &&
+                sidebar.classList.contains('open') &&
+                ! sidebar.contains(e.target) &&
+                toggle && ! toggle.contains(e.target)
+            ) {
+                closeSidebar();
             }
-            window.addEventListener('resize', repositionOpenDrops);
-            window.addEventListener('scroll', repositionOpenDrops, true);
-        })();
 
-        function toggleUserMenu() {
-            var m = document.getElementById('user-menu');
-            var wasOpen = m.classList.contains('open');
-            closeAllDrops();
-            closeNotifications();
-            if (!wasOpen) m.classList.add('open');
-        }
-        function closeUserMenu() {
-            var m = document.getElementById('user-menu');
-            if (m) m.classList.remove('open');
-        }
+            var wrap = document.getElementById('notif-wrap');
+            if (wrap && ! wrap.contains(e.target)) wrap.classList.remove('open');
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeSidebar();
+        });
 
         function toggleNotifications() {
             var w = document.getElementById('notif-wrap');
-            var wasOpen = w.classList.contains('open');
-            closeAllDrops();
-            closeUserMenu();
-            if (!wasOpen) w.classList.add('open');
+            if (w) w.classList.toggle('open');
         }
-        function closeNotifications() {
-            var w = document.getElementById('notif-wrap');
-            if (w) w.classList.remove('open');
-        }
-
-        function toggleMobileNav() {
-            var open = document.body.classList.toggle('nav-open');
-            var icon = document.getElementById('menu-toggle-icon');
-            if (icon) icon.className = open ? 'fas fa-xmark' : 'fas fa-bars';
-            document.getElementById('menu-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (open) { closeAllDrops(); closeNotifications(); closeUserMenu(); }
-        }
-
-        // Close panels when clicking outside them
-        document.addEventListener('click', function (e) {
-            if (!e.target.closest('.nav-drop')) closeAllDrops();
-            if (!e.target.closest('#user-menu')) closeUserMenu();
-            if (!e.target.closest('#notif-wrap')) closeNotifications();
-        });
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                closeAllDrops();
-                closeNotifications();
-                closeUserMenu();
-                document.body.classList.remove('nav-open');
-                var icon = document.getElementById('menu-toggle-icon');
-                if (icon) icon.className = 'fas fa-bars';
-            }
-        });
-
-        // A top-level nav link click on mobile should close the drawer
-        document.querySelectorAll('#main-nav > .nav-link').forEach(function (a) {
-            a.addEventListener('click', function () {
-                if (window.innerWidth <= 1024) document.body.classList.remove('nav-open');
-            });
-        });
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 

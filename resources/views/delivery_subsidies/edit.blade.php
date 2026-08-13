@@ -25,7 +25,7 @@
 </div>
 @endif
 
-<form action="{{ route('delivery_subsidies.update', $deliverySubsidy->id) }}" method="POST" id="po-form">
+<form action="{{ route('delivery_subsidies.update', $deliverySubsidy->id) }}" method="POST" id="subsidy-form">
 @csrf @method('PUT')
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">
     <div>
@@ -144,7 +144,7 @@
                 <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px">Total Amount</div>
                 <div style="font-size:28px;font-weight:800;color:var(--primary)" id="grand-total">₱{{ number_format($deliverySubsidy->total_amount, 2) }}</div>
                 <hr style="margin:16px 0;border-color:var(--border)">
-                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center"><i class="fas fa-save"></i> Update PO</button>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center"><i class="fas fa-save"></i> Update Subsidy</button>
                 <a href="{{ route('delivery_subsidies.show', $deliverySubsidy->id) }}" class="btn btn-secondary" style="width:100%;justify-content:center;margin-top:8px"><i class="fas fa-times"></i> Cancel</a>
             </div>
         </div>

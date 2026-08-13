@@ -8,6 +8,7 @@ class StockCardEntry extends Model
 {
     protected $fillable = [
         'item_id', 'entry_date', 'reference', 'reference_type', 'reference_id',
+        'dispatch_item_id',
         'receipt_qty', 'receipt_unit_cost', 'receipt_total_cost',
         'issue_qty', 'balance_qty', 'balance_unit_cost', 'balance_total_cost',
         'no_of_days_to_consume', 'from_to',

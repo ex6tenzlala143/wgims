@@ -108,6 +108,7 @@
                             <select name="items[{{ $ri->id }}][item_id]"
                                     id="item-select-{{ $ri->id }}"
                                     class="form-control {{ $errors->has('items.' . $ri->id . '.item_id') ? 'is-invalid' : '' }}"
+                                    data-restore-id="{{ old('items.' . $ri->id . '.item_id') }}"
                                     onchange="fillDispatchItem(this, '{{ $ri->id }}')">
                                 <option value="">— Select Warehouse first —</option>
                             </select>
@@ -253,7 +254,7 @@
 <script>
 const ITEMS_API_URL = '{{ route("requisitions.items_by_warehouse") }}';
 
-function onWhChange(idx) {
+function onWhChange(idx, restoreItemId) {
     const sel = document.getElementById('wh-select-' + idx);
     const itemSel = document.getElementById('item-select-' + idx);
     const stockEl = document.getElementById('stock-' + idx);
@@ -286,6 +287,16 @@ function onWhChange(idx) {
         ).join('');
         itemSel.innerHTML = '<option value="">— Select Stock Record —</option>' + opts;
         itemSel.disabled = false;
+
+        // Restore the exact stock record chosen before a validation re-render,
+        // so the quantity can be corrected without reselecting anything.
+        if (restoreItemId) {
+            const found = Array.from(itemSel.options).find(o => o.value === String(restoreItemId));
+            if (found) {
+                itemSel.value = String(restoreItemId);
+                fillDispatchItem(itemSel, idx);
+            }
+        }
     })
     .catch(() => {
         itemSel.innerHTML = '<option value="">— Failed to load records —</option>';
@@ -344,6 +355,21 @@ function checkDispatch(idx) {
         else         { drInput.removeAttribute('required'); }
     }
 }
+
+// On a re-render after a server-side validation error, the warehouse selects
+// are pre-selected from old() but the stock record dropdowns start empty
+// (they are only filled by the onchange handler). Auto-load them and restore
+// the exact stock record chosen before, so the quantity can be corrected
+// without reselecting anything.
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[id^="wh-select-"]').forEach(function(sel) {
+        if (!sel.value) { return; }
+        const idx = sel.id.replace('wh-select-', '');
+        const itemSel = document.getElementById('item-select-' + idx);
+        const restoreItemId = itemSel ? itemSel.dataset.restoreId : '';
+        onWhChange(idx, restoreItemId || null);
+    });
+});
 </script>
 @endpush
 @endsection

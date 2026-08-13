@@ -76,6 +76,11 @@ class ItemController extends Controller
                 break;
         }
 
+        // Source subsidy filter (deleted / archived / active)
+        if (in_array($request->source_subsidy_status, ['deleted', 'archived', 'active'], true)) {
+            $query->where('source_subsidy_status', $request->source_subsidy_status);
+        }
+
         $items = $query->orderBy('is_active', 'desc')  // active items first
                        ->orderBy('quantity', 'desc')
                        ->orderBy('description')
@@ -217,7 +222,7 @@ class ItemController extends Controller
     {
         abort_unless(Auth::user()->canWrite(), 403);
 
-        // Check for dependent PO or requisition records
+        // Check for dependent delivery/subsidy or requisition records
         if ($item->deliverySubsidyItems()->exists()) {
             return redirect()->route('items.index')
                 ->with('error', "Cannot delete \"{$item->description}\" — it is referenced by one or more Delivery / Subsidies.");

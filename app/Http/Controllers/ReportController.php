@@ -248,6 +248,9 @@ class ReportController extends Controller
         $warehouseId = $request->warehouse_id ? (int) $request->warehouse_id : null;
         $categoryKey = $request->category ?: null;
         $itemId      = $request->item_id ? (int) $request->item_id : null;
+        $sourceStatus = in_array($request->source_subsidy_status, ['deleted', 'archived', 'active'], true)
+            ? $request->source_subsidy_status
+            : null;
 
         // Fetch items with warehouse eager-loaded
         $items = Item::with('warehouse')
@@ -256,12 +259,23 @@ class ReportController extends Controller
             ->forWarehouse($warehouseId)
             ->forCategory($categoryKey)
             ->forItem($itemId)
+            ->when($sourceStatus, fn ($q) => $q->where('source_subsidy_status', $sourceStatus))
             ->orderBy('warehouse_id')
             ->orderBy('category')
             ->orderBy('description')
             ->get();
 
-        // Group: warehouse → category → items
+        // Every inventory record stays its own row — nothing is merged. The only
+        // addition is a "Total Qty" summary shown ONCE per Item + Warehouse group
+        // (the sum of ALL quantities sharing the same Item Name + Warehouse,
+        // ignoring unit cost / ENGAS unit cost / expiry).
+        $totals = [];
+        foreach ($items as $item) {
+            $key = $item->warehouse_id . '|' . $item->description;
+            $totals[$key] = ($totals[$key] ?? 0) + (float) $item->quantity;
+        }
+
+        // Group: warehouse → category → item-name → inventory records
         $balances = [];
         foreach ($items->groupBy('warehouse_id') as $wid => $warehouseItems) {
             $warehouse   = $warehouseItems->first()->warehouse;
@@ -269,13 +283,28 @@ class ReportController extends Controller
 
             foreach ($warehouseItems->groupBy('category') as $catKey => $catItems) {
                 $cat = Item::getCategories()[$catKey] ?? ['label' => ucfirst($catKey), 'account_code' => ''];
+
+                $groups = $catItems->groupBy('description')->map(function ($groupItems) use ($totals) {
+                    $first = $groupItems->first();
+
+                    return [
+                        'description' => $first->description,
+                        'unit'        => $first->unit,
+                        'total_qty'   => round(
+                            (float) ($totals[$first->warehouse_id . '|' . $first->description] ?? 0),
+                            4
+                        ),
+                        'items'       => $groupItems->values(),
+                    ];
+                })->values();
+
                 $catBalances[] = [
                     'category'     => $catKey,
                     'label'        => $cat['label'],
                     'account_code' => $cat['account_code'],
                     'total_qty'    => $catItems->sum('quantity'),
                     'total_value'  => $catItems->sum(fn ($i) => $i->quantity * $i->unit_cost),
-                    'items'        => $catItems->values(),
+                    'groups'       => $groups,
                 ];
             }
 
@@ -295,7 +324,7 @@ class ReportController extends Controller
 
         return view('reports.inventory_balance', compact(
             'balances', 'warehouses', 'allItems',
-            'warehouseId', 'categoryKey', 'itemId'
+            'warehouseId', 'categoryKey', 'itemId', 'sourceStatus'
         ));
     }
 
@@ -507,6 +536,9 @@ class ReportController extends Controller
         $warehouseId = $request->warehouse_id ? (int) $request->warehouse_id : null;
         $categoryKey = $request->category ?: null;
         $itemId      = $request->item_id ? (int) $request->item_id : null;
+        $sourceStatus = in_array($request->source_subsidy_status, ['deleted', 'archived', 'active'], true)
+            ? $request->source_subsidy_status
+            : null;
 
         $items = Item::with('warehouse')
             ->where('is_active', true)
@@ -514,6 +546,7 @@ class ReportController extends Controller
             ->forWarehouse($warehouseId)
             ->forCategory($categoryKey)
             ->forItem($itemId)
+            ->when($sourceStatus, fn ($q) => $q->where('source_subsidy_status', $sourceStatus))
             ->orderBy('warehouse_id')
             ->orderBy('category')
             ->orderBy('description')
@@ -523,16 +556,16 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Inventory Balance');
 
-        $sheet->mergeCells('A1:I1');
+        $sheet->mergeCells('A1:J1');
         $sheet->setCellValue('A1', 'INVENTORY BALANCE REPORT');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal('center');
 
-        $sheet->mergeCells('A2:I2');
+        $sheet->mergeCells('A2:J2');
         $sheet->setCellValue('A2', 'As of '.date('F d, Y'));
         $sheet->getStyle('A2')->getAlignment()->setHorizontal('center');
 
-        $headers = ['Warehouse', 'Account Code', 'Category', 'Description', 'Unit', 'Quantity', 'Unit Cost', 'Engas Unit Cost', 'Total Value'];
+        $headers = ['Warehouse', 'Account Code', 'Category', 'Description', 'Unit', 'Quantity', 'Total Quantity', 'Unit Cost', 'Engas Unit Cost', 'Total Value'];
         $col = 'A';
         foreach ($headers as $h) {
             $sheet->setCellValue($col.'4', $h);
@@ -544,12 +577,27 @@ class ReportController extends Controller
         $row = 5;
         $grandTotal = 0;
 
+        // "Total Quantity" is the sum of ALL quantities sharing the same Item
+        // Name + Warehouse. It is written only on the FIRST row of each group
+        // (left blank on the rest) so it appears once per Item + Warehouse group.
+        // Every inventory record keeps its own row.
+        $totals = [];
+        foreach ($items as $item) {
+            $key = $item->warehouse_id . '|' . $item->description;
+            $totals[$key] = ($totals[$key] ?? 0) + (float) $item->quantity;
+        }
+
+        $seen = [];
         foreach ($items->groupBy('warehouse_id') as $warehouseItems) {
             foreach ($warehouseItems->groupBy('category') as $catKey => $catItems) {
                 $cat = Item::getCategories()[$catKey] ?? ['label' => ucfirst($catKey), 'account_code' => ''];
                 foreach ($catItems as $item) {
-                    $value = $item->quantity * $item->unit_cost;
+                    $value = round((float) $item->quantity * (float) $item->unit_cost, 2);
                     $grandTotal += $value;
+
+                    $key        = $item->warehouse_id . '|' . $item->description;
+                    $showTotal  = ! isset($seen[$key]);
+                    $seen[$key] = true;
 
                     $sheet->setCellValue("A{$row}", $item->warehouse->name ?? '');
                     $sheet->setCellValue("B{$row}", $cat['account_code']);
@@ -557,22 +605,23 @@ class ReportController extends Controller
                     $sheet->setCellValue("D{$row}", $item->description);
                     $sheet->setCellValue("E{$row}", $item->unit);
                     $sheet->setCellValue("F{$row}", $item->quantity);
-                    $sheet->setCellValue("G{$row}", $item->unit_cost);
-                    $sheet->setCellValue("H{$row}", $item->engas_unit_cost ?? '');
-                    $sheet->setCellValue("I{$row}", $value);
-                    $sheet->getStyle("F{$row}:I{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+                    $sheet->setCellValue("G{$row}", $showTotal ? round((float) $totals[$key], 4) : '');
+                    $sheet->setCellValue("H{$row}", $item->unit_cost);
+                    $sheet->setCellValue("I{$row}", $item->engas_unit_cost ?? '');
+                    $sheet->setCellValue("J{$row}", $value);
+                    $sheet->getStyle("F{$row}:J{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
                     $row++;
                 }
             }
         }
 
-        $sheet->setCellValue("H{$row}", 'GRAND TOTAL:');
-        $sheet->setCellValue("I{$row}", $grandTotal);
-        $sheet->getStyle("H{$row}:I{$row}")->getFont()->setBold(true);
+        $sheet->setCellValue("I{$row}", 'GRAND TOTAL:');
+        $sheet->setCellValue("J{$row}", $grandTotal);
+        $sheet->getStyle("I{$row}:J{$row}")->getFont()->setBold(true);
         $sheet->getStyle("I{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
-        $sheet->getStyle("A4:I{$row}")->getBorders()->getAllBorders()->setBorderStyle('thin');
+        $sheet->getStyle("A4:J{$row}")->getBorders()->getAllBorders()->setBorderStyle('thin');
 
-        foreach (['A' => 28, 'B' => 16, 'C' => 32, 'D' => 36, 'E' => 8, 'F' => 12, 'G' => 14, 'H' => 14, 'I' => 16] as $c => $w) {
+        foreach (['A' => 28, 'B' => 16, 'C' => 32, 'D' => 36, 'E' => 8, 'F' => 12, 'G' => 14, 'H' => 14, 'I' => 14, 'J' => 16] as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
         }
 

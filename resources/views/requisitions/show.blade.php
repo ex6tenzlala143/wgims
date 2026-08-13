@@ -17,6 +17,10 @@
         @endif
         <a href="{{ route('requisitions.signatories', $requisition->id) }}" class="btn btn-secondary"><i class="fas fa-signature"></i> Signatories</a>
         <a href="{{ route('requisitions.print', $requisition->id) }}" class="btn btn-outline" target="_blank"><i class="fas fa-print"></i> Print RIS</a>
+        @if(auth()->user()->canWrite())
+        <a href="{{ route('requisitions.audit_log', $requisition->id) }}" class="btn btn-outline"><i class="fas fa-history"></i> Correction History</a>
+        <button type="button" class="btn btn-primary" onclick="openCorrectRisModal()"><i class="fas fa-sync-alt"></i> Correct RIS</button>
+        @endif
     </div>
 </div>
 
@@ -48,6 +52,20 @@
             <div style="margin-top:16px;font-size:13px;color:var(--text-muted)">
                 Approved on {{ $requisition->date_approved->format('F d, Y') }}<br>
                 by {{ $requisition->approver->name ?? '-' }}
+            </div>
+            @endif
+            @php $subSnapshot = $requisition->deletedSubsidySnapshot(); @endphp
+            @if($subSnapshot)
+            <div style="margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:8px">
+                @include('partials.subsidy-source-badge', [
+                    'status' => $subSnapshot['status'],
+                    'ris'    => $subSnapshot['ris'],
+                    'dr'     => $subSnapshot['dr'],
+                    'prefix' => 'RELATED TO',
+                ])
+                <span style="font-size:12px;color:var(--text-muted)">
+                    This RIS draws from stock that traces back to a {{ $subSnapshot['status'] === 'deleted' ? 'deleted' : 'archived' }} Subsidy.
+                </span>
             </div>
             @endif
         </div>
@@ -185,8 +203,30 @@
 
                     $totalCost = ($unitCost !== null) ? $unitCost * $ri->quantity_requested : null;
                 @endphp
+                @php
+                    // Resolve the flagged source-subsidy item for this requested line:
+                    // the live requested item wins, otherwise any of its dispatch items.
+                    $riSub = null;
+                    if ($ri->item && in_array($ri->item->source_subsidy_status, ['deleted', 'archived'], true)) {
+                        $riSub = $ri->item;
+                    } elseif ($flaggedDi = $ri->dispatchItems->pluck('item')->filter()->first(fn ($i) => in_array($i->source_subsidy_status, ['deleted', 'archived'], true))) {
+                        $riSub = $flaggedDi;
+                    }
+                @endphp
                 <tr>
-                    <td><code>{{ $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode(', ') ?: ($ri->item?->stock_number ?? '-') }}</code></td>
+                    <td>
+                        <code>{{ $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode(', ') ?: ($ri->item?->stock_number ?? '-') }}</code>
+                        @if($riSub)
+                        <div style="margin-top:5px">
+                            @include('partials.subsidy-source-badge', [
+                                'status' => $riSub->source_subsidy_status,
+                                'ris'    => $riSub->sourceSubsidyReference(),
+                                'dr'     => $riSub->sourceDrReference(),
+                                'prefix' => 'RELATED TO',
+                            ])
+                        </div>
+                        @endif
+                    </td>
                     <td>{{ $ri->unit ?? ($ri->item?->unit ?? '-') }}</td>
                     <td>{{ $ri->description ?? ($ri->item?->description ?? '-') }}</td>
                     <td>
@@ -260,7 +300,15 @@
                         @endif
                     </td>
                     <td>
-                        @if($ri->dr_number)
+                        @php
+                            // All DR numbers from the actual dispatch records for this line
+                            $drList = $ri->dispatchItems->pluck('dr_number')->filter()->unique()->values();
+                        @endphp
+                        @if($drList->isNotEmpty())
+                            @foreach($drList as $dr)
+                            <code style="font-size:12px;margin-right:4px">{{ $dr }}</code>
+                            @endforeach
+                        @elseif($ri->dr_number)
                             <code style="font-size:12px">{{ $ri->dr_number }}</code>
                         @else
                             <span style="color:var(--text-muted)">—</span>
@@ -374,6 +422,9 @@
                         <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Unit Cost</th>
                         <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Value</th>
                         <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Cumulative</th>
+                        @if(auth()->user()->canApprove())
+                        <th style="padding:8px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Actions</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
@@ -390,6 +441,16 @@
                             <strong>{{ $di->created_at?->format('M d, Y') }}</strong>
                             @if($di->expiration_date)
                                 <div style="font-size:11px;color:var(--text-muted)">Exp. {{ $di->expiration_date->format('M d, Y') }}</div>
+                            @endif
+                            @if($di->item && in_array($di->item->source_subsidy_status, ['deleted', 'archived'], true))
+                            <div style="margin-top:4px">
+                                @include('partials.subsidy-source-badge', [
+                                    'status' => $di->item->source_subsidy_status,
+                                    'ris'    => $di->item->sourceSubsidyReference(),
+                                    'dr'     => $di->item->sourceDrReference(),
+                                    'prefix' => 'RELATED TO',
+                                ])
+                            </div>
                             @endif
                         </td>
                         <td style="padding:10px 14px">{{ $di->item?->warehouse?->name ?? '—' }}</td>
@@ -411,6 +472,15 @@
                                 / {{ number_format($ri->quantity_requested, 2) }} ({{ $cumulativePct }}%)
                             </span>
                         </td>
+                        @if(auth()->user()->canApprove())
+                        <td style="padding:10px 14px;white-space:nowrap">
+                            <button type="button" class="btn btn-sm btn-outline btn-icon"
+                                    onclick="openDispatchEditModal({{ $di->id }})"
+                                    title="Edit this issued item (warehouse, quantity, costs, DR, expiry)">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                        @endif
                     </tr>
                     @endforeach
                 </tbody>
@@ -430,12 +500,74 @@
                                 {{ $outstanding > 0 ? number_format($outstanding, 2).' outstanding' : '✓ Fully issued' }}
                             </span>
                         </td>
+                        @if(auth()->user()->canApprove())
+                        <td></td>
+                        @endif
                     </tr>
                 </tfoot>
             </table>
         @endif
     </div>
     @endforeach
+</div>
+@endif
+
+<!-- Correction History -->
+@if(auth()->user()->canWrite() && $requisition->auditLogs()->exists())
+@php $recentCorrections = $requisition->auditLogs()->with('user')->take(5)->get(); @endphp
+<div class="card" style="margin-bottom:24px">
+    <div class="card-header">
+        <h3><i class="fas fa-history"></i> Recent Corrections</h3>
+        <a href="{{ route('requisitions.audit_log', $requisition->id) }}" class="btn btn-sm btn-outline">View Full History</a>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date / Time</th>
+                    <th>Corrected By</th>
+                    <th>Changes</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($recentCorrections as $log)
+                <tr>
+                    <td style="white-space:nowrap;font-size:12px">
+                        {{ $log->created_at->format('M d, Y') }}<br>
+                        <span style="color:var(--text-muted)">{{ $log->created_at->format('h:i A') }}</span>
+                    </td>
+                    <td style="font-size:13px">
+                        <strong>{{ $log->user->name ?? '—' }}</strong><br>
+                        <span style="font-size:11px;color:var(--text-muted)">{{ $log->user?->getRoleLabel() ?? '' }}</span>
+                    </td>
+                    <td style="font-size:12px">
+                        @php
+                            $lines = collect($log->changed_fields)->map(function ($change, $field) {
+                                $label = match (true) {
+                                    str_starts_with($field, 'items.') && str_ends_with($field, '.item') => 'Item',
+                                    str_starts_with($field, 'items.') => 'Requested Qty',
+                                    $field === 'total_requested' => 'Total Requested',
+                                    $field === 'status' => 'RIS Status',
+                                    default => ucfirst(str_replace('_', ' ', $field)),
+                                };
+                                return '<strong>'.$label.'</strong>: '
+                                    .(is_numeric($change['old'] ?? null) ? number_format((float) $change['old'], 2) : ($change['old'] ?? '—'))
+                                    .' → '
+                                    .(is_numeric($change['new'] ?? null) ? number_format((float) $change['new'], 2) : ($change['new'] ?? '—'));
+                            })->take(4);
+                        @endphp
+                        <span>{!! $lines->implode('<br>') !!}</span>
+                        @if(count($log->changed_fields) > 4)
+                        <a href="{{ route('requisitions.audit_log', $requisition->id) }}" style="display:block;margin-top:2px;font-size:11px">
+                            + {{ count($log->changed_fields) - 4 }} more
+                        </a>
+                        @endif
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
 </div>
 @endif
 
@@ -463,3 +595,11 @@
     </div>
 </div>
 @endsection
+
+@if(auth()->user()->canApprove())
+@include('requisitions._dispatch_edit_modal')
+@endif
+
+@if(auth()->user()->canWrite())
+@include('requisitions._correct_ris_modal')
+@endif

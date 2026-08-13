@@ -33,6 +33,11 @@
                     <option value="partially_approved" {{ request('status')=='partially_approved'?'selected':'' }}>Partially Fulfilled</option>
                     <option value="cancelled" {{ request('status')=='cancelled'?'selected':'' }}>Cancelled</option>
                 </select>
+                <select name="related_to_deleted_subsidy" class="form-control">
+                    <option value="">All Subsidy Sources</option>
+                    <option value="yes" {{ request('related_to_deleted_subsidy') === 'yes' ? 'selected' : '' }}>Related to Deleted/Archived Subsidy</option>
+                    <option value="no" {{ request('related_to_deleted_subsidy') === 'no' ? 'selected' : '' }}>Not Related to Deleted/Archived Subsidy</option>
+                </select>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
                 <a href="{{ route('requisitions.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
             </div>
@@ -62,9 +67,22 @@
                     $risRem  = max(0, $risReq - $risIss);
                     $risPct  = $risReq > 0 ? min(100, round($risIss / $risReq * 100)) : 0;
                     $risBar  = $risPct >= 100 ? 'var(--success)' : ($risPct > 0 ? 'var(--primary)' : '#e2e8f0');
+                    $subSnapshot = $ris->deletedSubsidySnapshot();
                 @endphp
                 <tr>
-                    <td><strong>{{ $ris->ris_number }}</strong></td>
+                    <td>
+                        <strong>{{ $ris->ris_number }}</strong>
+                        @if($subSnapshot)
+                        <div style="margin-top:5px">
+                            @include('partials.subsidy-source-badge', [
+                                'status' => $subSnapshot['status'],
+                                'ris'    => $subSnapshot['ris'],
+                                'dr'     => $subSnapshot['dr'],
+                                'prefix' => 'RELATED TO',
+                            ])
+                        </div>
+                        @endif
+                    </td>
                     <td>
                         @php $drs = $ris->items->pluck('dr_number')->filter()->unique(); @endphp
                         @if($drs->isNotEmpty())
@@ -100,7 +118,6 @@
                         <div style="display:flex;gap:4px">
                             <a href="{{ route('requisitions.show', $ris->id) }}" class="btn btn-sm btn-outline btn-icon" title="View"><i class="fas fa-eye"></i></a>
                             @if(auth()->user()->canWrite())
-                            <a href="{{ route('requisitions.edit', $ris->id) }}" class="btn btn-sm btn-primary btn-icon" title="Edit"><i class="fas fa-edit"></i></a>
                             <form action="{{ route('requisitions.destroy', $ris->id) }}" method="POST" style="display:inline"
                                 onsubmit="return confirm('Delete RIS #{{ $ris->ris_number }}?\n\nThis will permanently delete the requisition. Any stock that was already issued will be reversed back to inventory.');">
                                 @csrf @method('DELETE')

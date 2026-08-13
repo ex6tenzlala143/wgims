@@ -11,7 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('item_id')->constrained('items')->cascadeOnDelete();
             $table->date('entry_date');
-            $table->string('reference'); // PO number or RIS number
+            $table->string('reference'); // DR number, RIS number, or transfer number
             $table->string('reference_type'); // delivery, issuance, adjustment
             $table->string('reference_id')->nullable(); // delivery_id or requisition_id
             $table->decimal('receipt_qty', 15, 4)->default(0);

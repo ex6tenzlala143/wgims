@@ -28,7 +28,7 @@
                         @if($item->stock_number)
                             <code>{{ $item->stock_number }}</code>
                         @else
-                            <span style="color:var(--text-muted);font-style:italic">Not yet assigned — will be set on first PO delivery</span>
+                            <span style="color:var(--text-muted);font-style:italic">Not yet assigned — will be set on first subsidy delivery</span>
                         @endif
                     </td>
                 </tr>
@@ -38,6 +38,27 @@
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Category</td><td><span class="badge badge-info">{{ $item->getCategoryLabel() }}</span></td></tr>
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Account Code</td><td><span class="badge badge-primary">{{ $item->account_code }}</span></td></tr>
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Warehouse</td><td>{{ $item->warehouse->name ?? '—' }}</td></tr>
+                @if($item->source_subsidy_status)
+                <tr>
+                    <td style="padding:8px 0;color:var(--text-muted)">Source Subsidy</td>
+                    <td style="padding:8px 0">
+                        @include('partials.subsidy-source-badge', [
+                            'status' => $item->source_subsidy_status,
+                            'ris'    => $item->sourceSubsidyReference(),
+                            'dr'     => $item->sourceDrReference(),
+                            'prefix' => 'FROM',
+                        ])
+                        @if($item->source_subsidy_ris || $item->source_subsidy_dr)
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
+                            RIS: <code>{{ $item->sourceSubsidyReference() ?? '—' }}</code>
+                            @if($item->sourceDrReference())
+                            · DR: <code>{{ $item->sourceDrReference() }}</code>
+                            @endif
+                        </div>
+                        @endif
+                    </td>
+                </tr>
+                @endif
             </table>
         </div>
     </div>

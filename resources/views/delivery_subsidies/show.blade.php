@@ -12,14 +12,22 @@
         </div>
     </div>
     <div style="display:flex;gap:8px">
-        @if($deliverySubsidy->status !== 'fully_delivered' && $deliverySubsidy->status !== 'cancelled')
+        @if($deliverySubsidy->status !== 'fully_delivered' && $deliverySubsidy->status !== 'cancelled' && ! $deliverySubsidy->isArchived())
         <a href="{{ route('delivery_subsidies.delivery', $deliverySubsidy->id) }}" class="btn btn-success">
             <i class="fas fa-truck"></i> Record Delivery
         </a>
         @endif
-        @if(auth()->user()->canWrite())
+        @if($deliverySubsidy->isArchived())
+        <span class="badge badge-secondary" style="font-size:14px;padding:10px 16px;align-self:center">
+            <i class="fas fa-archive"></i> Archived
+        </span>
+        @endif
+        @if(auth()->user()->canWrite() && ! $deliverySubsidy->isArchived())
         <button type="button" class="btn btn-secondary" onclick="openEditModal({{ $deliverySubsidy->id }})">
-            <i class="fas fa-edit"></i> Edit PO
+            <i class="fas fa-edit"></i> Edit Subsidy
+        </button>
+        <button type="button" class="btn btn-primary" onclick="openCorrectSubsidyModal()">
+            <i class="fas fa-sync-alt"></i> Correct Subsidy
         </button>
         @endif
         @if(auth()->user()->isAdmin())
@@ -27,12 +35,29 @@
             <i class="fas fa-history"></i> Audit Log
         </a>
         @endif
+        @if(auth()->user()->canWrite() && ! $deliverySubsidy->isArchived())
+        <form action="{{ route('delivery_subsidies.archive', $deliverySubsidy->id) }}" method="POST"
+            onsubmit="return confirm('Archive RIS #{{ $deliverySubsidy->ris_number }}? Related stock transfers will be flagged for review — nothing is deleted.')">
+            @csrf @method('PATCH')
+            <button type="submit" class="btn btn-secondary">
+                <i class="fas fa-archive"></i> Archive
+            </button>
+        </form>
+        @elseif(auth()->user()->canWrite() && $deliverySubsidy->isArchived())
+        <form action="{{ route('delivery_subsidies.restore', $deliverySubsidy->id) }}" method="POST"
+            onsubmit="return confirm('Restore RIS #{{ $deliverySubsidy->ris_number }}? Related stock transfer flags will be cleared.')">
+            @csrf @method('PATCH')
+            <button type="submit" class="btn btn-outline">
+                <i class="fas fa-undo"></i> Restore
+            </button>
+        </form>
+        @endif
         @if(auth()->user()->canWrite())
         <form action="{{ route('delivery_subsidies.destroy', $deliverySubsidy->id) }}" method="POST"
-            onsubmit="return confirm('Delete RIS #{{ $deliverySubsidy->ris_number }}?\n\nThis will permanently delete the record and reverse all delivered stock quantities.')">
+            onsubmit="return confirm('Delete RIS #{{ $deliverySubsidy->ris_number }}?\n\nThis will permanently delete the record and reverse all delivered stock quantities. Related stock transfers will be preserved and flagged for review.')">
             @csrf @method('DELETE')
             <button type="submit" class="btn btn-danger">
-                <i class="fas fa-trash"></i> Delete PO
+                <i class="fas fa-trash"></i> Delete Subsidy
             </button>
         </form>
         @endif
@@ -42,7 +67,7 @@
     </div>
 </div>
 
-{{-- PO Info + Status --}}
+{{-- Subsidy Info + Status --}}
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-bottom:24px">
     <div class="card">
         <div class="card-header"><h3><i class="fas fa-file-invoice-dollar" style="color:var(--primary)"></i> Delivery/Subsidy Information</h3></div>
@@ -191,7 +216,7 @@
                     <th style="text-align:right">Ordered Qty</th>
                     <th style="text-align:right">Delivered Qty</th>
                     <th style="text-align:right">Remaining</th>
-                    <th style="text-align:right">Unit Cost (PO)</th>
+                    <th style="text-align:right">Unit Cost (Subsidy)</th>
                     @if(auth()->user()->hasAdminAccess())
                     <th style="text-align:right">Engas Unit Cost</th>
                     <th style="text-align:right">Engas Total Value</th>
@@ -202,11 +227,19 @@
             </thead>
             <tbody>
                 @foreach($deliverySubsidy->items as $poi)
+                @php $poiSummary = $poi->dispatch_summary; @endphp
                 <tr>
                     <td><strong>{{ $poi->item->description ?? $poi->description ?? '-' }}</strong></td>
                     <td>{{ $poi->item->unit ?? $poi->unit ?? '-' }}</td>
                     <td>
-                        @if($poi->warehouse)
+                        @if($poiSummary->isNotEmpty())
+                            @foreach($poiSummary as $sumRow)
+                                <span style="font-size:12px;font-weight:600;white-space:nowrap;display:inline-block;background:#f0f4ff;border:1px solid #dbe4ff;padding:2px 8px;border-radius:999px;margin:1px 2px">
+                                    <i class="fas fa-warehouse" style="color:var(--primary);margin-right:4px"></i>
+                                    {{ $sumRow['warehouse_name'] }}
+                                </span>
+                            @endforeach
+                        @elseif($poi->warehouse)
                             <span style="font-size:12px;font-weight:600;white-space:nowrap">
                                 <i class="fas fa-warehouse" style="color:var(--primary);margin-right:4px"></i>
                                 {{ $poi->warehouse->name }}
@@ -222,17 +255,53 @@
                             {{ number_format($poi->quantity - $poi->qty_delivered, 2) }}
                         </span>
                     </td>
-                    <td style="text-align:right">{{ $poi->unit_cost !== null ? '₱' . number_format($poi->unit_cost, 2) : '—' }}</td>
+                    <td style="text-align:right">
+                        @if($poiSummary->isNotEmpty())
+                            @foreach($poiSummary as $sumRow)
+                                <div style="white-space:nowrap">
+                                    @if($sumRow['unit_cost'] !== null)
+                                        ₱{{ number_format($sumRow['unit_cost'], 2) }}
+                                    @else
+                                        <span style="color:var(--text-muted)">—</span>
+                                    @endif
+                                </div>
+                            @endforeach
+                        @elseif($poi->unit_cost !== null)
+                            <div style="white-space:nowrap">₱{{ number_format($poi->unit_cost, 2) }}</div>
+                        @else
+                            <span style="color:var(--text-muted)">—</span>
+                        @endif
+                    </td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
-                        @if($poi->item && $poi->item->engas_unit_cost !== null)
+                        @if($poiSummary->isNotEmpty())
+                            @foreach($poiSummary as $sumRow)
+                                <div style="white-space:nowrap">
+                                    @if($sumRow['engas_unit_cost'] !== null)
+                                        <span style="color:var(--primary);font-weight:600">₱{{ number_format($sumRow['engas_unit_cost'], 2) }}</span>
+                                    @else
+                                        <span style="color:var(--text-muted)">—</span>
+                                    @endif
+                                </div>
+                            @endforeach
+                        @elseif($poi->item && $poi->item->engas_unit_cost !== null)
                             <span style="color:var(--primary);font-weight:600">₱{{ number_format($poi->item->engas_unit_cost, 2) }}</span>
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td style="text-align:right">
-                        @if($poi->item && $poi->item->engas_unit_cost !== null)
+                        @if($poiSummary->isNotEmpty())
+                            @foreach($poiSummary as $sumRow)
+                                <div style="white-space:nowrap">
+                                    @if($sumRow['engas_unit_cost'] !== null)
+                                        <span style="color:var(--primary);font-weight:600">₱{{ number_format($sumRow['quantity'] * $sumRow['engas_unit_cost'], 2) }}</span>
+                                    @else
+                                        <span style="color:var(--text-muted)">—</span>
+                                    @endif
+                                </div>
+                            @endforeach
+                        @elseif($poi->item && $poi->item->engas_unit_cost !== null)
                             <span style="color:var(--primary);font-weight:600">₱{{ number_format($poi->quantity * $poi->item->engas_unit_cost, 2) }}</span>
                         @else
                             <span style="color:var(--text-muted)">—</span>
@@ -278,7 +347,7 @@
     </div>
     @foreach($deliverySubsidy->items as $poi)
     @php
-        // Collect every delivery_item row for this PO line, across all shipments
+        // Collect every delivery_item row for this subsidy line, across all shipments
         $allDiForItem = $deliverySubsidy->deliveries
             ->flatMap(fn($d) => $d->items->where('delivery_subsidy_item_id', $poi->id)
                 ->map(fn($di) => ['delivery' => $d, 'di' => $di]))
@@ -512,9 +581,6 @@
                         @endif
                         <th>Condition</th>
                         <th>Stock Card</th>
-                        @if(auth()->user()->canWrite())
-                        <th>Actions</th>
-                        @endif
                     </tr>
                 </thead>
                 <tbody>
@@ -586,14 +652,6 @@
                             </a>
                             @endif
                         </td>
-                        @if(auth()->user()->canWrite())
-                        <td>
-                            <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $delivery->id]) }}"
-                               class="btn btn-sm btn-outline btn-icon" title="Edit this dispatched item">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                        </td>
-                        @endif
                     </tr>
                     @endforeach
                 </tbody>
@@ -609,7 +667,7 @@
                             {{ $engasShipTotal > 0 ? '₱'.number_format($engasShipTotal, 2) : '—' }}
                         </td>
                         @endif
-                        <td colspan="{{ 2 + (auth()->user()->canWrite() ? 1 : 0) }}"></td>
+                        <td colspan="2"></td>
                     </tr>
                 </tfoot>
             </table>
@@ -634,5 +692,6 @@
 
 @if(auth()->user()->canWrite())
 @include('delivery_subsidies._edit_form')
+@include('delivery_subsidies._correct_subsidy_modal')
 @endif
 @endsection

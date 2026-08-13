@@ -10,6 +10,10 @@ class StockTransfer extends Model
 {
     protected $fillable = [
         'transfer_number',
+        'delivery_subsidy_id',
+        'source_ris_number',
+        'source_dr_number',
+        'source_subsidy_status',
         'from_warehouse_id',
         'to_warehouse_id',
         'transfer_date',
@@ -35,6 +39,16 @@ class StockTransfer extends Model
     public function transferredBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'transferred_by');
+    }
+
+    public function deliverySubsidy(): BelongsTo
+    {
+        return $this->belongsTo(DeliverySubsidy::class);
+    }
+
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(StockTransferAuditLog::class, 'stock_transfer_id')->latest();
     }
 
     public function items(): HasMany
@@ -106,6 +120,51 @@ class StockTransfer extends Model
             'pending'   => 'Pending Dispatch',
             default     => ucfirst($this->status),
         };
+    }
+
+    /**
+     * Whether this transfer traces back to a Subsidy that has been deleted or
+     * archived. The subsidy row may be gone; the snapshot columns keep the trail.
+     */
+    public function isRelatedToDeletedSubsidy(): bool
+    {
+        return in_array($this->source_subsidy_status, ['deleted', 'archived'], true);
+    }
+
+    /**
+     * Human label for the source subsidy state ('Deleted' / 'Archived'), or null.
+     */
+    public function sourceSubsidyStatusLabel(): ?string
+    {
+        return match ($this->source_subsidy_status) {
+            'deleted'  => 'Deleted',
+            'archived' => 'Archived',
+            default    => null,
+        };
+    }
+
+    /**
+     * The original Subsidy/RIS reference this transfer was sourced from.
+     * Prefers the live subsidy when it still exists, otherwise the snapshot.
+     */
+    public function sourceSubsidyReference(): ?string
+    {
+        if ($this->deliverySubsidy) {
+            return $this->deliverySubsidy->ris_number;
+        }
+        return $this->source_ris_number;
+    }
+
+    /**
+     * The original Subsidy DR number this transfer was sourced from.
+     * Prefers the live subsidy when it still exists, otherwise the snapshot.
+     */
+    public function sourceDrReference(): ?string
+    {
+        if ($this->deliverySubsidy) {
+            return $this->deliverySubsidy->dr_number;
+        }
+        return $this->source_dr_number;
     }
 
     /**

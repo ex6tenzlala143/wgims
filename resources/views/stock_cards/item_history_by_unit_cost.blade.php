@@ -21,6 +21,7 @@
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Stock Number</div>
             <div style="font-size:16px;font-weight:700;margin-top:4px"><code>{{ $item->stock_number }}</code></div>
+            <div style="margin-top:6px">@include('partials.subsidy-source-badge', ['status' => $item->source_subsidy_status, 'ris' => $item->sourceSubsidyReference(), 'dr' => $item->sourceDrReference(), 'prefix' => 'FROM'])</div>
         </div>
     </div>
     <div class="card">
@@ -45,7 +46,7 @@
             <span class="badge {{ $batch['depleted'] ? 'badge-secondary' : 'badge-success' }}">
                 {{ $batch['depleted'] ? 'Depleted' : 'Active' }}
             </span>
-            <span style="font-size:13px;color:var(--text-muted)">PO: {{ $batch['reference'] }} — {{ $batch['date'] ? $batch['date']->format('M d, Y') : '—' }}</span>
+            <span style="font-size:13px;color:var(--text-muted)">Ref: {{ $batch['reference'] }} — {{ $batch['date'] ? $batch['date']->format('M d, Y') : '—' }}</span>
         </div>
         <div style="display:flex;gap:20px;font-size:13px">
             <div><span style="color:var(--text-muted)">Unit Cost:</span> <strong>₱{{ number_format($batch['unit_cost'], 2) }}</strong></div>

@@ -21,6 +21,12 @@
     <div class="card-body">
         <form method="GET" action="{{ route('transfers.index') }}">
             <div class="filters-bar">
+                <input type="text" name="q" class="form-control" value="{{ request('q') }}" placeholder="Search transfer # / RIS #">
+                <select name="related_to_deleted_subsidy" class="form-control">
+                    <option value="">All Transfers</option>
+                    <option value="yes" {{ request('related_to_deleted_subsidy') === 'yes' ? 'selected' : '' }}>Related to Deleted Subsidy</option>
+                    <option value="no" {{ request('related_to_deleted_subsidy') === 'no' ? 'selected' : '' }}>Not Related to Deleted Subsidy</option>
+                </select>
                 @if(auth()->user()->hasAdminAccess())
                 <select name="from_warehouse_id" class="form-control">
                     <option value="">All Source Warehouses</option>
@@ -74,7 +80,19 @@
                     $barColor   = $pct >= 100 ? 'var(--success)' : ($pct > 0 ? 'var(--primary)' : '#e2e8f0');
                 @endphp
                 <tr>
-                    <td><strong>{{ $transfer->transfer_number }}</strong></td>
+                    <td>
+                        <strong>{{ $transfer->transfer_number }}</strong>
+                        @if($transfer->isRelatedToDeletedSubsidy())
+                        <div style="margin-top:5px">
+                            <span class="badge badge-danger" style="white-space:normal;text-align:left">
+                                <i class="fas fa-exclamation-triangle"></i> RELATED TO DELETED SUBSIDY
+                            </span>
+                        </div>
+                        @endif
+                        @if($transfer->source_ris_number)
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">RIS: {{ $transfer->sourceSubsidyReference() }}</div>
+                        @endif
+                    </td>
                     <td>{{ $transfer->transfer_date->format('M d, Y') }}</td>
                     <td><span style="font-size:12px">{{ $transfer->fromWarehouse->name }}</span></td>
                     <td><span style="font-size:12px">{{ $transfer->toWarehouse->name }}</span></td>
@@ -110,11 +128,23 @@
                         <a href="{{ route('transfers.print', $transfer) }}" class="btn btn-sm btn-secondary" target="_blank">
                             <i class="fas fa-print"></i> Print
                         </a>
+                        @if(auth()->user()->canWrite())
+                        <form action="{{ route('transfers.destroy', $transfer) }}" method="POST" style="display:inline"
+                            onsubmit="return confirm({{ $transfer->isRelatedToDeletedSubsidy()
+                                ? "'This Stock Transfer is linked to a deleted Subsidy. Deleting this transfer will reverse its inventory movement. Are you sure?'"
+                                : "'Delete transfer {$transfer->transfer_number}?\\n\\nThis will permanently delete the transfer and reverse all dispatched stock quantities — stock returns to the source warehouse.'"
+                            }})">
+                            @csrf @method('DELETE')
+                            <button type="submit" class="btn btn-sm btn-danger" title="{{ $transfer->isRelatedToDeletedSubsidy() ? 'Review & Delete Transfer' : 'Delete Transfer' }}">
+                                <i class="fas fa-trash"></i> {{ $transfer->isRelatedToDeletedSubsidy() ? 'Review & Delete' : 'Delete' }}
+                            </button>
+                        </form>
+                        @endif
                     </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted)">
+                    <td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted)">
                         <i class="fas fa-exchange-alt" style="font-size:32px;margin-bottom:8px;display:block;opacity:0.3"></i>
                         No transfers found.
                     </td>

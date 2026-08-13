@@ -63,26 +63,33 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($pos as $po)
+                @forelse($pos as $subsidy)
                 @php
-                    $requested  = (float) $po->quantity_requested;
-                    $delivered  = (float) $po->deliveries_sum_quantity_delivered ?? $po->totalDelivered();
+                    $requested  = (float) $subsidy->quantity_requested;
+                    $delivered  = (float) $subsidy->deliveries_sum_quantity_delivered ?? $subsidy->totalDelivered();
                     $remaining  = max(0, $requested - $delivered);
                     $pct        = $requested > 0 ? min(100, round($delivered / $requested * 100)) : 0;
                     $barColor   = $pct >= 100 ? 'var(--success)' : ($pct > 0 ? 'var(--primary)' : '#e2e8f0');
                 @endphp
                 <tr>
-                    <td><strong>{{ $po->ris_number }}</strong></td>
-                    <td>{{ $po->date ? $po->date->format('M d, Y') : '-' }}</td>
-                    <td>{{ $po->supplier->name ?? '-' }}</td>
+                    <td>
+                        <strong>{{ $subsidy->ris_number }}</strong>
+                        @if($subsidy->isArchived())
+                        <div style="margin-top:5px">
+                            <span class="badge badge-secondary"><i class="fas fa-archive"></i> Archived</span>
+                        </div>
+                        @endif
+                    </td>
+                    <td>{{ $subsidy->date ? $subsidy->date->format('M d, Y') : '-' }}</td>
+                    <td>{{ $subsidy->supplier->name ?? '-' }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td>
                         @php
-                            $whNames = $po->items
+                            $whNames = $subsidy->items
                                 ->filter(fn ($i) => $i->warehouse !== null)
                                 ->pluck('warehouse.name')
                                 ->merge(
-                                    $po->deliveries
+                                    $subsidy->deliveries
                                         ->flatMap(fn ($d) => $d->items)
                                         ->filter(fn ($di) => $di->warehouse !== null)
                                         ->pluck('warehouse.name')
@@ -93,7 +100,7 @@
                         {{ $whNames->isNotEmpty() ? $whNames->join(', ') : '—' }}
                     </td>
                     @endif
-                    <td style="text-align:right">₱{{ number_format($po->total_amount, 2) }}</td>
+                    <td style="text-align:right">₱{{ number_format($subsidy->total_amount, 2) }}</td>
                     <td style="text-align:right;white-space:nowrap">
                         {{ $requested > 0 ? number_format($requested, 2) : '—' }}
                     </td>
@@ -113,19 +120,32 @@
                         <span style="color:var(--text-muted);font-size:12px">—</span>
                         @endif
                     </td>
-                    <td><span class="badge {{ $po->getStatusBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $po->status)) }}</span></td>
+                    <td><span class="badge {{ $subsidy->getStatusBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $subsidy->status)) }}</span></td>
                     <td>
                         <div style="display:flex;gap:4px">
-                            <a href="{{ route('delivery_subsidies.show', $po->id) }}" class="btn btn-sm btn-outline btn-icon" title="View"><i class="fas fa-eye"></i></a>
-                            @if($po->status !== 'fully_delivered' && $po->status !== 'cancelled')
-                            <a href="{{ route('delivery_subsidies.delivery', $po->id) }}" class="btn btn-sm btn-success btn-icon" title="Record Delivery"><i class="fas fa-truck"></i></a>
+                            <a href="{{ route('delivery_subsidies.show', $subsidy->id) }}" class="btn btn-sm btn-outline btn-icon" title="View"><i class="fas fa-eye"></i></a>
+                            @if($subsidy->status !== 'fully_delivered' && $subsidy->status !== 'cancelled' && ! $subsidy->isArchived())
+                            <a href="{{ route('delivery_subsidies.delivery', $subsidy->id) }}" class="btn btn-sm btn-success btn-icon" title="Record Delivery"><i class="fas fa-truck"></i></a>
                             @endif
-                            @if(auth()->user()->canWrite() && $po->status !== 'cancelled')
-                            <button type="button" class="btn btn-sm btn-outline btn-icon" title="Edit" onclick="openEditModal({{ $po->id }})"><i class="fas fa-edit"></i></button>
+                            @if(auth()->user()->canWrite() && $subsidy->status !== 'cancelled' && ! $subsidy->isArchived())
+                            <button type="button" class="btn btn-sm btn-outline btn-icon" title="Edit" onclick="openEditModal({{ $subsidy->id }})"><i class="fas fa-edit"></i></button>
+                            @endif
+                            @if(auth()->user()->canWrite() && ! $subsidy->isArchived())
+                            <form action="{{ route('delivery_subsidies.archive', $subsidy->id) }}" method="POST"
+                                onsubmit="return confirm('Archive RIS #{{ $subsidy->ris_number }}? Related stock transfers will be flagged for review — nothing is deleted.')">
+                                @csrf @method('PATCH')
+                                <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Archive"><i class="fas fa-archive"></i></button>
+                            </form>
+                            @elseif(auth()->user()->canWrite() && $subsidy->isArchived())
+                            <form action="{{ route('delivery_subsidies.restore', $subsidy->id) }}" method="POST"
+                                onsubmit="return confirm('Restore RIS #{{ $subsidy->ris_number }}? Related stock transfer flags will be cleared.')">
+                                @csrf @method('PATCH')
+                                <button type="submit" class="btn btn-sm btn-outline btn-icon" title="Restore"><i class="fas fa-undo"></i></button>
+                            </form>
                             @endif
                             @if(auth()->user()->canWrite())
-                            <form action="{{ route('delivery_subsidies.destroy', $po->id) }}" method="POST"
-                                onsubmit="return confirm('Delete RIS #{{ $po->ris_number }}? This will reverse all delivered stock quantities.')">
+                            <form action="{{ route('delivery_subsidies.destroy', $subsidy->id) }}" method="POST"
+                                onsubmit="return confirm('Delete RIS #{{ $subsidy->ris_number }}? This will reverse all delivered stock quantities. Related stock transfers will be preserved and flagged for review.')">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                             </form>

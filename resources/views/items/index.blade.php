@@ -38,6 +38,12 @@
                     <option value="out_of_stock"{{ request('stock_status') == 'out_of_stock'? 'selected' : '' }}>Out of Stock</option>
                     <option value="low_stock"   {{ request('stock_status') == 'low_stock'   ? 'selected' : '' }}>Low Stock</option>
                 </select>
+                <select name="source_subsidy_status" class="form-control">
+                    <option value="">All Sources</option>
+                    <option value="deleted"  {{ request('source_subsidy_status') == 'deleted'  ? 'selected' : '' }}>From Deleted Subsidy</option>
+                    <option value="archived" {{ request('source_subsidy_status') == 'archived' ? 'selected' : '' }}>From Archived Subsidy</option>
+                    <option value="active"   {{ request('source_subsidy_status') == 'active'   ? 'selected' : '' }}>From Active Subsidy</option>
+                </select>
                 @if($warehouses->count() > 1)
                 <select name="warehouse_id" class="form-control">
                     <option value="">All Warehouses</option>
@@ -80,6 +86,16 @@
                             <code style="font-size:12px">{{ $item->stock_number }}</code>
                         @else
                             <span style="color:var(--text-muted);font-size:11px;font-style:italic">Pending Delivery</span>
+                        @endif
+                        @if($item->source_subsidy_status)
+                        <div style="margin-top:5px">
+                            @include('partials.subsidy-source-badge', [
+                                'status' => $item->source_subsidy_status,
+                                'ris'    => $item->sourceSubsidyReference(),
+                                'dr'     => $item->sourceDrReference(),
+                                'prefix' => 'FROM',
+                            ])
+                        </div>
                         @endif
                     </td>
                     <td><strong>{{ $item->description }}</strong></td>

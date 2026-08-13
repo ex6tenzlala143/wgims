@@ -61,6 +61,17 @@
                 </select>
             </div>
 
+            {{-- Source --}}
+            <div>
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px">Source</label>
+                <select name="source_subsidy_status" class="form-control">
+                    <option value="">All Sources</option>
+                    <option value="deleted"  {{ $sourceStatus === 'deleted'  ? 'selected' : '' }}>From Deleted Subsidy</option>
+                    <option value="archived" {{ $sourceStatus === 'archived' ? 'selected' : '' }}>From Archived Subsidy</option>
+                    <option value="active"   {{ $sourceStatus === 'active'   ? 'selected' : '' }}>From Active Subsidy</option>
+                </select>
+            </div>
+
             <div style="align-self:flex-end;display:flex;gap:8px">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
                 <a href="{{ route('inventory_balance_report') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
@@ -70,7 +81,7 @@
 </div>
 
 {{-- ── Active filter summary ───────────────────────────────────────────────── --}}
-@if($warehouseId || $categoryKey || $itemId)
+@if($warehouseId || $categoryKey || $itemId || $sourceStatus)
 <div style="margin-bottom:16px;font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     <i class="fas fa-filter" style="color:var(--primary)"></i>
     <span>Showing results for:</span>
@@ -82,6 +93,9 @@
     @endif
     @if($itemId)
         <span class="badge badge-secondary">{{ $allItems->firstWhere('id', $itemId)?->description ?? 'Item #'.$itemId }}</span>
+    @endif
+    @if($sourceStatus)
+        <span class="badge badge-info">Source: {{ $sourceStatus === 'deleted' ? 'Deleted Subsidy' : ($sourceStatus === 'archived' ? 'Archived Subsidy' : 'Active Subsidy') }}</span>
     @endif
 </div>
 @endif
@@ -128,11 +142,24 @@
                     <td colspan="{{ auth()->user()->hasAdminAccess() ? 7 : 5 }}"><strong>{{ $cat['label'] }}</strong></td>
                     <td style="text-align:right;font-weight:700">₱{{ number_format($cat['total_value'], 2) }}</td>
                 </tr>
-                @foreach($cat['items'] as $item)
+                @foreach($cat['groups'] as $group)
+                @foreach($group['items'] as $item)
                 <tr>
                     <td></td>
                     <td></td>
-                    <td>{{ $item->description }}</td>
+                    <td>
+                        {{ $item->description }}
+                        @if($item->source_subsidy_status)
+                        <div style="margin-top:5px">
+                            @include('partials.subsidy-source-badge', [
+                                'status' => $item->source_subsidy_status,
+                                'ris'    => $item->sourceSubsidyReference(),
+                                'dr'     => $item->sourceDrReference(),
+                                'prefix' => 'FROM',
+                            ])
+                        </div>
+                        @endif
+                    </td>
                     <td>{{ $item->unit }}</td>
                     <td style="text-align:right">{{ number_format($item->quantity, 2) }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>
@@ -153,6 +180,14 @@
                     </td>
                     @endif
                     <td style="text-align:right">₱{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
+                </tr>
+                @endforeach
+                <tr style="background:#f0f7ff;font-weight:600">
+                    <td></td>
+                    <td></td>
+                    <td colspan="2" style="color:var(--primary)">Total Qty</td>
+                    <td style="text-align:right;font-weight:700">{{ number_format($group['total_qty'], 2) }}</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 4 : 2 }}"></td>
                 </tr>
                 @endforeach
                 @endforeach

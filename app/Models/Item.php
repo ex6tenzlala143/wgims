@@ -11,6 +11,7 @@ class Item extends Model
         'stock_number', 'description', 'ris_number', 'unit', 'category',
         'account_code', 'warehouse_id', 'unit_cost', 'engas_unit_cost', 'quantity',
         'quantity_per_item', 'reorder_point', 'expiration_date', 'is_active',
+        'source_subsidy_id', 'source_subsidy_ris', 'source_subsidy_dr', 'source_subsidy_status',
     ];
 
     protected $casts = [
@@ -130,6 +131,72 @@ class Item extends Model
     public function requisitionDispatchItems()
     {
         return $this->hasMany(RequisitionDispatchItem::class);
+    }
+
+    public function sourceSubsidy()
+    {
+        return $this->belongsTo(DeliverySubsidy::class, 'source_subsidy_id');
+    }
+
+    /**
+     * Whether this item's source Subsidy has been deleted or archived. The
+     * subsidy row may be gone; the snapshot columns keep the trail.
+     */
+    public function isRelatedToDeletedSubsidy(): bool
+    {
+        return in_array($this->source_subsidy_status, ['deleted', 'archived'], true);
+    }
+
+    /** Human label for the source subsidy state ('Deleted' / 'Archived'), or null. */
+    public function sourceSubsidyStatusLabel(): ?string
+    {
+        return match ($this->source_subsidy_status) {
+            'deleted'  => 'Deleted',
+            'archived' => 'Archived',
+            default    => null,
+        };
+    }
+
+    /** The original Subsidy/RIS reference this item was delivered from. */
+    public function sourceSubsidyReference(): ?string
+    {
+        if ($this->sourceSubsidy) {
+            return $this->sourceSubsidy->ris_number;
+        }
+        return $this->source_subsidy_ris;
+    }
+
+    /** The original Subsidy DR reference this item was delivered from. */
+    public function sourceDrReference(): ?string
+    {
+        if ($this->sourceSubsidy) {
+            return $this->sourceSubsidy->dr_number;
+        }
+        return $this->source_subsidy_dr;
+    }
+
+    /**
+     * Persist the source-subsidy snapshot. Uses a direct query update so the
+     * model's saving hook (which auto-manages is_active from quantity) is never
+     * triggered by snapshot bookkeeping. The subsidy id may be null when the
+     * subsidy row is already gone (nullOnDelete) — the RIS/DR/status snapshots
+     * still carry the trail.
+     */
+    public function applySubsidySnapshot(?int $subsidyId, ?string $ris, ?string $dr, string $status): void
+    {
+        static::whereKey($this->id)->update([
+            'source_subsidy_id'     => $subsidyId,
+            'source_subsidy_ris'    => $ris ?: $this->source_subsidy_ris,
+            'source_subsidy_dr'     => $dr ?: $this->source_subsidy_dr,
+            'source_subsidy_status' => $status,
+        ]);
+
+        $this->forceFill([
+            'source_subsidy_id'     => $subsidyId,
+            'source_subsidy_ris'    => $ris ?: $this->source_subsidy_ris,
+            'source_subsidy_dr'     => $dr ?: $this->source_subsidy_dr,
+            'source_subsidy_status' => $status,
+        ]);
     }
 
     public function getCategoryLabel(): string

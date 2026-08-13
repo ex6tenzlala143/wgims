@@ -22,7 +22,7 @@
     <div class="stat-card">
         <div class="stat-icon green"><i class="fas fa-truck-loading"></i></div>
         <div>
-            <div class="stat-value">{{ number_format($stats['total_pos']) }}</div>
+            <div class="stat-value">{{ number_format($stats['total_subsidies']) }}</div>
             <div class="stat-label">Delivery / Subsidies</div>
         </div>
     </div>
@@ -92,7 +92,7 @@
     </div>
 </div>
 
-<!-- Unliquidated POs per Warehouse -->
+<!-- Unliquidated Delivery/Subsidies per Warehouse -->
 @if($unliquidated->count() > 0)
 <div class="card">
     <div class="card-header">
@@ -113,15 +113,15 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($unliquidated->flatten() as $po)
+                    @foreach($unliquidated->flatten() as $subsidy)
                     <tr>
-                        <td><strong>{{ $po->ris_number }}</strong></td>
-                        <td>{{ $po->warehouse->name ?? '-' }}</td>
-                        <td>{{ $po->supplier->name ?? '-' }}</td>
-                        <td>{{ $po->date ? $po->date->format('M d, Y') : '-' }}</td>
-                        <td style="text-align:right">₱{{ number_format($po->total_amount, 2) }}</td>
-                        <td><span class="badge {{ $po->getStatusBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $po->status)) }}</span></td>
-                        <td><a href="{{ route('delivery_subsidies.show', $po->id) }}" class="btn btn-sm btn-outline"><i class="fas fa-eye"></i></a></td>
+                        <td><strong>{{ $subsidy->ris_number }}</strong></td>
+                        <td>{{ $subsidy->warehouse->name ?? '-' }}</td>
+                        <td>{{ $subsidy->supplier->name ?? '-' }}</td>
+                        <td>{{ $subsidy->date ? $subsidy->date->format('M d, Y') : '-' }}</td>
+                        <td style="text-align:right">₱{{ number_format($subsidy->total_amount, 2) }}</td>
+                        <td><span class="badge {{ $subsidy->getStatusBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $subsidy->status)) }}</span></td>
+                        <td><a href="{{ route('delivery_subsidies.show', $subsidy->id) }}" class="btn btn-sm btn-outline"><i class="fas fa-eye"></i></a></td>
                     </tr>
                     @endforeach
                 </tbody>

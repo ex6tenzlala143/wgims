@@ -52,7 +52,7 @@
             <button type="button" class="modal-close" onclick="closeCreateModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>
 
-        <form action="{{ route('delivery_subsidies.store') }}" method="POST" id="po-form" class="subsidy-form">
+        <form action="{{ route('delivery_subsidies.store') }}" method="POST" id="subsidy-form" class="subsidy-form">
             @csrf
             <div class="modal-body">
                 <div class="subsidy-form-grid">

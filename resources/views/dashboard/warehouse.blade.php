@@ -27,7 +27,7 @@
     <div class="stat-card">
         <div class="stat-icon green"><i class="fas fa-file-invoice-dollar"></i></div>
         <div>
-            <div class="stat-value">{{ number_format($stats['total_pos']) }}</div>
+            <div class="stat-value">{{ number_format($stats['total_subsidies']) }}</div>
             <div class="stat-label">Delivery / Subsidies</div>
         </div>
     </div>
