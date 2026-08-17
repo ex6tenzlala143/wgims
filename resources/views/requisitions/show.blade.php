@@ -15,7 +15,11 @@
             {{ $requisition->status == 'partially_approved' ? 'Issue Remaining Items' : 'Approve' }}
         </a>
         @endif
+        @if(auth()->user()->canWrite())
         <a href="{{ route('requisitions.signatories', $requisition->id) }}" class="btn btn-secondary"><i class="fas fa-signature"></i> Signatories</a>
+        @else
+        <a href="{{ route('requisitions.signatories', $requisition->id) }}" class="btn btn-outline"><i class="fas fa-eye"></i> View Signatories</a>
+        @endif
         <a href="{{ route('requisitions.print', $requisition->id) }}" class="btn btn-outline" target="_blank"><i class="fas fa-print"></i> Print RIS</a>
         @if(auth()->user()->canWrite())
         <a href="{{ route('requisitions.audit_log', $requisition->id) }}" class="btn btn-outline"><i class="fas fa-history"></i> Correction History</a>
@@ -472,7 +476,7 @@
                                 / {{ number_format($ri->quantity_requested, 2) }} ({{ $cumulativePct }}%)
                             </span>
                         </td>
-                        @if(auth()->user()->canApprove())
+                        @if(auth()->user()->canWrite())
                         <td style="padding:10px 14px;white-space:nowrap">
                             <button type="button" class="btn btn-sm btn-outline btn-icon"
                                     onclick="openDispatchEditModal({{ $di->id }})"
@@ -596,10 +600,7 @@
 </div>
 @endsection
 
-@if(auth()->user()->canApprove())
-@include('requisitions._dispatch_edit_modal')
-@endif
-
 @if(auth()->user()->canWrite())
+@include('requisitions._dispatch_edit_modal')
 @include('requisitions._correct_ris_modal')
 @endif

@@ -81,11 +81,48 @@ class ItemController extends Controller
             $query->where('source_subsidy_status', $request->source_subsidy_status);
         }
 
-        $items = $query->orderBy('is_active', 'desc')  // active items first
-                       ->orderBy('quantity', 'desc')
-                       ->orderBy('description')
-                       ->paginate(20)
-                       ->withQueryString();
+        // Fetch items first for merging
+        $allItems = $query->orderBy('is_active', 'desc')
+                          ->orderBy('quantity', 'desc')
+                          ->orderBy('description')
+                          ->get();
+
+        // Group items by merge key: description + unit_cost + engas_unit_cost + expiration_date + warehouse_id
+        $mergedGroups = $allItems->groupBy(function ($item) {
+            return implode('|', [
+                $item->description,
+                round((float) $item->unit_cost, 2),
+                $item->engas_unit_cost !== null ? round((float) $item->engas_unit_cost, 2) : 'null',
+                $item->expiration_date ? $item->expiration_date->format('Y-m-d') : 'null',
+                $item->warehouse_id,
+            ]);
+        })->map(function ($group) {
+            // Use the first item as the representative, but sum quantities
+            $representative = $group->first();
+            $totalQuantity = $group->sum('quantity');
+            $sourceItems = $group->values(); // Keep all source items for reference
+            
+            // Create a merged item object
+            $merged = clone $representative;
+            $merged->quantity = $totalQuantity;
+            $merged->_source_items = $sourceItems; // Store source items for tracking
+            $merged->_is_merged = $group->count() > 1; // Flag if actually merged
+            
+            return $merged;
+        })->values();
+
+        // Paginate the merged results manually
+        $perPage = 20;
+        $currentPage = \Illuminate\Pagination\Paginator::resolveCurrentPage('page');
+        $currentItems = $mergedGroups->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        
+        $items = new \Illuminate\Pagination\LengthAwarePaginator(
+            $currentItems,
+            $mergedGroups->count(),
+            $perPage,
+            $currentPage,
+            ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath(), 'query' => request()->query()]
+        );
 
         if (! isset($warehouses)) {
             $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();

@@ -91,23 +91,27 @@ Route::middleware('auth')->group(function () {
     Route::get('/requisitions',                                   [RequisitionController::class, 'index'])->name('requisitions.index');
     Route::get('/requisitions/create',                            [RequisitionController::class, 'create'])->name('requisitions.create');
     Route::post('/requisitions',                                  [RequisitionController::class, 'store'])->name('requisitions.store');
-    // Dispatch edit endpoints must be registered BEFORE the {requisition} wildcard
-    Route::get('/requisitions/dispatch/{dispatch}/edit-data',     [RequisitionController::class, 'dispatchEditData'])->name('requisitions.dispatch_edit_data');
-    Route::put('/requisitions/dispatch/{dispatch}',               [RequisitionController::class, 'updateDispatch'])->name('requisitions.dispatch_update');
     Route::get('/requisitions/{requisition}',                     [RequisitionController::class, 'show'])->name('requisitions.show');
     Route::get('/requisitions/{requisition}/approve',             [RequisitionController::class, 'approve'])->name('requisitions.approve');
     Route::post('/requisitions/{requisition}/approve',            [RequisitionController::class, 'processApproval'])->name('requisitions.process_approval');
     Route::get('/requisitions/{requisition}/signatories',         [RequisitionController::class, 'signatories'])->name('requisitions.signatories');
-    Route::put('/requisitions/{requisition}/signatories',         [RequisitionController::class, 'updateSignatories'])->name('requisitions.update_signatories');
     Route::get('/requisitions/{requisition}/print',               [RequisitionController::class, 'printRis'])->name('requisitions.print');
-    // Write routes — blocked for Warehouse Manager
+    
+    // Write routes — ADMIN ONLY (blocked for Warehouse Manager)
     Route::middleware('admin.write')->group(function () {
+        // Dispatch edit endpoints (must be before {requisition} wildcard)
+        Route::get('/requisitions/dispatch/{dispatch}/edit-data', [RequisitionController::class, 'dispatchEditData'])->name('requisitions.dispatch_edit_data');
+        Route::put('/requisitions/dispatch/{dispatch}',           [RequisitionController::class, 'updateDispatch'])->name('requisitions.dispatch_update');
+        
+        // Requisition edit endpoints
         Route::get('/requisitions/{requisition}/edit',            [RequisitionController::class, 'edit'])->name('requisitions.edit');
         Route::put('/requisitions/{requisition}',                 [RequisitionController::class, 'update'])->name('requisitions.update');
+        Route::put('/requisitions/{requisition}/signatories',     [RequisitionController::class, 'updateSignatories'])->name('requisitions.update_signatories');
         Route::get('/requisitions/{requisition}/correction-data', [RequisitionController::class, 'correctionData'])->name('requisitions.correction_data');
         Route::put('/requisitions/{requisition}/correct',         [RequisitionController::class, 'correct'])->name('requisitions.correct');
         Route::get('/requisitions/{requisition}/audit-log',       [RequisitionController::class, 'auditLog'])->name('requisitions.audit_log');
     });
+    
     // Delete — admin only (stricter than edit/update which allow any write-capable role)
     Route::middleware(['admin', 'admin.write'])->group(function () {
         Route::delete('/requisitions/{requisition}',              [RequisitionController::class, 'destroy'])->name('requisitions.destroy');
@@ -131,10 +135,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/transfers/{transfer}/print',    [StockTransferController::class, 'print'])->name('transfers.print');
     Route::get('/transfers/{transfer}/dispatch', [StockTransferController::class, 'dispatch'])->name('transfers.dispatch');
     Route::get('/api/transfer-items',            [StockTransferController::class, 'itemsForWarehouse'])->name('transfers.items_for_warehouse');
-    // Create + dispatch — admin + warehouse manager
-    // NOTE: /create must be registered BEFORE /{transfer} to avoid wildcard capture
+    // Create + dispatch — admin + warehouse manager (create now uses modal in index page)
     Route::middleware('admin.create')->group(function () {
-        Route::get('/transfers/create',               [StockTransferController::class, 'create'])->name('transfers.create');
         Route::post('/transfers',                     [StockTransferController::class, 'store'])->name('transfers.store');
         Route::post('/transfers/{transfer}/dispatch', [StockTransferController::class, 'processDispatch'])->name('transfers.process_dispatch');
     });

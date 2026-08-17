@@ -10,9 +10,9 @@
         <div class="breadcrumb">Inventory › Stock Transfers</div>
     </div>
     @if(auth()->user()->canCreate())
-    <a href="{{ route('transfers.create') }}" class="btn btn-primary">
+    <button type="button" class="btn btn-primary" onclick="openTransferModal()">
         <i class="fas fa-exchange-alt"></i> New Transfer
-    </a>
+    </button>
     @endif
 </div>
 
@@ -159,4 +159,13 @@
     </div>
     @endif
 </div>
+
+@if(auth()->user()->canCreate())
+@include('transfers._create_modal', [
+    'createModalOpen' => $errors->any(),
+    'warehouses' => $warehouses,
+    'sourceWarehouse' => $sourceWarehouse ?? null,
+    'sourceItems' => $sourceItems ?? collect(),
+])
+@endif
 @endsection

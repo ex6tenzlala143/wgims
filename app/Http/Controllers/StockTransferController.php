@@ -75,29 +75,11 @@ class StockTransferController extends Controller
         $transfers  = $query->paginate(20)->withQueryString();
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
 
-        return view('transfers.index', compact('transfers', 'warehouses'));
-    }
-
-    /**
-     * Show the create transfer form.
-     */
-    public function create()
-    {
-        $user = Auth::user();
-
-        // Center staff cannot create transfers
-        if ($user->role === User::ROLE_STAFF) {
-            abort(403);
-        }
-
-        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
-
+        // Data for the create modal
         if ($user->hasAdminAccess()) {
             $sourceWarehouse = null;
             $sourceItems = collect();
         } else {
-            // For non-admin, source is their primary warehouse
-            // (first assigned warehouse, falling back to legacy warehouse_id)
             $warehouseIds = $this->getUserWarehouseIds($user);
             $primaryId = $user->warehouse_id ?? ($warehouseIds[0] ?? null);
             $sourceWarehouse = $primaryId ? Warehouse::find($primaryId) : null;
@@ -111,8 +93,13 @@ class StockTransferController extends Controller
                 : collect();
         }
 
-        return view('transfers.create', compact('warehouses', 'sourceWarehouse', 'sourceItems'));
+        return view('transfers.index', compact('transfers', 'warehouses', 'sourceWarehouse', 'sourceItems'));
     }
+
+    /**
+     * Show the create transfer form.
+     * NOTE: Removed - Stock Transfer creation now uses modal in index page.
+     */
 
     /**
      * Store a new transfer — validate, execute atomically, redirect.

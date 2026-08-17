@@ -319,8 +319,8 @@
         box-shadow: 0 1px 0 var(--border);
     }
     .modal-body .table-wrapper {
-        min-height: 340px;
-        max-height: calc(100vh - 520px);
+        /* Removed fixed min-height that was causing the blank space */
+        max-height: calc(100vh - 420px);
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }

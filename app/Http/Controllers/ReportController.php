@@ -265,35 +265,44 @@ class ReportController extends Controller
             ->orderBy('description')
             ->get();
 
-        // Every inventory record stays its own row — nothing is merged. The only
-        // addition is a "Total Qty" summary shown ONCE per Item + Warehouse group
-        // (the sum of ALL quantities sharing the same Item Name + Warehouse,
-        // ignoring unit cost / ENGAS unit cost / expiry).
-        $totals = [];
-        foreach ($items as $item) {
-            $key = $item->warehouse_id . '|' . $item->description;
-            $totals[$key] = ($totals[$key] ?? 0) + (float) $item->quantity;
-        }
+        // Merge items by: description + unit_cost + engas_unit_cost + expiration_date + warehouse_id
+        $mergedItems = $items->groupBy(function ($item) {
+            return implode('|', [
+                $item->warehouse_id,
+                $item->description,
+                round((float) $item->unit_cost, 2),
+                $item->engas_unit_cost !== null ? round((float) $item->engas_unit_cost, 2) : 'null',
+                $item->expiration_date ? $item->expiration_date->format('Y-m-d') : 'null',
+            ]);
+        })->map(function ($group) {
+            // Representative item with summed quantity
+            $representative = $group->first();
+            $merged = clone $representative;
+            $merged->quantity = $group->sum('quantity');
+            $merged->_source_items = $group->values(); // Keep source records
+            $merged->_is_merged = $group->count() > 1;
+            return $merged;
+        })->values();
 
-        // Group: warehouse → category → item-name → inventory records
+        // Group: warehouse → category → item-name → merged inventory records
         $balances = [];
-        foreach ($items->groupBy('warehouse_id') as $wid => $warehouseItems) {
+        foreach ($mergedItems->groupBy('warehouse_id') as $wid => $warehouseItems) {
             $warehouse   = $warehouseItems->first()->warehouse;
             $catBalances = [];
 
             foreach ($warehouseItems->groupBy('category') as $catKey => $catItems) {
                 $cat = Item::getCategories()[$catKey] ?? ['label' => ucfirst($catKey), 'account_code' => ''];
 
-                $groups = $catItems->groupBy('description')->map(function ($groupItems) use ($totals) {
+                $groups = $catItems->groupBy('description')->map(function ($groupItems) {
                     $first = $groupItems->first();
+                    
+                    // Calculate total quantity across ALL variations (different costs/expiry)
+                    $totalQty = $groupItems->sum('quantity');
 
                     return [
                         'description' => $first->description,
                         'unit'        => $first->unit,
-                        'total_qty'   => round(
-                            (float) ($totals[$first->warehouse_id . '|' . $first->description] ?? 0),
-                            4
-                        ),
+                        'total_qty'   => round($totalQty, 4),
                         'items'       => $groupItems->values(),
                     ];
                 })->values();
@@ -552,6 +561,24 @@ class ReportController extends Controller
             ->orderBy('description')
             ->get();
 
+        // Merge items by: description + unit_cost + engas_unit_cost + expiration_date + warehouse_id
+        $mergedItems = $items->groupBy(function ($item) {
+            return implode('|', [
+                $item->warehouse_id,
+                $item->description,
+                round((float) $item->unit_cost, 2),
+                $item->engas_unit_cost !== null ? round((float) $item->engas_unit_cost, 2) : 'null',
+                $item->expiration_date ? $item->expiration_date->format('Y-m-d') : 'null',
+            ]);
+        })->map(function ($group) {
+            $representative = $group->first();
+            $merged = clone $representative;
+            $merged->quantity = $group->sum('quantity');
+            $merged->_source_items = $group->values();
+            $merged->_is_merged = $group->count() > 1;
+            return $merged;
+        })->values();
+
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Inventory Balance');
@@ -577,24 +604,22 @@ class ReportController extends Controller
         $row = 5;
         $grandTotal = 0;
 
-        // "Total Quantity" is the sum of ALL quantities sharing the same Item
-        // Name + Warehouse. It is written only on the FIRST row of each group
-        // (left blank on the rest) so it appears once per Item + Warehouse group.
-        // Every inventory record keeps its own row.
-        $totals = [];
-        foreach ($items as $item) {
-            $key = $item->warehouse_id . '|' . $item->description;
-            $totals[$key] = ($totals[$key] ?? 0) + (float) $item->quantity;
-        }
+        // Calculate Total Quantity per item name + warehouse (across ALL costs/expiry)
+        $totalQtyByNameAndWarehouse = $items->groupBy(function ($item) {
+            return $item->warehouse_id . '|' . $item->description;
+        })->map(function ($group) {
+            return $group->sum('quantity');
+        });
 
         $seen = [];
-        foreach ($items->groupBy('warehouse_id') as $warehouseItems) {
+        foreach ($mergedItems->groupBy('warehouse_id') as $warehouseItems) {
             foreach ($warehouseItems->groupBy('category') as $catKey => $catItems) {
                 $cat = Item::getCategories()[$catKey] ?? ['label' => ucfirst($catKey), 'account_code' => ''];
                 foreach ($catItems as $item) {
                     $value = round((float) $item->quantity * (float) $item->unit_cost, 2);
                     $grandTotal += $value;
 
+                    // Show "Total Quantity" (all costs/expiry combined) only once per item name + warehouse
                     $key        = $item->warehouse_id . '|' . $item->description;
                     $showTotal  = ! isset($seen[$key]);
                     $seen[$key] = true;
@@ -602,10 +627,10 @@ class ReportController extends Controller
                     $sheet->setCellValue("A{$row}", $item->warehouse->name ?? '');
                     $sheet->setCellValue("B{$row}", $cat['account_code']);
                     $sheet->setCellValue("C{$row}", $cat['label']);
-                    $sheet->setCellValue("D{$row}", $item->description);
+                    $sheet->setCellValue("D{$row}", $item->description . ($item->_is_merged ? ' [MERGED]' : ''));
                     $sheet->setCellValue("E{$row}", $item->unit);
                     $sheet->setCellValue("F{$row}", $item->quantity);
-                    $sheet->setCellValue("G{$row}", $showTotal ? round((float) $totals[$key], 4) : '');
+                    $sheet->setCellValue("G{$row}", $showTotal ? round((float) ($totalQtyByNameAndWarehouse[$key] ?? 0), 4) : '');
                     $sheet->setCellValue("H{$row}", $item->unit_cost);
                     $sheet->setCellValue("I{$row}", $item->engas_unit_cost ?? '');
                     $sheet->setCellValue("J{$row}", $value);
