@@ -122,7 +122,7 @@
                                             </tr>
                                         </thead>
                                         <tbody id="ris-items-body">
-                                            {{-- rows are added by JS (risAddRow) --}}
+                                            {{-- First row added by JS on page load --}}
                                         </tbody>
                                     </table>
                                 </div>
@@ -323,6 +323,68 @@
     }
     .modal-body .line-items-table .remove-row:hover { background: #fed7d7; }
 
+    /* Custom Autocomplete Dropdown Styles */
+    .autocomplete-wrapper {
+        position: relative;
+        width: 100%;
+    }
+    .autocomplete-dropdown {
+        position: fixed;
+        max-height: 320px;
+        min-width: 300px;
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid #cbd5e0;
+        border-radius: 7px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+        display: none;
+    }
+    .autocomplete-dropdown.open {
+        display: block;
+    }
+    .autocomplete-item {
+        padding: 12px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.1s ease;
+        font-size: 14px;
+        color: #2d3748;
+    }
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+        background-color: #ebf8ff;
+        color: var(--primary);
+    }
+    .autocomplete-item .item-meta {
+        font-size: 11px;
+        color: #718096;
+        margin-top: 3px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .autocomplete-item .item-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .autocomplete-no-results {
+        padding: 16px 14px;
+        text-align: center;
+        color: #718096;
+        font-size: 13px;
+    }
+    .desc-input:focus,
+    .ris-desc-input:focus {
+        border-color: var(--primary);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    }
+
     @media (max-width: 1150px) {
         .subsidy-summary { align-items: flex-start; }
     }
@@ -372,6 +434,248 @@
 <script>
 const RIS_ITEMS_API_URL = '{{ route("requisitions.description_items") }}';
 let risRowCount = 0;
+let risAllItems = [];
+const risAutocompleteState = {};
+
+// Load items from API on page load
+fetch(RIS_ITEMS_API_URL, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+})
+.then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+.then(data => {
+    risAllItems = data;
+})
+.catch(err => {
+    console.error('Failed to load RIS items:', err);
+    risAllItems = [];
+});
+
+function risInitAutocomplete(idx) {
+    const input = document.querySelector(`input[data-ris-row-idx="${idx}"]`);
+    const dropdown = document.getElementById(`ris-autocomplete-dropdown-${idx}`);
+    
+    if (!input || !dropdown) return;
+    
+    risAutocompleteState[idx] = {
+        input: input,
+        dropdown: dropdown,
+        selectedIndex: -1,
+        filteredOptions: []
+    };
+    
+    // Position dropdown function
+    function positionDropdown() {
+        const rect = input.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const dropdownMaxHeight = 320;
+        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        
+        // Determine if dropdown should open above or below
+        const openAbove = spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow;
+        
+        if (openAbove) {
+            dropdown.style.bottom = (viewportHeight - rect.top + 5) + 'px';
+            dropdown.style.top = 'auto';
+        } else {
+            dropdown.style.top = (rect.bottom + 5) + 'px';
+            dropdown.style.bottom = 'auto';
+        }
+        
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.width = rect.width + 'px';
+    }
+    
+    // Input event - filter and show dropdown
+    input.addEventListener('input', function(e) {
+        const value = e.target.value.trim();
+        if (value.length === 0) {
+            risCloseDropdown(idx);
+            risClearItemData(idx);
+            return;
+        }
+        positionDropdown();
+        risFilterAndShowDropdown(idx, value);
+    });
+    
+    // Focus event - show dropdown if there's text
+    input.addEventListener('focus', function(e) {
+        const value = e.target.value.trim();
+        if (value.length > 0) {
+            positionDropdown();
+            risFilterAndShowDropdown(idx, value);
+        }
+    });
+    
+    // Click event - show all options
+    input.addEventListener('click', function(e) {
+        const value = e.target.value.trim();
+        if (value.length === 0 && risAllItems.length > 0) {
+            positionDropdown();
+            risFilterAndShowDropdown(idx, '');
+        }
+    });
+    
+    // Reposition on scroll
+    const modalBody = document.querySelector('.modal-body');
+    if (modalBody) {
+        modalBody.addEventListener('scroll', function() {
+            if (dropdown.classList.contains('open')) {
+                positionDropdown();
+            }
+        });
+    }
+    
+    // Reposition on window resize
+    window.addEventListener('resize', function() {
+        if (dropdown.classList.contains('open')) {
+            positionDropdown();
+        }
+    });
+    
+    // Keyboard navigation
+    input.addEventListener('keydown', function(e) {
+        const state = risAutocompleteState[idx];
+        if (!state || !state.dropdown.classList.contains('open')) return;
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            state.selectedIndex = Math.min(state.selectedIndex + 1, state.filteredOptions.length - 1);
+            risUpdateSelectedItem(idx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            state.selectedIndex = Math.max(state.selectedIndex - 1, -1);
+            risUpdateSelectedItem(idx);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (state.selectedIndex >= 0 && state.selectedIndex < state.filteredOptions.length) {
+                risSelectItem(idx, state.filteredOptions[state.selectedIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            risCloseDropdown(idx);
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            risCloseDropdown(idx);
+        }
+    });
+}
+
+function risFilterAndShowDropdown(idx, searchTerm) {
+    const state = risAutocompleteState[idx];
+    if (!state) return;
+    
+    if (risAllItems.length === 0) {
+        state.dropdown.innerHTML = '<div class="autocomplete-no-results"><i class="fas fa-hourglass-half"></i> Loading items...</div>';
+        state.dropdown.classList.add('open');
+        return;
+    }
+    
+    const lowerSearch = searchTerm.toLowerCase();
+    state.filteredOptions = risAllItems.filter(function(opt) {
+        return opt.name.toLowerCase().includes(lowerSearch) || 
+               (opt.account_code && opt.account_code.toLowerCase().includes(lowerSearch));
+    });
+    
+    state.selectedIndex = -1;
+    risRenderDropdown(idx);
+}
+
+function risRenderDropdown(idx) {
+    const state = risAutocompleteState[idx];
+    if (!state) return;
+    
+    const dropdown = state.dropdown;
+    dropdown.innerHTML = '';
+    
+    if (state.filteredOptions.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-no-results"><i class="fas fa-search"></i> No matching items found</div>';
+        dropdown.classList.add('open');
+        return;
+    }
+    
+    state.filteredOptions.forEach(function(opt, index) {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        if (index === state.selectedIndex) {
+            item.classList.add('selected');
+        }
+        
+        let metaHtml = '<div class="item-meta">';
+        if (opt.account_code) {
+            metaHtml += '<span><i class="fas fa-hashtag"></i> ' + risEscapeHtml(opt.account_code) + '</span>';
+        }
+        if (opt.unit) {
+            metaHtml += '<span><i class="fas fa-box"></i> ' + risEscapeHtml(opt.unit) + '</span>';
+        }
+        if (opt.total_stock && opt.total_stock > 0) {
+            metaHtml += '<span><i class="fas fa-warehouse"></i> Available: ' + opt.total_stock.toLocaleString() + '</span>';
+        }
+        metaHtml += '</div>';
+        
+        item.innerHTML = '<div>' + risEscapeHtml(opt.name) + '</div>' + metaHtml;
+        
+        item.addEventListener('click', function() {
+            risSelectItem(idx, opt);
+        });
+        
+        dropdown.appendChild(item);
+    });
+    
+    dropdown.classList.add('open');
+}
+
+function risUpdateSelectedItem(idx) {
+    const state = risAutocompleteState[idx];
+    if (!state) return;
+    
+    const items = state.dropdown.querySelectorAll('.autocomplete-item');
+    items.forEach(function(item, index) {
+        if (index === state.selectedIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+function risSelectItem(idx, option) {
+    const state = risAutocompleteState[idx];
+    if (!state) return;
+    
+    // Set the input value
+    state.input.value = option.name;
+    
+    // Set hidden catalog_item_id field
+    const catalogItemId = document.getElementById('ris-catalog-item-id-' + idx);
+    if (catalogItemId) catalogItemId.value = option.id;
+    
+    risCloseDropdown(idx);
+}
+
+function risClearItemData(idx) {
+    const catalogItemId = document.getElementById('ris-catalog-item-id-' + idx);
+    if (catalogItemId) catalogItemId.value = '';
+}
+
+function risCloseDropdown(idx) {
+    const state = risAutocompleteState[idx];
+    if (state && state.dropdown) {
+        state.dropdown.classList.remove('open');
+        state.selectedIndex = -1;
+    }
+}
+
+function risEscapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 function openCreateModal() {
     const m = document.getElementById('createModal');
@@ -395,7 +699,15 @@ function closeCreateModal() {
 }
 
 function onModalEsc(e) {
-    if (e.key === 'Escape') closeCreateModal();
+    if (e.key === 'Escape') {
+        // Check if any dropdown is open first
+        const anyDropdownOpen = Object.values(risAutocompleteState).some(state => 
+            state.dropdown && state.dropdown.classList.contains('open')
+        );
+        if (!anyDropdownOpen) {
+            closeCreateModal();
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -405,7 +717,12 @@ document.addEventListener('DOMContentLoaded', function() {
     overlay.addEventListener('click', function(e) {
         if (e.target === overlay) closeCreateModal();
     });
-    risAddRow();
+    
+    // Add first row after a short delay to ensure items are loaded
+    setTimeout(function() {
+        risAddRow();
+    }, 100);
+    
     risCalcTotal();
     risUpdateItemCount();
 });
@@ -430,37 +747,6 @@ function risCalcTotal() {
     if (el) el.textContent = total.toLocaleString('en-PH', { maximumFractionDigits: 2 });
 }
 
-function risBuildOptions(items) {
-    if (!items || items.length === 0) {
-        return '<option value="">— No items in Item Categories yet —</option>';
-    }
-    return items.map(function(i) {
-        return '<option value="' + i.id + '">' + i.name + '</option>';
-    }).join('');
-}
-
-/** Load the Item Categories item-name dropdown for a row. */
-function risLoadRowItems(idx) {
-    const sel = document.getElementById('ris-item-select-' + idx);
-    if (!sel) return;
-
-    sel.innerHTML = '<option value="">— Loading items… —</option>';
-    sel.disabled  = true;
-
-    fetch(RIS_ITEMS_API_URL, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
-    })
-    .then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
-    .then(data => {
-        sel.innerHTML = '<option value="">— Select Item —</option>' + risBuildOptions(data);
-        sel.disabled  = false;
-    })
-    .catch(() => {
-        sel.innerHTML = '<option value="">— Failed to load items —</option>';
-        sel.disabled  = false;
-    });
-}
-
 function risAddRow() {
     const idx = risRowCount++;
     const tbody = document.getElementById('ris-items-body');
@@ -468,23 +754,37 @@ function risAddRow() {
     tr.id = 'ris-row-' + idx;
     tr.innerHTML =
         '<td data-label="Item Description">' +
-            '<select name="items[' + idx + '][catalog_item_id]" id="ris-item-select-' + idx + '" class="form-control" required>' +
-                '<option value="">— Loading items… —</option>' +
-            '</select>' +
+            '<div class="autocomplete-wrapper" id="ris-autocomplete-wrapper-' + idx + '">' +
+                '<input type="text" class="form-control ris-desc-input" placeholder="Type item description..." required autocomplete="off" data-ris-row-idx="' + idx + '">' +
+                '<div class="autocomplete-dropdown" id="ris-autocomplete-dropdown-' + idx + '"></div>' +
+            '</div>' +
+            '<input type="hidden" name="items[' + idx + '][catalog_item_id]" id="ris-catalog-item-id-' + idx + '">' +
         '</td>' +
         '<td data-label="Requested Quantity">' +
             '<input type="number" name="items[' + idx + '][quantity_requested]" id="ris-qty-' + idx + '" class="ris-qty-input form-control" min="0.01" step="0.01" placeholder="e.g. 500" oninput="risCalcTotal()" required>' +
         '</td>' +
         '<td><button type="button" class="remove-row" onclick="risRemoveRow(\'ris-row-' + idx + '\')"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);
-    risLoadRowItems(idx);
+    
     risUpdateItemCount();
+    
+    // Initialize autocomplete for the new row
+    setTimeout(function() {
+        risInitAutocomplete(idx);
+    }, 50);
 }
 
 function risRemoveRow(id) {
     if (document.querySelectorAll('#ris-items-body tr').length > 1) {
         var row = document.getElementById(id);
-        if (row) row.remove();
+        if (row) {
+            // Extract row index and clean up state
+            const idx = id.replace('ris-row-', '');
+            if (risAutocompleteState[idx]) {
+                delete risAutocompleteState[idx];
+            }
+            row.remove();
+        }
         risCalcTotal();
         risUpdateItemCount();
     }

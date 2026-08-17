@@ -14,7 +14,6 @@ class ItemCatalogItemController extends Controller
         $request->validate([
             'item_category_id' => 'required|exists:item_categories,id',
             'name'             => 'required|string|max:255',
-            'account_code'     => 'required|string|max:50',
         ]);
 
         $category = ItemCategory::findOrFail($request->item_category_id);
@@ -25,10 +24,11 @@ class ItemCatalogItemController extends Controller
                 ->where('item_category_id', $category->id),
         ], ['name.unique' => 'That item name already exists under this category.']);
 
+        // Automatically inherit account code from the parent category
         ItemCatalogItem::create([
             'item_category_id' => $category->id,
             'name'             => $request->name,
-            'account_code'     => $request->account_code,
+            'account_code'     => $category->account_code,
             'is_active'        => true,
         ]);
 
@@ -39,7 +39,6 @@ class ItemCatalogItemController extends Controller
     {
         $request->validate([
             'name'         => 'required|string|max:255',
-            'account_code' => 'required|string|max:50',
             'is_active'    => 'nullable|boolean',
         ]);
 
@@ -49,9 +48,10 @@ class ItemCatalogItemController extends Controller
                 ->ignore($catalogItem->id),
         ], ['name.unique' => 'That item name already exists under this category.']);
 
+        // Automatically inherit account code from the parent category
         $catalogItem->update([
             'name'         => $request->name,
-            'account_code' => $request->account_code,
+            'account_code' => $catalogItem->category->account_code,
             'is_active'    => $request->boolean('is_active', $catalogItem->is_active),
         ]);
 

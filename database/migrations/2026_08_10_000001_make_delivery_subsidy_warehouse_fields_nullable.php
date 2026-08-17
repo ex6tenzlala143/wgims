@@ -23,7 +23,8 @@ return new class extends Migration {
         });
 
         Schema::table('delivery_subsidy_items', function (Blueprint $table) {
-            $table->dropForeign(['item_id']);
+            // Check if foreign key exists before dropping (legacy name from old schema)
+            $table->dropForeign('purchase_order_items_item_id_foreign');
             $table->unsignedBigInteger('item_id')->nullable()->change();
             $table->foreign('item_id')->references('id')->on('items')->nullOnDelete();
 
@@ -59,9 +60,10 @@ return new class extends Migration {
             $table->dropColumn(['description', 'unit', 'category']);
             $table->decimal('amount', 15, 2)->change();
             $table->decimal('unit_cost', 15, 2)->change();
-            $table->dropForeign(['item_id']);
+            // Only drop the foreign key constraint, MySQL will handle the index
+            DB::statement('ALTER TABLE delivery_subsidy_items DROP FOREIGN KEY IF EXISTS delivery_subsidy_items_item_id_foreign');
             $table->unsignedBigInteger('item_id')->change();
-            $table->foreign('item_id')->references('id')->on('items')->cascadeOnDelete();
+            $table->foreign('item_id', 'purchase_order_items_item_id_foreign')->references('id')->on('items')->cascadeOnDelete();
         });
 
         Schema::table('delivery_subsidies', function (Blueprint $table) {

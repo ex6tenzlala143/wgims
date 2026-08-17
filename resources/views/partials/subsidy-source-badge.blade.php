@@ -2,12 +2,16 @@
      or archived.
 
      Params:
-     $status  - 'deleted' | 'archived' | null
+     $status  - 'deleted' | 'archived' | 'active' | null
      $ris     - Subsidy/RIS reference (string|null)
      $dr      - Subsidy DR reference (string|null)
      $prefix  - 'FROM' (items) or 'RELATED TO' (transfers / requisitions)
+
+     Note: 'active' status means the item was previously from an archived subsidy
+     that has since been restored. We don't show a badge for this because it's
+     no longer a concern.
 --}}
-@if($status)
+@if($status && in_array($status, ['deleted', 'archived']))
 @php
     $isDeleted = $status === 'deleted';
     $label     = strtoupper((string) $status);

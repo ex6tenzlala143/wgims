@@ -112,21 +112,15 @@
                                         <tbody id="items-body">
                                             <tr id="row-0">
                                                 <td data-label="Description">
-                                                    <input type="text" name="items[0][description]"
-                                                        class="form-control desc-input" list="items-datalist-0"
-                                                        placeholder="Type item description..." required
-                                                        oninput="onDescInput(this, 0)" autocomplete="off"
-                                                        style="color:#000;background:#fff">
-                                                    <datalist id="items-datalist-0">
-                                                        @foreach($datalistOptions as $opt)
-                                                        <option value="{{ $opt['name'] }}"
-                                                            data-source="{{ $opt['source'] }}"
-                                                            data-id="{{ $opt['id'] }}"
-                                                            data-account-code="{{ $opt['account_code'] }}"
-                                                            data-category="{{ $opt['category'] }}"
-                                                            data-unit="{{ $opt['unit'] }}">
-                                                        @endforeach
-                                                    </datalist>
+                                                    <div class="autocomplete-wrapper" id="autocomplete-wrapper-0">
+                                                        <input type="text" name="items[0][description]"
+                                                            class="form-control desc-input"
+                                                            placeholder="Type item description..." required
+                                                            autocomplete="off"
+                                                            style="color:#000;background:#fff"
+                                                            data-row-idx="0">
+                                                        <div class="autocomplete-dropdown" id="autocomplete-dropdown-0"></div>
+                                                    </div>
                                                     <input type="hidden" name="items[0][item_id]" id="item-id-0">
                                                     <input type="hidden" name="items[0][catalog_item_id]" id="catalog-item-id-0">
                                                     <input type="hidden" name="items[0][account_code]" id="account-code-0">
@@ -353,6 +347,59 @@
     }
     .modal-body .line-items-table .remove-row:hover { background: #fed7d7; }
 
+    /* Custom Autocomplete Dropdown Styles */
+    .autocomplete-wrapper {
+        position: relative;
+        width: 100%;
+    }
+    .autocomplete-dropdown {
+        position: fixed;
+        max-height: 320px;
+        min-width: 300px;
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid #cbd5e0;
+        border-radius: 7px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+        display: none;
+    }
+    .autocomplete-dropdown.open {
+        display: block;
+    }
+    .autocomplete-item {
+        padding: 12px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.1s ease;
+        font-size: 14px;
+        color: #2d3748;
+    }
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+        background-color: #ebf8ff;
+        color: var(--primary);
+    }
+    .autocomplete-item .item-category {
+        font-size: 11px;
+        color: #718096;
+        margin-top: 2px;
+    }
+    .autocomplete-no-results {
+        padding: 16px 14px;
+        text-align: center;
+        color: #718096;
+        font-size: 13px;
+    }
+    .desc-input:focus {
+        border-color: var(--primary);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    }
+
     @media (max-width: 1150px) {
         .subsidy-summary { align-items: flex-start; }
     }
@@ -406,15 +453,243 @@ const categoryCodes = {!! json_encode($categoryCodes) !!};
 const unitOptions = {!! json_encode($unitOptionsHtml) !!};
 const catOptions  = {!! json_encode($catOptionsHtml) !!};
 
-function optionHtml(idx) {
-    return allOptions.map(function(o) {
-        return '<option value="' + o.name + '"' +
-            ' data-source="' + o.source + '"' +
-            ' data-id="' + (o.id || '') + '"' +
-            ' data-account-code="' + (o.account_code || '') + '"' +
-            ' data-category="' + (o.category || '') + '"' +
-            ' data-unit="' + (o.unit || '') + '">';
-    }).join('');
+// Autocomplete state management
+const autocompleteState = {};
+
+function initAutocomplete(idx) {
+    const input = document.querySelector(`input[data-row-idx="${idx}"]`);
+    const dropdown = document.getElementById(`autocomplete-dropdown-${idx}`);
+    
+    if (!input || !dropdown) return;
+    
+    autocompleteState[idx] = {
+        input: input,
+        dropdown: dropdown,
+        selectedIndex: -1,
+        filteredOptions: []
+    };
+    
+    // Position dropdown function
+    function positionDropdown() {
+        const rect = input.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const dropdownMaxHeight = 320;
+        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        
+        // Determine if dropdown should open above or below
+        const openAbove = spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow;
+        
+        if (openAbove) {
+            dropdown.style.bottom = (viewportHeight - rect.top + 5) + 'px';
+            dropdown.style.top = 'auto';
+        } else {
+            dropdown.style.top = (rect.bottom + 5) + 'px';
+            dropdown.style.bottom = 'auto';
+        }
+        
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.width = rect.width + 'px';
+    }
+    
+    // Input event - filter and show dropdown
+    input.addEventListener('input', function(e) {
+        const value = e.target.value.trim();
+        if (value.length === 0) {
+            closeDropdown(idx);
+            clearItemData(idx);
+            return;
+        }
+        positionDropdown();
+        filterAndShowDropdown(idx, value);
+    });
+    
+    // Focus event - show dropdown if there's text
+    input.addEventListener('focus', function(e) {
+        const value = e.target.value.trim();
+        if (value.length > 0) {
+            positionDropdown();
+            filterAndShowDropdown(idx, value);
+        }
+    });
+    
+    // Click event - show all options
+    input.addEventListener('click', function(e) {
+        positionDropdown();
+        const value = e.target.value.trim();
+        if (value.length === 0) {
+            filterAndShowDropdown(idx, '');
+        }
+    });
+    
+    // Reposition on scroll
+    const modalBody = document.querySelector('.modal-body');
+    if (modalBody) {
+        modalBody.addEventListener('scroll', function() {
+            if (dropdown.classList.contains('open')) {
+                positionDropdown();
+            }
+        });
+    }
+    
+    // Reposition on window resize
+    window.addEventListener('resize', function() {
+        if (dropdown.classList.contains('open')) {
+            positionDropdown();
+        }
+    });
+    
+    // Keyboard navigation
+    input.addEventListener('keydown', function(e) {
+        const state = autocompleteState[idx];
+        if (!state || !state.dropdown.classList.contains('open')) return;
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            state.selectedIndex = Math.min(state.selectedIndex + 1, state.filteredOptions.length - 1);
+            updateSelectedItem(idx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            state.selectedIndex = Math.max(state.selectedIndex - 1, -1);
+            updateSelectedItem(idx);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (state.selectedIndex >= 0 && state.selectedIndex < state.filteredOptions.length) {
+                selectItem(idx, state.filteredOptions[state.selectedIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeDropdown(idx);
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            closeDropdown(idx);
+        }
+    });
+}
+
+function filterAndShowDropdown(idx, searchTerm) {
+    const state = autocompleteState[idx];
+    if (!state) return;
+    
+    const lowerSearch = searchTerm.toLowerCase();
+    state.filteredOptions = allOptions.filter(function(opt) {
+        return opt.name.toLowerCase().includes(lowerSearch);
+    });
+    
+    state.selectedIndex = -1;
+    renderDropdown(idx);
+}
+
+function renderDropdown(idx) {
+    const state = autocompleteState[idx];
+    if (!state) return;
+    
+    const dropdown = state.dropdown;
+    dropdown.innerHTML = '';
+    
+    if (state.filteredOptions.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-no-results"><i class="fas fa-search"></i> No matching items found</div>';
+        dropdown.classList.add('open');
+        return;
+    }
+    
+    state.filteredOptions.forEach(function(opt, index) {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        if (index === state.selectedIndex) {
+            item.classList.add('selected');
+        }
+        
+        const categoryLabel = getCategoryLabel(opt.category);
+        item.innerHTML = '<div>' + escapeHtml(opt.name) + '</div>' +
+            '<div class="item-category">' + escapeHtml(categoryLabel) + '</div>';
+        
+        item.addEventListener('click', function() {
+            selectItem(idx, opt);
+        });
+        
+        dropdown.appendChild(item);
+    });
+    
+    dropdown.classList.add('open');
+}
+
+function updateSelectedItem(idx) {
+    const state = autocompleteState[idx];
+    if (!state) return;
+    
+    const items = state.dropdown.querySelectorAll('.autocomplete-item');
+    items.forEach(function(item, index) {
+        if (index === state.selectedIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+function selectItem(idx, option) {
+    const state = autocompleteState[idx];
+    if (!state) return;
+    
+    // Set the input value
+    state.input.value = option.name;
+    
+    // Set hidden fields
+    const itemId  = document.getElementById('item-id-' + idx);
+    const catId   = document.getElementById('catalog-item-id-' + idx);
+    const acct    = document.getElementById('account-code-' + idx);
+    const unitSel = document.getElementById('unit-' + idx);
+    const catSel  = document.getElementById('category-' + idx);
+    
+    if (option.source === 'catalog') {
+        if (itemId) itemId.value = '';
+        if (catId) catId.value = option.id;
+        if (acct) acct.value = option.account_code || '';
+        if (catSel) catSel.value = option.category || '';
+    } else {
+        if (catId) catId.value = '';
+        if (itemId) itemId.value = option.id;
+        if (acct) acct.value = categoryCodes[option.category] || option.account_code || '';
+        if (unitSel) unitSel.value = option.unit || '';
+        if (catSel) catSel.value = option.category || '';
+    }
+    
+    closeDropdown(idx);
+}
+
+function clearItemData(idx) {
+    const itemId = document.getElementById('item-id-' + idx);
+    const catId = document.getElementById('catalog-item-id-' + idx);
+    const acct = document.getElementById('account-code-' + idx);
+    
+    if (itemId) itemId.value = '';
+    if (catId) catId.value = '';
+    if (acct) acct.value = '';
+}
+
+function closeDropdown(idx) {
+    const state = autocompleteState[idx];
+    if (state && state.dropdown) {
+        state.dropdown.classList.remove('open');
+        state.selectedIndex = -1;
+    }
+}
+
+function getCategoryLabel(key) {
+    const categories = {!! json_encode(collect(App\Models\Item::getCategories())->mapWithKeys(fn($c, $k) => [$k => $c['label']])) !!};
+    return categories[key] || key || 'Unknown';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function openCreateModal() {
@@ -439,7 +714,15 @@ function closeCreateModal() {
 }
 
 function onModalEsc(e) {
-    if (e.key === 'Escape') closeCreateModal();
+    if (e.key === 'Escape') {
+        // Check if any dropdown is open first
+        const anyDropdownOpen = Object.values(autocompleteState).some(state => 
+            state.dropdown && state.dropdown.classList.contains('open')
+        );
+        if (!anyDropdownOpen) {
+            closeCreateModal();
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -451,6 +734,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     calcTotal();
     updateItemCount();
+    
+    // Initialize autocomplete for row 0
+    initAutocomplete(0);
 });
 
 @if($errors->any() && !$modalOnlyPage)
@@ -471,8 +757,10 @@ function addRow() {
     tr.id = 'row-' + idx;
     tr.innerHTML =
         '<td data-label="Description">' +
-            '<input type="text" name="items[' + idx + '][description]" class="form-control desc-input" list="items-datalist-' + idx + '" placeholder="Type or pick item name..." required oninput="onDescInput(this,' + idx + ')" autocomplete="off" style="color:#000;background:#fff">' +
-            '<datalist id="items-datalist-' + idx + '">' + optionHtml(idx) + '</datalist>' +
+            '<div class="autocomplete-wrapper" id="autocomplete-wrapper-' + idx + '">' +
+                '<input type="text" name="items[' + idx + '][description]" class="form-control desc-input" placeholder="Type or pick item name..." required autocomplete="off" style="color:#000;background:#fff" data-row-idx="' + idx + '">' +
+                '<div class="autocomplete-dropdown" id="autocomplete-dropdown-' + idx + '"></div>' +
+            '</div>' +
             '<input type="hidden" name="items[' + idx + '][item_id]" id="item-id-' + idx + '">' +
             '<input type="hidden" name="items[' + idx + '][catalog_item_id]" id="catalog-item-id-' + idx + '">' +
             '<input type="hidden" name="items[' + idx + '][account_code]" id="account-code-' + idx + '">' +
@@ -483,36 +771,11 @@ function addRow() {
         '<td><button type="button" class="remove-row" onclick="removeRow(\'row-' + idx + '\')"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);
     updateItemCount();
-}
-
-function onDescInput(input, idx) {
-    var val   = input.value.trim().toLowerCase();
-    var match = allOptions.find(function(o) { return o.name.toLowerCase() === val; });
-
-    var itemId  = document.getElementById('item-id-' + idx);
-    var catId   = document.getElementById('catalog-item-id-' + idx);
-    var acct    = document.getElementById('account-code-' + idx);
-    var unitSel = document.getElementById('unit-' + idx);
-    var catSel  = document.getElementById('category-' + idx);
-
-    if (match) {
-        if (match.source === 'catalog') {
-            itemId.value = '';
-            catId.value  = match.id;
-            if (acct) acct.value = match.account_code || '';
-            if (catSel) catSel.value = match.category || '';
-        } else {
-            catId.value  = '';
-            itemId.value = match.id;
-            if (acct) acct.value = categoryCodes[match.category] || match.account_code || '';
-            if (unitSel) unitSel.value = match.unit || '';
-            if (catSel) catSel.value = match.category || '';
-        }
-    } else {
-        itemId.value = '';
-        catId.value  = '';
-        if (acct) acct.value = '';
-    }
+    
+    // Initialize autocomplete for the new row
+    setTimeout(function() {
+        initAutocomplete(idx);
+    }, 50);
 }
 
 function calcTotal() {
@@ -524,7 +787,14 @@ function calcTotal() {
 function removeRow(id) {
     if (document.querySelectorAll('#items-body tr').length > 1) {
         var row = document.getElementById(id);
-        if (row) row.remove();
+        if (row) {
+            // Extract row index and clean up state
+            const idx = id.replace('row-', '');
+            if (autocompleteState[idx]) {
+                delete autocompleteState[idx];
+            }
+            row.remove();
+        }
         calcTotal();
         updateItemCount();
     }

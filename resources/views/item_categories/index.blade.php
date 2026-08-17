@@ -203,19 +203,17 @@
                                 <form action="{{ route('item_catalog_items.store') }}" method="POST" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">
                                     @csrf
                                     <input type="hidden" name="item_category_id" value="{{ $cat->id }}">
-                                    <div style="flex:2;min-width:220px">
+                                    <div style="flex:1;min-width:300px">
                                         <label class="form-label" style="font-size:12px">Item Name / Description <span style="color:red">*</span></label>
-                                        <input type="text" name="name" class="form-control" placeholder="e.g. Bond Paper A4" value="{{ old('item_category_id') == $cat->id ? old('name') : '' }}" required>
-                                    </div>
-                                    <div style="flex:1;min-width:160px">
-                                        <label class="form-label" style="font-size:12px">Account Code <span style="color:red">*</span></label>
-                                        <input type="text" name="account_code" class="form-control" placeholder="e.g. 101-001" value="{{ old('item_category_id') == $cat->id ? old('account_code') : '' }}" required>
+                                        <input type="text" name="name" class="form-control" placeholder="e.g. Bond Paper A4 (Account Code: {{ $cat->account_code }})" value="{{ old('item_category_id') == $cat->id ? old('name') : '' }}" required>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                                            <i class="fas fa-info-circle"></i> Account Code will automatically inherit from category: <strong>{{ $cat->account_code }}</strong>
+                                        </div>
                                     </div>
                                     <button type="submit" class="btn btn-sm btn-primary" style="margin-bottom:2px"><i class="fas fa-plus"></i> Add Item Name</button>
                                 </form>
                                 @if(old('item_category_id') == $cat->id)
                                     @error('name')<div style="color:var(--danger);font-size:12px;margin-bottom:6px">{{ $message }}</div>@enderror
-                                    @error('account_code')<div style="color:var(--danger);font-size:12px;margin-bottom:6px">{{ $message }}</div>@enderror
                                 @endif
 
                                 {{-- Item name list --}}
@@ -251,7 +249,7 @@
                                                 <td>
                                                     <div style="display:flex;gap:4px">
                                                         <button type="button" class="btn btn-sm btn-outline btn-icon" title="Edit"
-                                                                onclick="openCatalogEdit({{ $ci->id }}, {{ $cat->id }}, {{ json_encode($ci->name) }}, {{ json_encode($ci->account_code) }}, {{ $ci->is_active ? 'true' : 'false' }})">
+                                                                onclick="openCatalogEdit({{ $ci->id }}, {{ $cat->id }}, {{ json_encode($ci->name) }}, {{ $ci->is_active ? 'true' : 'false' }})">
                                                             <i class="fas fa-edit"></i>
                                                         </button>
                                                         <form action="{{ route('item_catalog_items.destroy', $ci->id) }}" method="POST" style="display:inline"
@@ -275,13 +273,12 @@
                                     @csrf @method('PUT')
                                     <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--primary)"><i class="fas fa-edit"></i> Edit Item Name</div>
                                     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-                                        <div style="flex:2;min-width:220px">
+                                        <div style="flex:1;min-width:280px">
                                             <label class="form-label" style="font-size:12px">Item Name / Description</label>
                                             <input type="text" name="name" class="form-control catalog-edit-name" required>
-                                        </div>
-                                        <div style="flex:1;min-width:160px">
-                                            <label class="form-label" style="font-size:12px">Account Code</label>
-                                            <input type="text" name="account_code" class="form-control catalog-edit-code" required>
+                                            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                                                <i class="fas fa-info-circle"></i> Account Code: <strong>{{ $cat->account_code }}</strong> (automatically inherited from category)
+                                            </div>
                                         </div>
                                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-bottom:8px">
                                             <input type="checkbox" name="is_active" value="1" class="catalog-edit-active" style="width:15px;height:15px"> Active
@@ -341,12 +338,11 @@ function toggleCatalog(id) {
     row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 
-function openCatalogEdit(id, catId, name, code, isActive) {
+function openCatalogEdit(id, catId, name, isActive) {
     const form = document.getElementById('catalog-edit-form-' + catId);
     if (!form) return;
     form.action = catalogEditRouteBase + '/' + id;
     form.querySelector('.catalog-edit-name').value   = name;
-    form.querySelector('.catalog-edit-code').value   = code;
     form.querySelector('.catalog-edit-active').checked = isActive;
     form.style.display = '';
     form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

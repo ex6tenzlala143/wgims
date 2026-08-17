@@ -181,8 +181,11 @@ class Item extends Model
      * triggered by snapshot bookkeeping. The subsidy id may be null when the
      * subsidy row is already gone (nullOnDelete) — the RIS/DR/status snapshots
      * still carry the trail.
+     * 
+     * When $status is null, we're clearing the marker (e.g., when restoring an
+     * archived subsidy, we remove the warning badge).
      */
-    public function applySubsidySnapshot(?int $subsidyId, ?string $ris, ?string $dr, string $status): void
+    public function applySubsidySnapshot(?int $subsidyId, ?string $ris, ?string $dr, ?string $status): void
     {
         static::whereKey($this->id)->update([
             'source_subsidy_id'     => $subsidyId,

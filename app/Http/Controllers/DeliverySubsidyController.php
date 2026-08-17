@@ -1067,9 +1067,9 @@ class DeliverySubsidyController extends Controller
      * Sync the source-subsidy snapshot on every Item delivered by the given
      * Subsidy AND on every Item that received that stock through a Stock
      * Transfer (including multi-hop chains), so the marker follows the stock
-     * across warehouses. 'active' only re-activates items this subsidy
-     * previously marked 'archived' — a restore must never clobber another
-     * subsidy's flag.
+     * across warehouses. When restoring an archived subsidy, we clear the
+     * 'archived' flag (set to null) instead of marking it as 'active', since
+     * 'active' is confusing and looks like a warning.
      */
     private function markItemsWithSubsidyState(DeliverySubsidy $deliverySubsidy, string $state): void
     {
@@ -1078,10 +1078,21 @@ class DeliverySubsidyController extends Controller
         );
 
         foreach (Item::whereIn('id', $lineageIds)->get() as $item) {
-            if ($state === 'active' && $item->source_subsidy_status !== 'archived') {
+            // When restoring (state = 'active'), only clear items that this subsidy previously archived
+            if ($state === 'active') {
+                if ($item->source_subsidy_status === 'archived' && $item->source_subsidy_id === $deliverySubsidy->id) {
+                    // Clear the archived status by setting to null
+                    $item->applySubsidySnapshot(
+                        $deliverySubsidy->id,
+                        $deliverySubsidy->ris_number,
+                        $deliverySubsidy->dr_number,
+                        null
+                    );
+                }
                 continue;
             }
 
+            // For deleted/archived states, apply the status
             $item->applySubsidySnapshot(
                 $deliverySubsidy->id,
                 $deliverySubsidy->ris_number,
