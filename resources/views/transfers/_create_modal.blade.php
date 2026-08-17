@@ -219,6 +219,7 @@
         padding: 14px 24px;
         border-top: 1px solid var(--border);
         background: #ffffff;
+        flex-wrap: wrap;
     }
     body.modal-open { overflow: hidden; }
 
@@ -227,11 +228,13 @@
     .transfer-modal .form-section:last-child { margin-bottom: 0; }
     .transfer-modal .table-wrapper {
         max-height: calc(100vh - 480px);
+        overflow-x: auto;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }
     .transfer-modal .line-items-table {
         width: 100%;
+        min-width: 900px;
         border-collapse: separate;
         border-spacing: 0;
     }
@@ -242,6 +245,7 @@
         background: var(--surface-soft, #f7fafc);
         box-shadow: 0 1px 0 var(--border);
         padding: 12px 14px;
+        white-space: nowrap;
     }
     .transfer-modal .line-items-table th,
     .transfer-modal .line-items-table td {
@@ -257,6 +261,7 @@
     .transfer-modal .line-items-table input[type="number"],
     .transfer-modal .line-items-table select {
         width: 100%;
+        min-width: 120px;
         padding: 10px 12px;
         font-size: 13px;
         border-radius: 6px;
@@ -280,43 +285,135 @@
         font-size: 15px;
         cursor: pointer;
         transition: all 0.15s;
+        flex-shrink: 0;
     }
     .transfer-modal .line-items-table .remove-row:hover { background: #fed7d7; }
     
-    @media (max-width: 820px) {
-        .transfer-modal .line-items-table,
-        .transfer-modal .line-items-table tbody,
-        .transfer-modal .line-items-table tr,
-        .transfer-modal .line-items-table td {
-            display: block;
-            width: 100%;
+    /* Tablet responsive */
+    @media (max-width: 1024px) {
+        .transfer-modal .table-wrapper {
+            max-height: calc(100vh - 520px);
         }
-        .transfer-modal .line-items-table thead { display: none; }
-        .transfer-modal .line-items-table tr {
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 14px;
-            background: #ffffff;
-        }
-        .transfer-modal .line-items-table td { padding: 8px 4px; border: none; }
-        .transfer-modal .line-items-table td::before {
-            content: attr(data-label);
-            display: block;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
+        .transfer-modal .line-items-table {
+            min-width: 800px;
         }
     }
+    
+    /* Mobile responsive */
+    @media (max-width: 820px) {
+        /* Stack the card header content */
+        .transfer-modal .card-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+        }
+        
+        .transfer-modal .card-header h3 {
+            margin: 0;
+        }
+        
+        .transfer-modal .card-header .btn {
+            width: 100%;
+            justify-content: center;
+        }
+        
+        /* Make table scrollable but keep structure */
+        .transfer-modal .table-wrapper {
+            max-height: none;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 -16px;
+            padding: 0 16px;
+        }
+        
+        .transfer-modal .line-items-table {
+            min-width: 700px;
+            font-size: 12px;
+        }
+        
+        .transfer-modal .line-items-table th,
+        .transfer-modal .line-items-table td {
+            padding: 10px 8px;
+        }
+        
+        .transfer-modal .line-items-table input[type="text"],
+        .transfer-modal .line-items-table input[type="number"],
+        .transfer-modal .line-items-table select {
+            min-width: 100px;
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+        
+        /* Stack form rows */
+        .transfer-modal .form-row.cols-2 {
+            display: block;
+        }
+        
+        .transfer-modal .form-row.cols-2 .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .transfer-modal .form-row.cols-2 .form-group:last-child {
+            margin-bottom: 0;
+        }
+    }
+    
+    /* Small mobile phones */
     @media (max-width: 640px) {
-        .modal-overlay { padding: 10px; }
-        .modal-shell { width: 100%; height: calc(100vh - 20px); max-height: calc(100vh - 20px); }
-        .modal-header { padding: 12px 16px; }
-        .modal-body { padding: 14px; }
-        .modal-footer { padding: 12px 16px; }
+        .modal-overlay { 
+            padding: 10px;
+            align-items: stretch;
+        }
+        .modal-shell { 
+            width: 100%; 
+            height: 100vh;
+            max-height: 100vh;
+            border-radius: 0;
+        }
+        .modal-header { 
+            padding: 12px 16px;
+        }
+        .modal-header h2 {
+            font-size: 16px;
+        }
+        .modal-subtitle {
+            font-size: 11px;
+        }
+        .modal-body { 
+            padding: 12px;
+        }
+        .modal-footer { 
+            padding: 12px 16px;
+        }
+        .modal-footer .btn {
+            flex: 1;
+            justify-content: center;
+        }
+        
+        /* Improve touch targets */
+        .transfer-modal .line-items-table input[type="text"],
+        .transfer-modal .line-items-table input[type="number"],
+        .transfer-modal .line-items-table select {
+            min-height: 44px;
+        }
+        
+        .transfer-modal .line-items-table .remove-row {
+            min-width: 44px;
+            min-height: 44px;
+        }
+    }
+    
+    /* Very small screens */
+    @media (max-width: 375px) {
+        .transfer-modal .line-items-table {
+            min-width: 650px;
+            font-size: 11px;
+        }
+        
+        .transfer-modal .line-items-table th,
+        .transfer-modal .line-items-table td {
+            padding: 8px 6px;
+        }
     }
 </style>
 @endpush
