@@ -355,6 +355,67 @@
         .form-section-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--primary); margin: 6px 0 16px; padding-bottom: 6px; border-bottom: 1px dashed var(--border); }
         .form-section-label i { color: var(--primary); }
 
+        /* ── Searchable selects (combobox) ─────────────────────────────────── */
+        .ss { position: relative; display: inline-flex; padding: 0 !important; background: transparent; vertical-align: middle; }
+        .ss .ss-native { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; opacity: 0; pointer-events: none; }
+        .ss .ss-btn {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            width: 100%; min-height: 38px; padding: 9px 12px;
+            background: var(--input-bg); border: none; border-radius: 5px;
+            font-size: 14px; color: var(--text); cursor: pointer; text-align: left;
+            font-family: inherit;
+        }
+        .ss .ss-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ss .ss-value.ss-placeholder { color: var(--text-muted); }
+        .ss .ss-caret { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+        .ss:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1); }
+        .ss .ss-btn:hover { color: var(--primary); }
+        .ss.ss-disabled { opacity: 0.6; }
+        .ss.ss-disabled .ss-btn { cursor: not-allowed; }
+        .ss.ss-invalid { border-color: var(--danger); }
+        .ss:has(.ss-native:invalid) { border-color: var(--danger); }
+        .ss:has(.ss-native:invalid:focus) { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1); }
+
+        /* combobox inside line-item tables */
+        .line-items-table .ss { width: 100%; min-width: 120px; }
+        .line-items-table .ss .ss-btn { padding: 10px 12px; font-size: 13px; }
+
+        /* combobox panel (portal to <body>) */
+        .ss-panel {
+            position: fixed;
+            z-index: 1500;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 10px 34px rgba(2, 6, 23, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .ss-panel .ss-search-wrap { padding: 6px; border-bottom: 1px solid var(--border); background: #f8fafc; flex-shrink: 0; }
+        .ss-panel .ss-search {
+            width: 100%; box-sizing: border-box;
+            padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+            font-size: 13px; outline: none; background: #fff; color: var(--text);
+        }
+        .ss-panel .ss-search:focus { border-color: var(--primary); }
+        .ss-panel .ss-list { margin: 0; padding: 6px; list-style: none; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+        .ss-panel .ss-item {
+            padding: 8px 10px; border-radius: 6px; font-size: 13px; color: var(--text);
+            cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ss-panel .ss-item:hover, .ss-panel .ss-item.active { background: var(--primary); color: #fff; }
+        .ss-panel .ss-item.disabled { color: var(--text-muted); cursor: not-allowed; background: transparent; }
+        .ss-panel .ss-empty { padding: 14px 12px; font-size: 12px; color: var(--text-muted); text-align: center; }
+        .ss-panel .ss-more { padding: 8px 12px; font-size: 11px; color: var(--text-muted); text-align: center; flex-shrink: 0; }
+
+        @media (max-width: 820px) {
+            .line-items-table .ss .ss-btn { padding: 8px 10px; font-size: 12px; }
+        }
+        @media (max-width: 640px) {
+            .line-items-table .ss .ss-btn { min-height: 44px; }
+        }
+
         /* ── Requisition line-item cards ──────────────────────────────────── */
         .ris-item-card {
             background: #fafbfd;
@@ -519,11 +580,48 @@
         .filter-row .form-control { width: auto; min-width: 150px; }
 
         /* ── Pagination ───────────────────────────────────────────────────── */
-        .pagination { display: flex; gap: 4px; align-items: center; justify-content: center; padding: 16px; }
-        .pagination a, .pagination span { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; text-decoration: none; color: var(--text); }
-        .pagination a:hover { background: var(--surface-hover); }
-        .pagination .active { background: var(--primary); color: #fff; border-color: var(--primary); }
-        .pagination .disabled { color: var(--text-muted); cursor: not-allowed; }
+        .pagination {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            max-width: 100%;
+        }
+        .pagination .page-item { margin: 0; padding: 0; list-style: none; }
+        .pagination .page-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            min-height: 36px;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface);
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1;
+            white-space: nowrap;
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+        .pagination a.page-link:hover { background: var(--surface-hover); border-color: var(--primary); color: var(--primary); }
+        .pagination .page-item.active .page-link { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; box-shadow: 0 1px 4px rgba(2, 132, 199, 0.35); }
+        .pagination .page-item.disabled .page-link { background: var(--surface-soft); color: var(--text-muted); cursor: not-allowed; }
+        .pagination-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .pagination-summary { font-size: 12px; color: var(--text-muted); }
+
+        /* ── Pagination responsive ─────────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .pagination { gap: 4px; }
+            .pagination .page-link { min-width: 32px; min-height: 32px; padding: 4px 9px; font-size: 12px; }
+            .pagination-summary { font-size: 11px; }
+        }
 
         /* ── Line items table ─────────────────────────────────────────────── */
         .line-items-table { width: 100%; border-collapse: collapse; }
@@ -887,6 +985,320 @@
         if (!isNotifPage) {
             notifInterval = setInterval(loadNotifications, 30000);
         }
+    </script>
+
+    <script>
+    // ── Global searchable select component (combobox) ──────────────────────
+    // Enhances every <select> into a writable/searchable dropdown. The native
+    // select stays in the DOM (hidden) so form submission, validation and all
+    // existing onchange handlers keep working unchanged.
+    (function () {
+        'use strict';
+
+        if (!window.HTMLSelectElement || window.__ssLoaded) return;
+        window.__ssLoaded = true;
+
+        var nativeValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+        if (nativeValue && nativeValue.set) {
+            Object.defineProperty(HTMLSelectElement.prototype, 'value', {
+                configurable: true,
+                enumerable: true,
+                get: function () { return nativeValue.get.call(this); },
+                set: function (v) {
+                    nativeValue.set.call(this, v);
+                    if (this.ss && typeof this.ss.sync === 'function') this.ss.sync();
+                }
+            });
+        }
+
+        var MAX_RENDER = 100;
+        var instances  = [];
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function closeAll(except) {
+            instances.forEach(function (inst) {
+                if (inst !== except && inst.open) inst.close();
+            });
+        }
+
+        function repositionAll() {
+            instances.forEach(function (inst) {
+                if (inst.open) inst.position();
+            });
+        }
+
+        function SearchableSelect(select) {
+            this.select  = select;
+            this.wrapper  = null;
+            this.btn      = null;
+            this.valueEl  = null;
+            this.panel    = null;
+            this.search   = null;
+            this.list     = null;
+            this.highlight = -1;
+            this.term     = '';
+            this.open     = false;
+            this.matches  = [];
+            select.ss = this;
+            instances.push(this);
+            this.build();
+        }
+
+        SearchableSelect.prototype.build = function () {
+            var self = this, s = this.select;
+
+            this.wrapper = document.createElement('div');
+            var classes = (s.className || '').replace(/\bform-control\b/g, '').replace(/\s+/g, ' ').trim();
+            this.wrapper.className = 'ss form-control' + (classes ? ' ' + classes : '');
+
+            if (s.getAttribute('style')) {
+                var style = s.getAttribute('style');
+                var m;
+                m = style.match(/width\s*:\s*[^;]+/i); if (m) this.wrapper.style.width = m[0].split(':')[1].trim();
+                m = style.match(/min-width\s*:\s*[^;]+/i); if (m) this.wrapper.style.minWidth = m[0].split(':')[1].trim();
+                m = style.match(/max-width\s*:\s*[^;]+/i); if (m) this.wrapper.style.maxWidth = m[0].split(':')[1].trim();
+            }
+
+            s.parentNode.insertBefore(this.wrapper, s);
+            this.wrapper.appendChild(s);
+            s.setAttribute('tabindex', '-1');
+            s.classList.add('ss-native');
+
+            this.btn = document.createElement('button');
+            this.btn.type = 'button';
+            this.btn.className = 'ss-btn';
+            this.btn.setAttribute('aria-haspopup', 'listbox');
+            this.btn.innerHTML = '<span class="ss-value"></span><i class="fas fa-chevron-down ss-caret"></i>';
+            this.btn.addEventListener('click', function (e) { e.stopPropagation(); self.toggle(); });
+            this.btn.addEventListener('keydown', function (e) {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    self.openPanel();
+                }
+            });
+            this.wrapper.appendChild(this.btn);
+            this.valueEl = this.btn.querySelector('.ss-value');
+
+            s.addEventListener('change', function () { self.sync(); });
+
+            this.sync();
+            this.observe();
+        };
+
+        SearchableSelect.prototype.observe = function () {
+            var self = this;
+            this.observer = new MutationObserver(function () {
+                self.sync();
+                if (self.open) self.renderOptions();
+            });
+            this.observer.observe(this.select, {
+                childList: true,
+                attributes: true,
+                attributeFilter: ['disabled', 'required', 'class']
+            });
+        };
+
+        SearchableSelect.prototype.sync = function () {
+            var s = this.select;
+            if (!this.valueEl) return;
+            var opt = s.options[s.selectedIndex] || s.options[0];
+            this.valueEl.textContent = opt ? opt.text : (s.getAttribute('data-placeholder') || '— Select —');
+            this.valueEl.classList.toggle('ss-placeholder', !s.value);
+            if (this.btn) this.btn.disabled = s.disabled;
+            this.wrapper.classList.toggle('ss-disabled', s.disabled);
+            this.wrapper.classList.toggle('ss-invalid', s.classList.contains('is-invalid'));
+        };
+
+        SearchableSelect.prototype.toggle = function () {
+            if (this.open) this.close();
+            else this.openPanel();
+        };
+
+        SearchableSelect.prototype.openPanel = function () {
+            if (this.open || this.select.disabled) return;
+            var self = this;
+
+            closeAll(this);
+
+            this.panel = document.createElement('div');
+            this.panel.className = 'ss-panel';
+            this.panel.innerHTML =
+                '<div class="ss-search-wrap"><input type="text" class="ss-search" placeholder="Search…" autocomplete="off" spellcheck="false"></div>' +
+                '<div class="ss-list" role="listbox"></div>';
+            document.body.appendChild(this.panel);
+            this.search = this.panel.querySelector('.ss-search');
+            this.list   = this.panel.querySelector('.ss-list');
+            this.term = '';
+            this.highlight = -1;
+
+            this.search.addEventListener('input', function () {
+                self.term = self.search.value;
+                self.renderOptions();
+            });
+            this.search.addEventListener('keydown', function (e) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); self.highlightNext(1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); self.highlightNext(-1); }
+                else if (e.key === 'Enter') { e.preventDefault(); self.commitHighlight(); }
+                else if (e.key === 'Escape') { self.close(); }
+            });
+            this.list.addEventListener('mousedown', function (e) {
+                var item = e.target.closest ? e.target.closest('.ss-item') : null;
+                if (!item) return;
+                if (item.classList.contains('disabled')) return;
+                self.commit(parseInt(item.getAttribute('data-idx'), 10));
+            });
+
+            this.renderOptions();
+            this.position();
+            this.open = true;
+            this.search.focus();
+        };
+
+        SearchableSelect.prototype.position = function () {
+            var MAX_PANEL = 300;
+            var r = this.btn.getBoundingClientRect();
+            var vw = window.innerWidth, vh = window.innerHeight;
+            if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) { this.close(); return; }
+            var w = Math.max(r.width, 240);
+            var left = Math.min(Math.max(r.left, 8), vw - w - 8);
+            this.panel.style.width = w + 'px';
+            this.panel.style.left = left + 'px';
+            var below = vh - r.bottom;
+            var above = r.top;
+            if (below < 220 && above > below) {
+                this.panel.style.top = '';
+                this.panel.style.bottom = (vh - r.top + 4) + 'px';
+                this.panel.style.maxHeight = (Math.max(120, Math.min(above, MAX_PANEL)) - 4) + 'px';
+            } else {
+                this.panel.style.bottom = '';
+                this.panel.style.top = (r.bottom + 4) + 'px';
+                this.panel.style.maxHeight = (Math.max(120, Math.min(below, MAX_PANEL)) - 4) + 'px';
+            }
+        };
+
+        SearchableSelect.prototype.renderOptions = function () {
+            if (!this.list) return;
+            var self = this;
+            var term = (this.term || '').toLowerCase().trim();
+            var opts = this.select.options;
+            this.matches = [];
+            for (var i = 0; i < opts.length; i++) {
+                if (term && opts[i].text.toLowerCase().indexOf(term) === -1) continue;
+                this.matches.push(i);
+            }
+            var html = '', shown = 0;
+            for (var j = 0; j < this.matches.length && shown < MAX_RENDER; j++) {
+                var o = opts[this.matches[j]];
+                shown++;
+                html += '<li class="ss-item' + (o.disabled ? ' disabled' : '') + '" data-idx="' + this.matches[j] + '" role="option">' + escapeHtml(o.text) + '</li>';
+            }
+            if (shown === 0) {
+                this.list.innerHTML = '<div class="ss-empty">No matching options</div>';
+            } else {
+                this.list.innerHTML = html + (this.matches.length > MAX_RENDER
+                    ? '<div class="ss-more">' + (this.matches.length - MAX_RENDER) + ' more — keep typing to narrow results</div>'
+                    : '');
+            }
+            this.highlight = -1;
+            this.highlightNext(1, true);
+        };
+
+        SearchableSelect.prototype.highlightNext = function (delta, force) {
+            var items = this.list.querySelectorAll('.ss-item:not(.disabled)');
+            if (!items.length) { this.highlight = -1; return; }
+            var pos;
+            if (force || this.highlight < 0) pos = delta > 0 ? 0 : items.length - 1;
+            else pos = (this.highlight + delta + items.length) % items.length;
+            for (var i = 0; i < items.length; i++) {
+                items[i].classList.toggle('active', i === pos);
+                if (i === pos) items[i].scrollIntoView({ block: 'nearest' });
+            }
+            this.highlight = pos;
+        };
+
+        SearchableSelect.prototype.commitHighlight = function () {
+            var items = this.list.querySelectorAll('.ss-item:not(.disabled)');
+            if (!items.length) return;
+            var pos = this.highlight < 0 ? 0 : this.highlight;
+            var el  = items[pos];
+            if (!el) return;
+            this.commit(parseInt(el.getAttribute('data-idx'), 10));
+        };
+
+        SearchableSelect.prototype.commit = function (optIndex) {
+            var s = this.select;
+            var prev = s.value;
+            s.selectedIndex = optIndex;
+            if (s.value !== prev) {
+                s.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            this.sync();
+            this.close();
+        };
+
+        SearchableSelect.prototype.close = function () {
+            if (!this.open) return;
+            if (this.panel) {
+                this.panel.remove();
+                this.panel = null;
+            }
+            this.open = false;
+            this.btn.focus();
+        };
+
+        function enhance(select) {
+            if (!select || select.ss || select.hasAttribute('data-ss') && select.getAttribute('data-ss') === 'false') return;
+            new SearchableSelect(select);
+        }
+
+        function initAll(root) {
+            var selects = (root || document).querySelectorAll('select');
+            for (var i = 0; i < selects.length; i++) enhance(selects[i]);
+        }
+
+        function domReady(fn) {
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+            else fn();
+        }
+
+        domReady(function () { initAll(document); });
+
+        var mo = new MutationObserver(function (muts) {
+            for (var i = 0; i < muts.length; i++) {
+                var nodes = muts[i].addedNodes;
+                for (var j = 0; j < nodes.length; j++) {
+                    var n = nodes[j];
+                    if (n.nodeType !== 1) continue;
+                    if (n.matches && n.matches('select')) enhance(n);
+                    if (n.querySelectorAll) {
+                        var inner = n.querySelectorAll('select');
+                        for (var k = 0; k < inner.length; k++) enhance(inner[k]);
+                    }
+                }
+            }
+        });
+        mo.observe(document.documentElement, { childList: true, subtree: true });
+
+        document.addEventListener('mousedown', function (e) {
+            if (e.target.closest && e.target.closest('.ss-panel')) return;
+            if (e.target.closest && e.target.closest('.ss')) return;
+            closeAll();
+        });
+        window.addEventListener('scroll', function (e) {
+            var t = e.target;
+            if (t && t.closest && t.closest('.ss-panel')) return;
+            repositionAll();
+        }, true);
+        window.addEventListener('resize', function () { repositionAll(); });
+
+        window.SS = {
+            sync: function (el) { if (el && el.ss) el.ss.sync(); },
+            refresh: function (root) { initAll(root); }
+        };
+    })();
     </script>
     @stack('scripts')
 </body>

@@ -227,9 +227,7 @@
     .transfer-modal .form-section { margin-bottom: 20px; }
     .transfer-modal .form-section:last-child { margin-bottom: 0; }
     .transfer-modal .table-wrapper {
-        max-height: calc(100vh - 480px);
         overflow-x: auto;
-        overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }
     .transfer-modal .line-items-table {
@@ -291,9 +289,6 @@
     
     /* Tablet responsive */
     @media (max-width: 1024px) {
-        .transfer-modal .table-wrapper {
-            max-height: calc(100vh - 520px);
-        }
         .transfer-modal .line-items-table {
             min-width: 800px;
         }
@@ -319,7 +314,6 @@
         
         /* Make table scrollable but keep structure */
         .transfer-modal .table-wrapper {
-            max-height: none;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             margin: 0 -16px;
