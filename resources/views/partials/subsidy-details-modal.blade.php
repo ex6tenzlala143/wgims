@@ -148,6 +148,10 @@
                 <span id="subsidy-detail-status" class="subsidy-detail-value"></span>
             </div>
             <div class="subsidy-detail-row">
+                <span class="subsidy-detail-label">Subsidy ID</span>
+                <span id="subsidy-detail-code" class="subsidy-detail-value"></span>
+            </div>
+            <div class="subsidy-detail-row">
                 <span class="subsidy-detail-label">Subsidy / RIS Reference</span>
                 <span id="subsidy-detail-ris" class="subsidy-detail-value"></span>
             </div>
@@ -174,7 +178,7 @@
     var modal = document.getElementById('subsidyDetailsModal');
     if (!modal) return;
 
-    function open(status, ris, dr) {
+    function open(status, ris, dr, code) {
         var isDeleted = status === 'deleted';
         var label     = isDeleted ? 'Deleted' : 'Archived';
 
@@ -183,6 +187,9 @@
 
         var stat = document.getElementById('subsidy-detail-status');
         if (stat) stat.innerHTML = '<span class="badge ' + (isDeleted ? 'badge-danger' : 'badge-warning') + '">' + label + '</span>';
+
+        var codeEl = document.getElementById('subsidy-detail-code');
+        if (codeEl) codeEl.textContent = code || '—';
 
         var risEl = document.getElementById('subsidy-detail-ris');
         if (risEl) risEl.textContent = ris || '—';
@@ -215,7 +222,8 @@
         open(
             badge.getAttribute('data-sub-status') || 'deleted',
             badge.getAttribute('data-sub-ris') || '',
-            badge.getAttribute('data-sub-dr') || ''
+            badge.getAttribute('data-sub-dr') || '',
+            badge.getAttribute('data-sub-code') || ''
         );
     });
 

@@ -789,5 +789,8 @@ function risRemoveRow(id) {
         risUpdateItemCount();
     }
 }
+
+// Never allow a double-click to submit the same RIS twice.
+guardFormSubmit(document.getElementById('ris-form'));
 </script>
 @endpush

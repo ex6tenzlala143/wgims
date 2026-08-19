@@ -228,6 +228,9 @@ function removeRow(id) {
     }
 }
 calcTotal();
+
+// Never allow a double-click to save the same subsidy edit twice.
+guardFormSubmit(document.getElementById('subsidy-form'));
 </script>
 @endpush
 @endsection

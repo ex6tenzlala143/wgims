@@ -25,7 +25,7 @@
     </div>
 </div>
 
-<form action="{{ route('delivery_subsidies.update_delivery', [$deliverySubsidy->id, $delivery->id]) }}" method="POST">
+<form action="{{ route('delivery_subsidies.update_delivery', [$deliverySubsidy->id, $delivery->id]) }}" method="POST" id="edit-delivery-form">
     @csrf @method('PUT')
 
     <div class="edit-layout">
@@ -428,6 +428,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
     });
+
+    // Never allow a double-click to save the same shipment edit twice.
+    guardFormSubmit(document.querySelector('#edit-delivery-form'));
 });
 </script>
 @endpush

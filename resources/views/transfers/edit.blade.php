@@ -23,7 +23,7 @@
     </div>
 </div>
 
-<form action="{{ route('transfers.update', $transfer) }}" method="POST">
+<form action="{{ route('transfers.update', $transfer) }}" method="POST" id="edit-transfer-form">
     @csrf @method('PUT')
 
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">
@@ -226,6 +226,9 @@ function recalcGrand() {
         });
     }
 }
+
+// Never allow a double-click to save the same transfer edit twice.
+guardFormSubmit(document.getElementById('edit-transfer-form'));
 </script>
 @endpush
 @endsection

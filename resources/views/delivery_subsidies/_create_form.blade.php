@@ -799,5 +799,8 @@ function removeRow(id) {
         updateItemCount();
     }
 }
+
+// Never allow a double-click to submit the same subsidy twice.
+guardFormSubmit(document.getElementById('subsidy-form'));
 </script>
 @endpush

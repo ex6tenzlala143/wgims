@@ -7,11 +7,27 @@ use Illuminate\Database\Eloquent\Model;
 class DeliverySubsidy extends Model
 {
     protected $fillable = [
-        'dr_number', 'supplier_id', 'warehouse_id', 'created_by', 'date',
+        'subsidy_code', 'dr_number', 'supplier_id', 'warehouse_id', 'created_by', 'date',
         'ris_number', 'place_of_delivery', 'date_of_delivery',
         'date_of_expiration', 'total_amount', 'quantity_requested', 'status', 'remarks',
         'is_archived',
     ];
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        // Permanent Subsidy ID (SUB-000001 format) derived from the auto-increment
+        // id. Ids are never reused, so a code can never be re-issued to a
+        // different Subsidy — even after deletion.
+        static::created(function (DeliverySubsidy $subsidy): void {
+            if (! $subsidy->subsidy_code) {
+                $code = 'SUB-' . str_pad((string) $subsidy->id, 6, '0', STR_PAD_LEFT);
+                static::whereKey($subsidy->id)->update(['subsidy_code' => $code]);
+                $subsidy->subsidy_code = $code;
+            }
+        });
+    }
 
     protected $casts = [
         'date'               => 'date',

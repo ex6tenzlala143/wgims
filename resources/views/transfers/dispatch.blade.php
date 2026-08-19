@@ -264,6 +264,9 @@ function recalcTotal() {
 }
 
 document.addEventListener('DOMContentLoaded', recalcTotal);
+
+// Never allow a double-click to dispatch the same stock twice.
+guardFormSubmit(document.getElementById('dispatch-form'));
 </script>
 @endpush
 @endsection

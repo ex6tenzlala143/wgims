@@ -61,7 +61,11 @@
         </div>
         <table style="width:100%;font-size:14px;border-collapse:collapse">
             <tr>
-                <td style="padding:5px 0;color:var(--text-muted);width:32%">Original Subsidy/RIS Reference</td>
+                <td style="padding:5px 0;color:var(--text-muted);width:32%">Subsidy ID</td>
+                <td style="padding:5px 0;font-weight:700"><code style="color:var(--primary)">{{ $transfer->sourceSubsidyCode() ?? '—' }}</code></td>
+            </tr>
+            <tr>
+                <td style="padding:5px 0;color:var(--text-muted)">Original Subsidy/RIS Reference</td>
                 <td style="padding:5px 0;font-weight:700">{{ $transfer->sourceSubsidyReference() ?? '—' }}</td>
             </tr>
             <tr>

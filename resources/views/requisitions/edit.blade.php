@@ -10,7 +10,7 @@
     </div>
 </div>
 
-<form action="{{ route('requisitions.update', $requisition->id) }}" method="POST">
+<form action="{{ route('requisitions.update', $requisition->id) }}" method="POST" id="edit-ris-form">
 @csrf @method('PUT')
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">
     <div>
@@ -390,6 +390,9 @@ document.querySelectorAll('#ris-items .ris-item-select').forEach(sel => {
         loadRowItems(idx, itemId);
     }
 });
+
+// Never allow a double-click to save the same RIS edit twice.
+guardFormSubmit(document.getElementById('edit-ris-form'));
 </script>
 @endpush
 @endsection

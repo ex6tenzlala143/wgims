@@ -15,6 +15,8 @@ use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class StockTransferController extends Controller
 {
@@ -160,12 +162,19 @@ class StockTransferController extends Controller
                 $linkedRis    = null;
                 foreach ($request->items as $line) {
                     $sourceItem = Item::find($line['item_id'] ?? null);
-                    if (! $sourceItem || ! $sourceItem->ris_number) {
+                    if (! $sourceItem) {
                         continue;
                     }
-                    $linkedSubsidy = DeliverySubsidy::where('ris_number', $sourceItem->ris_number)
-                        ->orderByDesc('id')
-                        ->first();
+                    // Prefer the exact originating Subsidy — never guess. Only
+                    // legacy records without an attribution fall back to a
+                    // RIS-number lookup.
+                    $linkedSubsidy = $sourceItem->source_subsidy_id
+                        ? DeliverySubsidy::find($sourceItem->source_subsidy_id)
+                        : ($sourceItem->ris_number
+                            ? DeliverySubsidy::where('ris_number', $sourceItem->ris_number)
+                                ->orderByDesc('id')
+                                ->first()
+                            : null);
                     if ($linkedSubsidy) {
                         $linkedRis = $sourceItem->ris_number;
                         break;
@@ -177,6 +186,7 @@ class StockTransferController extends Controller
                     'delivery_subsidy_id'  => $linkedSubsidy?->id,
                     'source_ris_number'    => $linkedRis,
                     'source_dr_number'     => $linkedSubsidy?->dr_number,
+                    'source_subsidy_code'  => $linkedSubsidy?->subsidy_code,
                     'source_subsidy_status'=> null,
                     'from_warehouse_id'    => $fromWarehouse->id,
                     'to_warehouse_id'      => $toWarehouse->id,
@@ -190,6 +200,7 @@ class StockTransferController extends Controller
                     $unitCost = round((float) $line['unit_cost'], 2);
 
                     // Resolve/create the destination item slot now so it exists for dispatching later
+                    // (carries the source Subsidy so the origin travels with the stock).
                     $sourceItem = Item::find($line['item_id']);
                     $destItem   = Item::findOrCreateByUnitCost(
                         $toWarehouse->id,
@@ -199,7 +210,20 @@ class StockTransferController extends Controller
                         $unitCost,
                         $sourceItem->ris_number,
                         $sourceItem->expiration_date?->format('Y-m-d'),
-                        $sourceItem->engas_unit_cost
+                        $sourceItem->engas_unit_cost,
+                        $sourceItem->account_code,
+                        $sourceItem->source_subsidy_id
+                    );
+
+                    // Carry the source-subsidy snapshot onto the destination slot
+                    // immediately (id, RIS/DR references, code, status) so the
+                    // origin is visible even before the stock is dispatched.
+                    $destItem->applySubsidySnapshot(
+                        $sourceItem->source_subsidy_id,
+                        $sourceItem->source_subsidy_ris,
+                        $sourceItem->source_subsidy_dr,
+                        $sourceItem->source_subsidy_status,
+                        $sourceItem->source_subsidy_code
                     );
 
                     // quantity_requested = planned; quantity = 0 (nothing dispatched yet)
@@ -229,7 +253,12 @@ class StockTransferController extends Controller
                 $this->createdTransferId = $transfer->id;
             });
         } catch (\Throwable $e) {
-            return back()->withInput()->with('error', 'Transfer could not be saved. Please try again.');
+            Log::error('Stock transfer creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
         }
 
         return redirect()
@@ -289,28 +318,41 @@ class StockTransferController extends Controller
             'items.*.quantity' => 'required|numeric|min:0',
         ]);
 
-        DB::transaction(function () use ($request, $transfer) {
-            $transfer->load(['fromWarehouse', 'toWarehouse', 'items.sourceItem', 'items.destinationItem']);
+        try {
+            DB::transaction(function () use ($request, $transfer) {
+                $transfer->load(['fromWarehouse', 'toWarehouse', 'items.sourceItem', 'items.destinationItem']);
 
-            foreach ($request->items as $line) {
-                $sti = StockTransferItem::with(['sourceItem', 'destinationItem'])
-                    ->where('id', $line['sti_id'])
-                    ->where('stock_transfer_id', $transfer->id)
-                    ->firstOrFail();
-
-                $remaining   = max(0, $sti->quantity_requested - $sti->quantity);
-                $dispatchQty = min((float) $line['quantity'], $remaining);
-
-                if ($dispatchQty <= 0) {
-                    continue;
+                // Re-check the status INSIDE the transaction: two concurrent
+                // dispatches that both passed the pre-check above are serialized
+                // here by the row locks below, and the second one aborts instead
+                // of double-dispatching stock.
+                if (StockTransfer::whereKey($transfer->id)->value('status') === 'completed') {
+                    throw ValidationException::withMessages([
+                        'items' => 'This transfer is already fully completed.',
+                    ]);
                 }
 
-                $sourceItem = $sti->sourceItem;
-                $destItem   = $sti->destinationItem;
+                foreach ($request->items as $line) {
+                    $sti = StockTransferItem::with(['sourceItem', 'destinationItem'])
+                        ->where('id', $line['sti_id'])
+                        ->where('stock_transfer_id', $transfer->id)
+                        ->firstOrFail();
 
-                if (! $sourceItem || ! $destItem) {
-                    continue;
-                }
+                    $remaining   = max(0, $sti->quantity_requested - $sti->quantity);
+                    $dispatchQty = min((float) $line['quantity'], $remaining);
+
+                    if ($dispatchQty <= 0) {
+                        continue;
+                    }
+
+                    // Lock the exact stock rows before the read-modify-write so
+                    // two concurrent dispatches can never lose a quantity update.
+                    $sourceItem = Item::whereKey($sti->item_id)->lockForUpdate()->first();
+                    $destItem   = Item::whereKey($sti->destination_item_id)->lockForUpdate()->first();
+
+                    if (! $sourceItem || ! $destItem) {
+                        continue;
+                    }
 
                 // Move stock
                 $newSourceQty = max(0, $sourceItem->quantity - $dispatchQty);
@@ -329,7 +371,8 @@ class StockTransferController extends Controller
                         $sourceItem->source_subsidy_id,
                         $sourceItem->source_subsidy_ris,
                         $sourceItem->source_subsidy_dr,
-                        $sourceItem->source_subsidy_status
+                        $sourceItem->source_subsidy_status,
+                        $sourceItem->source_subsidy_code
                     );
                 }
 
@@ -374,7 +417,18 @@ class StockTransferController extends Controller
             // Refresh items and recalculate status
             $transfer->load('items');
             $transfer->updateTransferStatus();
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Stock transfer dispatch failed', [
+                'transfer_id' => $transfer->id,
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('transfers.show', $transfer)
             ->with('success', 'Dispatch recorded and stock updated.');
@@ -476,30 +530,33 @@ class StockTransferController extends Controller
             'items.*.unit_cost' => 'required|numeric|min:0.01',
         ]);
 
-        DB::transaction(function () use ($request, $transfer) {
-            $transfer->update([
-                'transfer_date' => $request->transfer_date,
-                'remarks'       => $request->remarks,
-            ]);
+        try {
+            DB::transaction(function () use ($request, $transfer) {
+                $transfer->update([
+                    'transfer_date' => $request->transfer_date,
+                    'remarks'       => $request->remarks,
+                ]);
 
-            foreach ($request->items as $line) {
-                /** @var StockTransferItem $sti */
-                $sti = StockTransferItem::with(['sourceItem', 'destinationItem'])
-                    ->where('id', $line['sti_id'])
-                    ->where('stock_transfer_id', $transfer->id)
-                    ->firstOrFail();
+                foreach ($request->items as $line) {
+                    /** @var StockTransferItem $sti */
+                    $sti = StockTransferItem::with(['sourceItem', 'destinationItem'])
+                        ->where('id', $line['sti_id'])
+                        ->where('stock_transfer_id', $transfer->id)
+                        ->firstOrFail();
 
-                $oldQty  = $sti->quantity;
-                $newQty  = (float) $line['quantity'];
-                $newCost = round((float) $line['unit_cost'], 2);
-                $delta   = $newQty - $oldQty;
+                    $oldQty  = $sti->quantity;
+                    $newQty  = (float) $line['quantity'];
+                    $newCost = round((float) $line['unit_cost'], 2);
+                    $delta   = $newQty - $oldQty;
 
-                $sourceItem = $sti->sourceItem;
-                $destItem   = $sti->destinationItem;
+                    // Lock the exact stock rows before the read-modify-write so
+                    // two concurrent edits can never lose a quantity update.
+                    $sourceItem = Item::whereKey($sti->item_id)->lockForUpdate()->first();
+                    $destItem   = Item::whereKey($sti->destination_item_id)->lockForUpdate()->first();
 
-                if (! $sourceItem || ! $destItem) {
-                    continue;
-                }
+                    if (! $sourceItem || ! $destItem) {
+                        continue;
+                    }
 
                 // ── Adjust source item stock ───────────────────────────────
                 // More transferred out → source loses more stock
@@ -535,19 +592,30 @@ class StockTransferController extends Controller
                     ->where('item_id', $destItem->id)
                     ->first();
 
-                if ($inEntry) {
-                    $inEntry->update([
-                        'entry_date'          => $request->transfer_date,
-                        'receipt_qty'         => $newQty,
-                        'receipt_unit_cost'   => $newCost,
-                        'receipt_total_cost'  => $newQty * $newCost,
-                        'balance_qty'         => $newDestQty,
-                        'balance_unit_cost'   => $newCost,
-                        'balance_total_cost'  => $newDestQty * $newCost,
-                    ]);
+if ($inEntry) {
+                        $inEntry->update([
+                            'entry_date'          => $request->transfer_date,
+                            'receipt_qty'         => $newQty,
+                            'receipt_unit_cost'   => $newCost,
+                            'receipt_total_cost'  => $newQty * $newCost,
+                            'balance_qty'         => $newDestQty,
+                            'balance_unit_cost'   => $newCost,
+                            'balance_total_cost'  => $newDestQty * $newCost,
+                        ]);
+                    }
                 }
-            }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Stock transfer update failed', [
+                'transfer_id' => $transfer->id,
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()
             ->route('transfers.show', $transfer)
@@ -589,49 +657,54 @@ class StockTransferController extends Controller
             return back()->with('error', 'This transfer cannot be deleted yet because the transferred stock has since been used by: '.implode('; ', $blockers).'. Resolve those transactions first, then delete this transfer.');
         }
 
-        DB::transaction(function () use ($transfer) {
-            $reversal = [];
-            $affectedItemIds = [];
+        try {
+            DB::transaction(function () use ($transfer) {
+                $reversal = [];
+                $affectedItemIds = [];
 
-            foreach ($transfer->items as $sti) {
-                // Remove this line's stock-card movements (harmless when none).
-                StockCardEntry::where('reference_type', 'transfer_out')
-                    ->where('reference_id', $transfer->id)
-                    ->where('item_id', $sti->item_id)
-                    ->delete();
+                foreach ($transfer->items as $sti) {
+                    // Remove this line's stock-card movements (harmless when none).
+                    StockCardEntry::where('reference_type', 'transfer_out')
+                        ->where('reference_id', $transfer->id)
+                        ->where('item_id', $sti->item_id)
+                        ->delete();
 
-                StockCardEntry::where('reference_type', 'transfer_in')
-                    ->where('reference_id', $transfer->id)
-                    ->where('item_id', $sti->destination_item_id)
-                    ->delete();
+                    StockCardEntry::where('reference_type', 'transfer_in')
+                        ->where('reference_id', $transfer->id)
+                        ->where('item_id', $sti->destination_item_id)
+                        ->delete();
 
-                $dispatched = (float) $sti->quantity;
-                if ($dispatched <= 0) {
-                    continue;
+                    $dispatched = (float) $sti->quantity;
+                    if ($dispatched <= 0) {
+                        continue;
+                    }
+
+                    $reversal[] = [
+                        'description'          => $sti->sourceItem?->description ?? "Item #{$sti->item_id}",
+                        'quantity'             => $dispatched,
+                        'unit_cost'            => (float) $sti->unit_cost,
+                        'source_item_id'       => $sti->item_id,
+                        'destination_item_id'  => $sti->destination_item_id,
+                    ];
+
+                    $affectedItemIds[$sti->item_id] = true;
+                    $affectedItemIds[$sti->destination_item_id] = true;
+
+                    // Lock the exact stock rows before reversing the movement.
+                    $sourceItem = Item::whereKey($sti->item_id)->lockForUpdate()->first();
+                    $destItem   = Item::whereKey($sti->destination_item_id)->lockForUpdate()->first();
+
+                    // Dispatch deducted stock at the source → add it back on delete
+                    if ($sourceItem) {
+                        $sourceItem->increment('quantity', $dispatched);
+                    }
+
+                    // Dispatch added stock at the destination → remove it on delete
+                    if ($destItem) {
+                        $newQty = max(0, $destItem->quantity - $dispatched);
+                        $destItem->update(['quantity' => $newQty]);
+                    }
                 }
-
-                $reversal[] = [
-                    'description'          => $sti->sourceItem?->description ?? "Item #{$sti->item_id}",
-                    'quantity'             => $dispatched,
-                    'unit_cost'            => (float) $sti->unit_cost,
-                    'source_item_id'       => $sti->item_id,
-                    'destination_item_id'  => $sti->destination_item_id,
-                ];
-
-                $affectedItemIds[$sti->item_id] = true;
-                $affectedItemIds[$sti->destination_item_id] = true;
-
-                // Dispatch deducted stock at the source → add it back on delete
-                if ($sti->sourceItem) {
-                    $sti->sourceItem->increment('quantity', $dispatched);
-                }
-
-                // Dispatch added stock at the destination → remove it on delete
-                if ($sti->destinationItem) {
-                    $newQty = max(0, $sti->destinationItem->quantity - $dispatched);
-                    $sti->destinationItem->update(['quantity' => $newQty]);
-                }
-            }
 
             // Audit trail BEFORE the row disappears — the entry survives the delete.
             StockTransferAuditLog::create([
@@ -653,10 +726,21 @@ class StockTransferController extends Controller
             $transfer->delete();
 
             // Rebuild running stock-card balances for the affected items
-            foreach (array_keys($affectedItemIds) as $itemId) {
-                StockCardEntry::recalculateBalancesForItem($itemId);
-            }
-        });
+                foreach (array_keys($affectedItemIds) as $itemId) {
+                    StockCardEntry::recalculateBalancesForItem($itemId);
+                }
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Stock transfer deletion failed', [
+                'transfer_id' => $transfer->id,
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('transfers.index')
             ->with('success', "Transfer {$transfer->transfer_number} deleted and stock reversed.");

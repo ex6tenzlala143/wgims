@@ -6,6 +6,8 @@ use App\Models\Item;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ItemController extends Controller
 {
@@ -273,8 +275,20 @@ class ItemController extends Controller
                 ->with('error', "Cannot delete \"{$item->description}\" — it has already been dispatched against a Requisition.");
         }
 
-        $item->stockCardEntries()->delete();
-        $item->delete();
+        try {
+            DB::transaction(function () use ($item) {
+                $item->stockCardEntries()->delete();
+                $item->delete();
+            });
+        } catch (\Throwable $e) {
+            Log::error('Item deletion failed', [
+                'item_id' => $item->id,
+                'error'   => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('items.index')->with('success', 'Item deleted.');
     }

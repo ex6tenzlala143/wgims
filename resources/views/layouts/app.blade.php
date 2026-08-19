@@ -1300,6 +1300,21 @@
         };
     })();
     </script>
+    <script>
+    // Disable a form's submit button the instant it is submitted, so a
+    // double-click (or any second submit) can never fire the same request twice.
+    // Native-submit forms only — fetch-based modals manage their own buttons.
+    function guardFormSubmit(form) {
+        if (!form) return;
+        form.addEventListener('submit', function () {
+            var btn = form.querySelector('button[type="submit"]');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            }
+        });
+    }
+    </script>
     @stack('scripts')
 </body>
 </html>

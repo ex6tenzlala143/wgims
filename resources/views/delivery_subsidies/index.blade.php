@@ -51,6 +51,7 @@
         <table>
             <thead>
                 <tr>
+                    <th>Subsidy ID</th>
                     <th>RIS No.</th>
                     <th>Date</th>
                     <th>Supplier/Subsidy</th>
@@ -72,6 +73,9 @@
                     $barColor   = $pct >= 100 ? 'var(--success)' : ($pct > 0 ? 'var(--primary)' : '#e2e8f0');
                 @endphp
                 <tr>
+                    <td>
+                        <code style="font-weight:700;color:var(--primary)">{{ $subsidy->subsidy_code }}</code>
+                    </td>
                     <td>
                         <strong>{{ $subsidy->ris_number }}</strong>
                         @if($subsidy->isArchived())
@@ -154,7 +158,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-file-invoice" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No delivery/subsidy records found.
                 </td></tr>

@@ -252,13 +252,6 @@
                 </div>
                 @endif
 
-                @if(session('status'))
-                <div class="flex items-start gap-3 p-4 mb-6 bg-blue-50 border border-blue-100 rounded-xl" role="alert">
-                    <i class="fas fa-info-circle text-blue-400 mt-0.5 shrink-0"></i>
-                    <div class="text-sm text-blue-700">{{ session('status') }}</div>
-                </div>
-                @endif
-
                 {{-- Login form --}}
                 <form action="{{ route('login.post') }}" method="POST">
                     @csrf
@@ -294,15 +287,12 @@
                         @enderror
                     </div>
 
-                    {{-- Remember me + Forgot password --}}
-                    <div class="flex items-center justify-between mb-6">
+                    {{-- Remember me --}}
+                    <div class="mb-6">
                         <label for="remember" class="flex items-center gap-2.5 cursor-pointer select-none">
                             <input type="checkbox" name="remember" id="remember" class="custom-checkbox">
                             <span class="text-sm text-slate-600 font-medium">Remember me</span>
                         </label>
-                        <a href="#" class="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors duration-200">
-                            Forgot password?
-                        </a>
                     </div>
 
                     {{-- Submit button --}}

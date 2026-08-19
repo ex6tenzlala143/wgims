@@ -104,6 +104,7 @@
                                 'status' => $item->source_subsidy_status,
                                 'ris'    => $item->sourceSubsidyReference(),
                                 'dr'     => $item->sourceDrReference(),
+                                'code'   => $item->sourceSubsidyCode(),
                                 'prefix' => 'FROM',
                             ])
                         </div>

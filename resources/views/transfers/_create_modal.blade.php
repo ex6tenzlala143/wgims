@@ -598,11 +598,11 @@ function removeTransferRow(idx) {
 }
 
 // Validate qty vs available before submit
+let transferSubmitting = false;
 document.getElementById('transfer-form').addEventListener('submit', function(e) {
     let valid = true;
-    let isSubmitting = false;
     
-    if (isSubmitting) {
+    if (transferSubmitting) {
         e.preventDefault();
         return;
     }
@@ -623,7 +623,7 @@ document.getElementById('transfer-form').addEventListener('submit', function(e) 
     }
     
     // Disable submit button and show loading
-    isSubmitting = true;
+    transferSubmitting = true;
     const btn = document.getElementById('transfer-submit-btn');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';

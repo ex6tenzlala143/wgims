@@ -5,16 +5,16 @@ set TIMESTAMP=%TIMESTAMP: =0%
 set BACKUP_FILE=database_backup_%TIMESTAMP%.sql
 
 cd /d "%~dp0"
-C:\xampp\mysql\bin\mysqldump -u root wgims > "backups\%BACKUP_FILE%"
+C:\xampp\mysql\bin\mysqldump -u root wgims > "..\backups\%BACKUP_FILE%"
 
 if %ERRORLEVEL% EQU 0 (
     echo.
-    echo ✅ Database backup created successfully!
-    echo File: backups\%BACKUP_FILE%
+    echo Database backup created successfully!
+    echo File: ..\backups\%BACKUP_FILE%
     echo.
 ) else (
     echo.
-    echo ❌ Backup failed!
+    echo Backup failed!
     echo.
 )
 

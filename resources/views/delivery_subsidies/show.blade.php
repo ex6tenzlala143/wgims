@@ -73,6 +73,7 @@
         <div class="card-header"><h3><i class="fas fa-file-invoice-dollar" style="color:var(--primary)"></i> Delivery/Subsidy Information</h3></div>
         <div class="card-body">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:14px">
+                <div><span style="color:var(--text-muted)">Subsidy ID</span><br><code style="font-weight:700;color:var(--primary)">{{ $deliverySubsidy->subsidy_code }}</code></div>
                 <div><span style="color:var(--text-muted)">RIS No.</span><br><strong>{{ $deliverySubsidy->ris_number }}</strong></div>
                 <div><span style="color:var(--text-muted)">Date</span><br>{{ $deliverySubsidy->date?->format('F d, Y') ?? '-' }}</div>
                 <div><span style="color:var(--text-muted)">Supplier/Subsidy</span><br><strong>{{ $deliverySubsidy->supplier->name ?? '-' }}</strong></div>

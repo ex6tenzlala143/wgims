@@ -16,6 +16,7 @@ use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class RequisitionController extends Controller
@@ -207,7 +208,8 @@ class RequisitionController extends Controller
             return back()->withErrors($lineErrors)->withInput();
         }
 
-        DB::transaction(function () use ($request, $user) {
+        try {
+            DB::transaction(function () use ($request, $user) {
             $catalogItems = ItemCatalogItem::with('category')
                 ->whereIn('id', collect($request->items)->pluck('catalog_item_id')->filter()->unique())
                 ->get()
@@ -278,7 +280,17 @@ class RequisitionController extends Controller
                     'link' => route('requisitions.show', $ris->id),
                 ]);
             }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('RIS creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('requisitions.index')->with('success', 'Requisition created successfully.');
     }
@@ -361,7 +373,8 @@ class RequisitionController extends Controller
             return back()->withErrors($lineErrors)->withInput();
         }
 
-        DB::transaction(function () use ($request, $requisition, $existingItems) {
+        try {
+            DB::transaction(function () use ($request, $requisition, $existingItems) {
             $requisition->update([
                 'entity_name' => $request->entity_name,
                 'fund_cluster' => $request->fund_cluster,
@@ -439,7 +452,18 @@ class RequisitionController extends Controller
                     ]);
                 }
             }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('RIS update failed', [
+                'requisition_id' => $requisition->id,
+                'error'          => $e->getMessage(),
+                'trace'          => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('requisitions.show', $requisition)
             ->with('success', 'Requisition updated successfully.');
@@ -453,7 +477,8 @@ class RequisitionController extends Controller
         $risNumber = $requisition->ris_number;
         $requisition->load('items.dispatchItems.item');
 
-        DB::transaction(function () use ($requisition) {
+        try {
+            DB::transaction(function () use ($requisition) {
             $affectedItemIds = [];
 
             // Reverse each dispatch independently — each one may have come from a
@@ -480,7 +505,18 @@ class RequisitionController extends Controller
             foreach (array_keys($affectedItemIds) as $itemId) {
                 StockCardEntry::recalculateBalancesForItem($itemId);
             }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('RIS deletion failed', [
+                'requisition_id' => $requisition->id,
+                'error'          => $e->getMessage(),
+                'trace'          => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('requisitions.index')
             ->with('success', "RIS #{$risNumber} deleted and any issued stock has been reversed.");
@@ -590,7 +626,8 @@ class RequisitionController extends Controller
         $oldTotal  = $requisition->totalRequested();
         $changes   = [];
 
-        DB::transaction(function () use ($request, $requisition, $existingItems, $user, &$changes, &$oldTotal, &$oldStatus) {
+        try {
+            DB::transaction(function () use ($request, $requisition, $existingItems, $user, &$changes, &$oldTotal, &$oldStatus) {
             // ── Header ──────────────────────────────────────────────────────
             $headerMap = [
                 'entity_name', 'fund_cluster', 'office', 'division', 'province',
@@ -703,7 +740,20 @@ class RequisitionController extends Controller
                     'changed_fields' => $changes,
                 ]);
             }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('RIS correction failed', [
+                'requisition_id' => $requisition->id,
+                'error'          => $e->getMessage(),
+                'trace'          => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'errors' => ['general' => ['The transaction could not be completed. No changes were made. Please try again.']],
+            ], 500);
+        }
 
         return response()->json(['redirect' => route('requisitions.show', $requisition->id)]);
     }
@@ -802,7 +852,8 @@ class RequisitionController extends Controller
 
         $requisition->load(['items.item', 'items.warehouse', 'items.dispatchItems']);
 
-        DB::transaction(function () use ($request, $requisition) {
+        try {
+            DB::transaction(function () use ($request, $requisition) {
             $user       = Auth::user();
             $anyIssued  = false;
             $allowedIds = $user->hasAdminAccess()
@@ -945,7 +996,18 @@ class RequisitionController extends Controller
                 'type' => $status === 'approved' ? 'success' : 'info',
                 'link' => route('requisitions.show', $requisition->id),
             ]);
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('RIS dispatch failed', [
+                'requisition_id' => $requisition->id,
+                'error'          => $e->getMessage(),
+                'trace'          => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('requisitions.show', $requisition)
             ->with('success', 'Requisition processed successfully.');
@@ -1049,7 +1111,8 @@ class RequisitionController extends Controller
         $dispatch->load(['requisitionItem', 'requisitionItem.requisition', 'item']);
         $requisitionId = $dispatch->requisitionItem->requisition_id;
 
-        DB::transaction(function () use ($request, $dispatch, &$requisitionId) {
+        try {
+            DB::transaction(function () use ($request, $dispatch, &$requisitionId) {
             $user        = Auth::user();
             $ri          = $dispatch->requisitionItem;
             $requisition = $ri->requisition;
@@ -1202,7 +1265,20 @@ class RequisitionController extends Controller
 
             $requisition->load('items');
             $requisition->updateFulfilmentStatus();
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Dispatch edit failed', [
+                'dispatch_id' => $dispatch->id,
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'errors' => ['general' => ['The transaction could not be completed. No changes were made. Please try again.']],
+            ], 500);
+        }
 
         return response()->json(['redirect' => route('requisitions.show', $requisitionId)]);
     }

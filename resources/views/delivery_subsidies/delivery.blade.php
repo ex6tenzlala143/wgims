@@ -580,6 +580,9 @@ function removeBatch(btn) {
 }
 
 document.addEventListener('DOMContentLoaded', recalcTotal);
+
+// Never allow a double-click to record the shipment twice.
+guardFormSubmit(document.getElementById('delivery-form'));
 </script>
 @endpush
 @endsection

@@ -13,6 +13,7 @@ class StockTransfer extends Model
         'delivery_subsidy_id',
         'source_ris_number',
         'source_dr_number',
+        'source_subsidy_code',
         'source_subsidy_status',
         'from_warehouse_id',
         'to_warehouse_id',
@@ -165,6 +166,18 @@ class StockTransfer extends Model
             return $this->deliverySubsidy->dr_number;
         }
         return $this->source_dr_number;
+    }
+
+    /**
+     * The permanent Subsidy ID (SUB-000001) this transfer's stock originated
+     * from. Prefers the live subsidy, otherwise the snapshot.
+     */
+    public function sourceSubsidyCode(): ?string
+    {
+        if ($this->deliverySubsidy) {
+            return $this->deliverySubsidy->subsidy_code;
+        }
+        return $this->source_subsidy_code;
     }
 
     /**

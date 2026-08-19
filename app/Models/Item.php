@@ -11,7 +11,7 @@ class Item extends Model
         'stock_number', 'description', 'ris_number', 'unit', 'category',
         'account_code', 'warehouse_id', 'unit_cost', 'engas_unit_cost', 'quantity',
         'quantity_per_item', 'reorder_point', 'expiration_date', 'is_active',
-        'source_subsidy_id', 'source_subsidy_ris', 'source_subsidy_dr', 'source_subsidy_status',
+        'source_subsidy_id', 'source_subsidy_code', 'source_subsidy_ris', 'source_subsidy_dr', 'source_subsidy_status',
     ];
 
     protected $casts = [
@@ -175,6 +175,15 @@ class Item extends Model
         return $this->source_subsidy_dr;
     }
 
+    /** The permanent Subsidy ID (SUB-000001) this item's stock originated from. */
+    public function sourceSubsidyCode(): ?string
+    {
+        if ($this->sourceSubsidy) {
+            return $this->sourceSubsidy->subsidy_code;
+        }
+        return $this->source_subsidy_code;
+    }
+
     /**
      * Persist the source-subsidy snapshot. Uses a direct query update so the
      * model's saving hook (which auto-manages is_active from quantity) is never
@@ -185,12 +194,13 @@ class Item extends Model
      * When $status is null, we're clearing the marker (e.g., when restoring an
      * archived subsidy, we remove the warning badge).
      */
-    public function applySubsidySnapshot(?int $subsidyId, ?string $ris, ?string $dr, ?string $status): void
+    public function applySubsidySnapshot(?int $subsidyId, ?string $ris, ?string $dr, ?string $status, ?string $code = null): void
     {
         static::whereKey($this->id)->update([
             'source_subsidy_id'     => $subsidyId,
             'source_subsidy_ris'    => $ris ?: $this->source_subsidy_ris,
             'source_subsidy_dr'     => $dr ?: $this->source_subsidy_dr,
+            'source_subsidy_code'   => $code ?: $this->source_subsidy_code,
             'source_subsidy_status' => $status,
         ]);
 
@@ -198,6 +208,7 @@ class Item extends Model
             'source_subsidy_id'     => $subsidyId,
             'source_subsidy_ris'    => $ris ?: $this->source_subsidy_ris,
             'source_subsidy_dr'     => $dr ?: $this->source_subsidy_dr,
+            'source_subsidy_code'   => $code ?: $this->source_subsidy_code,
             'source_subsidy_status' => $status,
         ]);
     }
@@ -244,9 +255,12 @@ class Item extends Model
     }
 
     /**
-     * On delivery: find the existing item matching description+unit+category+center,
-     * assign a stock number if it doesn't have one yet (or find the matching cost variant),
-     * then update its unit_cost. Never creates a duplicate item record.
+     * On delivery: find the existing item matching the full stock identity —
+     * Originating Subsidy + Item Name + Unit Cost + ENGAS Unit Cost +
+     * Expiration + Warehouse — then assign a stock number if it doesn't have
+     * one yet (or find the matching cost variant). Stock from a different
+     * Subsidy never merges into the same record, even when every other field
+     * matches.
      */
     public static function findOrCreateByUnitCost(
         int $warehouseId,
@@ -257,7 +271,8 @@ class Item extends Model
         ?string $risNumber = null,
         ?string $expirationDate = null,
         ?float $engasUnitCost = null,
-        ?string $accountCode = null
+        ?string $accountCode = null,
+        ?int $sourceSubsidyId = null
     ): self {
         $unitCost = round($unitCost, 2);
 
@@ -272,13 +287,24 @@ class Item extends Model
             $query->whereDate('expiration_date', $expirationDate);
         }
 
+        // Originating Subsidy is part of the identity — never merge across
+        // subsidies, and never guess one when none is provided.
+        if ($sourceSubsidyId !== null) {
+            $query->where('source_subsidy_id', $sourceSubsidyId);
+        } else {
+            $query->whereNull('source_subsidy_id');
+        }
+
+        // ENGAS unit cost is part of the identity too (all 6 values must match).
+        if ($engasUnitCost !== null) {
+            $query->whereBetween('engas_unit_cost', [$engasUnitCost - 0.001, $engasUnitCost + 0.001]);
+        } else {
+            $query->whereNull('engas_unit_cost');
+        }
+
         $existing = $query->first();
 
         if ($existing) {
-            // Sync engas_unit_cost if the source provides it and the existing item doesn't have one
-            if ($engasUnitCost !== null && $existing->engas_unit_cost === null) {
-                $existing->update(['engas_unit_cost' => $engasUnitCost]);
-            }
             // Keep the configured account code in sync (admin-configured codes win)
             if ($accountCode && $existing->account_code !== $accountCode) {
                 $existing->update(['account_code' => $accountCode]);
@@ -292,6 +318,17 @@ class Item extends Model
             ->where('category', $category)
             ->whereNull('stock_number');
 
+        if ($sourceSubsidyId !== null) {
+            $baseQuery->where('source_subsidy_id', $sourceSubsidyId);
+        } else {
+            $baseQuery->whereNull('source_subsidy_id');
+        }
+        if ($engasUnitCost !== null) {
+            $baseQuery->whereBetween('engas_unit_cost', [$engasUnitCost - 0.001, $engasUnitCost + 0.001]);
+        } else {
+            $baseQuery->whereNull('engas_unit_cost');
+        }
+
         $base = $baseQuery->first();
 
         $warehouse   = \App\Models\Warehouse::find($warehouseId);
@@ -299,29 +336,31 @@ class Item extends Model
 
         if ($base) {
             $base->update([
-                'stock_number'    => $stockNumber,
-                'unit_cost'       => $unitCost,
-                'account_code'    => $accountCode ?: ($base->account_code ?: static::getAccountCodeForCategory($category)),
-                'expiration_date' => $expirationDate ?? $base->expiration_date,
-                'engas_unit_cost' => $engasUnitCost ?? $base->engas_unit_cost,
-                'is_active'       => true,
+                'stock_number'       => $stockNumber,
+                'unit_cost'          => $unitCost,
+                'account_code'       => $accountCode ?: ($base->account_code ?: static::getAccountCodeForCategory($category)),
+                'expiration_date'    => $expirationDate ?? $base->expiration_date,
+                'engas_unit_cost'    => $engasUnitCost ?? $base->engas_unit_cost,
+                'source_subsidy_id'  => $sourceSubsidyId,
+                'is_active'          => true,
             ]);
             return $base->fresh();
         }
 
         return static::create([
-            'stock_number'    => $stockNumber,
-            'description'     => $description,
-            'ris_number'      => $risNumber,
-            'unit'            => $unit,
-            'category'        => $category,
-            'account_code'    => $accountCode ?: static::getAccountCodeForCategory($category),
-            'warehouse_id'    => $warehouseId,
-            'unit_cost'       => $unitCost,
-            'engas_unit_cost' => $engasUnitCost,
-            'quantity'        => 0,
-            'expiration_date' => $expirationDate,
-            'is_active'       => true,
+            'stock_number'       => $stockNumber,
+            'description'        => $description,
+            'ris_number'         => $risNumber,
+            'unit'               => $unit,
+            'category'           => $category,
+            'account_code'       => $accountCode ?: static::getAccountCodeForCategory($category),
+            'warehouse_id'       => $warehouseId,
+            'unit_cost'          => $unitCost,
+            'engas_unit_cost'    => $engasUnitCost,
+            'quantity'           => 0,
+            'expiration_date'    => $expirationDate,
+            'source_subsidy_id'  => $sourceSubsidyId,
+            'is_active'          => true,
         ]);
     }
 

@@ -24,7 +24,7 @@
     @endif
 </div>
 
-<form action="{{ route('requisitions.process_approval', $requisition->id) }}" method="POST">
+<form action="{{ route('requisitions.process_approval', $requisition->id) }}" method="POST" id="approval-form">
 @csrf
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">
     <div>
@@ -370,6 +370,9 @@ document.addEventListener('DOMContentLoaded', function() {
         onWhChange(idx, restoreItemId || null);
     });
 });
+
+// Never allow a double-click to process the approval twice.
+guardFormSubmit(document.getElementById('approval-form'));
 </script>
 @endpush
 @endsection

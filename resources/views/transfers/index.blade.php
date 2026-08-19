@@ -89,8 +89,16 @@
                             </span>
                         </div>
                         @endif
-                        @if($transfer->source_ris_number)
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">RIS: {{ $transfer->sourceSubsidyReference() }}</div>
+                        @if($transfer->source_subsidy_code || $transfer->source_ris_number)
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                            @if($transfer->sourceSubsidyCode())
+                            <code style="font-weight:700;color:var(--primary)">{{ $transfer->sourceSubsidyCode() }}</code>
+                            @endif
+                            @if($transfer->source_ris_number)
+                            @if($transfer->sourceSubsidyCode()) · @endif
+                            RIS: {{ $transfer->sourceSubsidyReference() }}
+                            @endif
+                        </div>
                         @endif
                     </td>
                     <td>{{ $transfer->transfer_date->format('M d, Y') }}</td>

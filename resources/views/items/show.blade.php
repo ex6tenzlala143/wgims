@@ -46,6 +46,7 @@
                             'status' => $item->source_subsidy_status,
                             'ris'    => $item->sourceSubsidyReference(),
                             'dr'     => $item->sourceDrReference(),
+                            'code'   => $item->sourceSubsidyCode(),
                             'prefix' => 'FROM',
                         ])
                         @if($item->source_subsidy_ris || $item->source_subsidy_dr)

@@ -163,6 +163,7 @@
                                 'status' => $firstItem->source_subsidy_status,
                                 'ris'    => $firstItem->sourceSubsidyReference(),
                                 'dr'     => $firstItem->sourceDrReference(),
+                                'code'   => $firstItem->sourceSubsidyCode(),
                                 'prefix' => 'FROM',
                             ])
                         </div>

@@ -24,7 +24,7 @@
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Stock Number</div>
             <div style="font-size:16px;font-weight:700;margin-top:4px"><code>{{ $item->stock_number }}</code></div>
-            <div style="margin-top:6px">@include('partials.subsidy-source-badge', ['status' => $item->source_subsidy_status, 'ris' => $item->sourceSubsidyReference(), 'dr' => $item->sourceDrReference(), 'prefix' => 'FROM'])</div>
+            <div style="margin-top:6px">@include('partials.subsidy-source-badge', ['status' => $item->source_subsidy_status, 'ris' => $item->sourceSubsidyReference(), 'dr' => $item->sourceDrReference(), 'code' => $item->sourceSubsidyCode(), 'prefix' => 'FROM'])</div>
         </div>
     </div>
     <div class="card">

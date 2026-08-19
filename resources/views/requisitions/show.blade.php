@@ -226,6 +226,7 @@
                                 'status' => $riSub->source_subsidy_status,
                                 'ris'    => $riSub->sourceSubsidyReference(),
                                 'dr'     => $riSub->sourceDrReference(),
+                                'code'   => $riSub->sourceSubsidyCode(),
                                 'prefix' => 'RELATED TO',
                             ])
                         </div>
@@ -452,6 +453,7 @@
                                     'status' => $di->item->source_subsidy_status,
                                     'ris'    => $di->item->sourceSubsidyReference(),
                                     'dr'     => $di->item->sourceDrReference(),
+                                    'code'   => $di->item->sourceSubsidyCode(),
                                     'prefix' => 'RELATED TO',
                                 ])
                             </div>

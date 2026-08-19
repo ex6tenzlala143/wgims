@@ -60,6 +60,6 @@ echo 2. Test inventory merging (Items page)
 echo 3. Test stock transfer modal
 echo 4. Test permissions (if using warehouse manager account)
 echo.
-echo See TESTING_GUIDE.md for detailed test scenarios.
+echo See docs\qa\TESTING_GUIDE.md for detailed test scenarios.
 echo.
 pause

@@ -5,6 +5,7 @@
      $status  - 'deleted' | 'archived' | 'active' | null
      $ris     - Subsidy/RIS reference (string|null)
      $dr      - Subsidy DR reference (string|null)
+     $code    - permanent Subsidy ID, e.g. SUB-000007 (string|null)
      $prefix  - 'FROM' (items) or 'RELATED TO' (transfers / requisitions)
 
      Note: 'active' status means the item was previously from an archived subsidy
@@ -18,11 +19,13 @@
 @endphp
 <span class="badge subsidy-source-badge {{ $isDeleted ? 'badge-danger' : 'badge-warning' }}"
       data-sub-status="{{ $status }}"
+      data-sub-code="{{ $code ?? '' }}"
       data-sub-ris="{{ $ris ?? '' }}"
       data-sub-dr="{{ $dr ?? '' }}"
       title="{{ ($isDeleted ? 'Source subsidy was deleted' : 'Source subsidy is archived') }} — click for details."
       style="cursor:pointer;white-space:normal;text-align:left">
     <i class="fas fa-exclamation-triangle"></i>
     {{ $prefix ?? 'FROM' }} {{ $label }} SUBSIDY
+    @if($code ?? null)<span style="opacity:.85;font-weight:600">({{ $code }})</span>@endif
 </span>
 @endif

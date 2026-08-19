@@ -25,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class DeliverySubsidyController extends Controller
@@ -142,7 +143,8 @@ class DeliverySubsidyController extends Controller
 
         $user = Auth::user();
 
-        DB::transaction(function () use ($request, $user) {
+        try {
+            DB::transaction(function () use ($request, $user) {
             // quantity_requested = sum of all line item quantities.
             // Unit Cost and Warehouse are deliberately NOT captured at creation —
             // they are decided by the dispatcher when the shipment is recorded.
@@ -203,7 +205,17 @@ class DeliverySubsidyController extends Controller
             if (! empty($notifRows)) {
                 \App\Models\SystemNotification::insert($notifRows);
             }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Delivery / subsidy creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('delivery_subsidies.index')->with('success', 'Delivery / Subsidy created successfully.');
     }
@@ -396,7 +408,8 @@ class DeliverySubsidyController extends Controller
         $oldRequested = (float) $deliverySubsidy->quantity_requested;
         $changes      = [];
 
-        DB::transaction(function () use ($request, $deliverySubsidy, $existingItems, &$changes, &$oldStatus, &$oldRequested) {
+        try {
+            DB::transaction(function () use ($request, $deliverySubsidy, $existingItems, &$changes, &$oldStatus, &$oldRequested) {
             // ── Header ──────────────────────────────────────────────────────
             // ris_number / supplier_id / dr_number are the historical identity
             // of the request and are deliberately frozen here (mirrors the RIS
@@ -500,7 +513,20 @@ class DeliverySubsidyController extends Controller
                 [],
                 'correction'
             );
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Delivery / subsidy correction failed', [
+                'delivery_subsidy_id' => $deliverySubsidy->id,
+                'error'               => $e->getMessage(),
+                'trace'               => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'errors' => ['general' => ['The transaction could not be completed. No changes were made. Please try again.']],
+            ], 500);
+        }
 
         return response()->json(['redirect' => route('delivery_subsidies.show', $deliverySubsidy->id)]);
     }
@@ -577,7 +603,8 @@ class DeliverySubsidyController extends Controller
 
         $cascadeSvc = new DeliverySubsidyCascadeService();
 
-        DB::transaction(function () use ($request, $deliverySubsidy, $cascadeSvc) {
+        try {
+            DB::transaction(function () use ($request, $deliverySubsidy, $cascadeSvc) {
             // ── Snapshot old values for audit + cascade detection ─────────
             $oldRisNumber  = $deliverySubsidy->ris_number;
             $oldSupplierId = $deliverySubsidy->supplier_id;
@@ -707,7 +734,24 @@ class DeliverySubsidyController extends Controller
 
             // ── Write audit log ───────────────────────────────────────────
             $cascadeSvc->recordAudit($deliverySubsidy->id, $changedFields, $cascadeSummary);
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Delivery / subsidy update failed', [
+                'delivery_subsidy_id' => $deliverySubsidy->id,
+                'error'               => $e->getMessage(),
+                'trace'               => $e->getTraceAsString(),
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'errors' => ['general' => ['The transaction could not be completed. No changes were made. Please try again.']],
+                ], 500);
+            }
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         $success = 'Delivery / Subsidy updated.';
 
@@ -726,7 +770,8 @@ class DeliverySubsidyController extends Controller
         $lineageIds = [];
         $descendantIds = [];
 
-        DB::transaction(function () use ($deliverySubsidy, &$markedTransferCount, &$lineageIds, &$descendantIds) {
+        try {
+            DB::transaction(function () use ($deliverySubsidy, &$markedTransferCount, &$lineageIds, &$descendantIds) {
             // ── Flag every related Stock Transfer BEFORE the subsidy disappears ──
             // The transfer keeps its inventory movement and is only *marked*, never
             // auto-deleted: the administrator reviews it and decides afterwards.
@@ -755,7 +800,8 @@ class DeliverySubsidyController extends Controller
                                 $deliverySubsidy->id,
                                 $deliverySubsidy->ris_number,
                                 $deliverySubsidy->dr_number,
-                                'deleted'
+                                'deleted',
+                                $deliverySubsidy->subsidy_code
                             );
 
                             $affectedItemIds[$di->item_id] = true;
@@ -788,7 +834,8 @@ class DeliverySubsidyController extends Controller
                             $deliverySubsidy->id,
                             $deliverySubsidy->ris_number,
                             $deliverySubsidy->dr_number,
-                            'deleted'
+                            'deleted',
+                            $deliverySubsidy->subsidy_code
                         );
                     }
                 }
@@ -830,7 +877,18 @@ class DeliverySubsidyController extends Controller
                     StockCardEntry::recalculateBalancesForItem($itemId);
                 }
             }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Delivery / subsidy deletion failed', [
+                'delivery_subsidy_id' => $deliverySubsidy->id,
+                'error'               => $e->getMessage(),
+                'trace'               => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         $success = "DR #{$deliverySubsidy->dr_number} deleted and stock reversed. "
             . ($markedTransferCount > 0
@@ -915,22 +973,34 @@ class DeliverySubsidyController extends Controller
         abort_unless(Auth::user()->canWrite(), 403);
 
         if (! $deliverySubsidy->isArchived()) {
-            DB::transaction(function () use ($deliverySubsidy) {
-                $deliverySubsidy->update(['is_archived' => true]);
+            try {
+                DB::transaction(function () use ($deliverySubsidy) {
+                    $deliverySubsidy->update(['is_archived' => true]);
 
-                $this->markTransfersWithSubsidyState($deliverySubsidy, 'archived', 'subsidy_archived');
+                    $this->markTransfersWithSubsidyState($deliverySubsidy, 'archived', 'subsidy_archived');
 
-                $this->markItemsWithSubsidyState($deliverySubsidy, 'archived');
+                    $this->markItemsWithSubsidyState($deliverySubsidy, 'archived');
 
-                DeliverySubsidyAuditLog::create([
+                    DeliverySubsidyAuditLog::create([
+                        'delivery_subsidy_id' => $deliverySubsidy->id,
+                        'user_id'             => Auth::user()->id,
+                        'action'              => 'archive',
+                        'changed_fields'      => [
+                            'is_archived' => ['old' => false, 'new' => true],
+                        ],
+                    ]);
+                });
+            } catch (ValidationException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                Log::error('Delivery / subsidy archiving failed', [
                     'delivery_subsidy_id' => $deliverySubsidy->id,
-                    'user_id'             => Auth::user()->id,
-                    'action'              => 'archive',
-                    'changed_fields'      => [
-                        'is_archived' => ['old' => false, 'new' => true],
-                    ],
+                    'error'               => $e->getMessage(),
+                    'trace'               => $e->getTraceAsString(),
                 ]);
-            });
+
+                return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+            }
         }
 
         return redirect()->route('delivery_subsidies.index')
@@ -947,40 +1017,52 @@ class DeliverySubsidyController extends Controller
         abort_unless(Auth::user()->canWrite(), 403);
 
         if ($deliverySubsidy->isArchived()) {
-            DB::transaction(function () use ($deliverySubsidy) {
-                $deliverySubsidy->update(['is_archived' => false]);
+            try {
+                DB::transaction(function () use ($deliverySubsidy) {
+                    $deliverySubsidy->update(['is_archived' => false]);
 
-                foreach ($this->relatedStockTransfers($deliverySubsidy) as $transfer) {
-                    if ($transfer->source_subsidy_status !== 'archived') {
-                        continue;
+                    foreach ($this->relatedStockTransfers($deliverySubsidy) as $transfer) {
+                        if ($transfer->source_subsidy_status !== 'archived') {
+                            continue;
+                        }
+
+                        $transfer->update(['source_subsidy_status' => null]);
+
+                        StockTransferAuditLog::create([
+                            'stock_transfer_id' => $transfer->id,
+                            'transfer_number'   => $transfer->transfer_number,
+                            'user_id'           => Auth::user()->id,
+                            'action'            => 'subsidy_restored',
+                            'changed_fields'    => [
+                                'ris_number'     => $deliverySubsidy->ris_number,
+                                'dr_number'      => $deliverySubsidy->dr_number,
+                                'subsidy_status' => null,
+                            ],
+                        ]);
                     }
 
-                    $transfer->update(['source_subsidy_status' => null]);
+                    $this->markItemsWithSubsidyState($deliverySubsidy, 'active');
 
-                    StockTransferAuditLog::create([
-                        'stock_transfer_id' => $transfer->id,
-                        'transfer_number'   => $transfer->transfer_number,
-                        'user_id'           => Auth::user()->id,
-                        'action'            => 'subsidy_restored',
-                        'changed_fields'    => [
-                            'ris_number'     => $deliverySubsidy->ris_number,
-                            'dr_number'      => $deliverySubsidy->dr_number,
-                            'subsidy_status' => null,
+                    DeliverySubsidyAuditLog::create([
+                        'delivery_subsidy_id' => $deliverySubsidy->id,
+                        'user_id'             => Auth::user()->id,
+                        'action'              => 'restore',
+                        'changed_fields'      => [
+                            'is_archived' => ['old' => true, 'new' => false],
                         ],
                     ]);
-                }
-
-                $this->markItemsWithSubsidyState($deliverySubsidy, 'active');
-
-                DeliverySubsidyAuditLog::create([
+                });
+            } catch (ValidationException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                Log::error('Delivery / subsidy restore failed', [
                     'delivery_subsidy_id' => $deliverySubsidy->id,
-                    'user_id'             => Auth::user()->id,
-                    'action'              => 'restore',
-                    'changed_fields'      => [
-                        'is_archived' => ['old' => true, 'new' => false],
-                    ],
+                    'error'               => $e->getMessage(),
+                    'trace'               => $e->getTraceAsString(),
                 ]);
-            });
+
+                return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+            }
         }
 
         return redirect()->route('delivery_subsidies.index')
@@ -1086,7 +1168,8 @@ class DeliverySubsidyController extends Controller
                         $deliverySubsidy->id,
                         $deliverySubsidy->ris_number,
                         $deliverySubsidy->dr_number,
-                        null
+                        null,
+                        $deliverySubsidy->subsidy_code
                     );
                 }
                 continue;
@@ -1097,7 +1180,8 @@ class DeliverySubsidyController extends Controller
                 $deliverySubsidy->id,
                 $deliverySubsidy->ris_number,
                 $deliverySubsidy->dr_number,
-                $state
+                $state,
+                $deliverySubsidy->subsidy_code
             );
         }
     }
@@ -1271,7 +1355,8 @@ class DeliverySubsidyController extends Controller
             return back()->withInput()->withErrors($errors);
         }
 
-        DB::transaction(function () use ($request, $deliverySubsidy, $user) {
+        try {
+            DB::transaction(function () use ($request, $deliverySubsidy, $user) {
             // ── Delivery header: one row per shipment ──────────────────────
             // DR# is now tracked per dispatched item; the header keeps an
             // optional reference for legacy records only.
@@ -1290,13 +1375,26 @@ class DeliverySubsidyController extends Controller
             // Rows without a positive quantity (e.g. fully delivered items that
             // were ignored by validation) are skipped entirely.
             foreach ($request->items as $line) {
-                if ((float) ($line['quantity_delivered'] ?? 0) <= 0) {
+                $qtyDelivered = (float) ($line['quantity_delivered'] ?? 0);
+                if ($qtyDelivered <= 0) {
                     continue;
                 }
 
                 $dsItem = DeliverySubsidyItem::where('id', $line['ds_item_id'])
                     ->where('delivery_subsidy_id', $deliverySubsidy->id)
+                    ->lockForUpdate()
                     ->firstOrFail();
+
+                // Re-check the remaining quantity against the LOCKED row: two
+                // concurrent duplicate submissions are serialized here, and the
+                // second one sees the reduced remaining instead of double-recording.
+                $freshRemaining = max(0, (float) $dsItem->quantity - (float) $dsItem->qty_delivered);
+                if ($qtyDelivered > $freshRemaining + 0.0001) {
+                    throw ValidationException::withMessages([
+                        "items.{$line['ds_item_id']}.quantity_delivered" =>
+                            "Quantity exceeds the remaining quantity of {$freshRemaining} for this item.",
+                    ]);
+                }
 
                 $baseItem = $dsItem->item;
 
@@ -1318,13 +1416,6 @@ class DeliverySubsidyController extends Controller
                 $expirationDate = $line['expiration_date'] ?? null;
                 $drNumber       = trim((string) $line['dr_number']);
 
-                // Quantity was already validated against the remaining amount
-                // above — use it verbatim (rows with 0 are simply skipped).
-                $qtyDelivered = (float) $line['quantity_delivered'];
-                if ($qtyDelivered <= 0) {
-                    continue;
-                }
-
                 // Total ENGAS cost is always computed server-side — the client
                 // cannot override it (qty × engas unit cost).
                 $engasTotalCost = $engasUnitCost !== null ? round($qtyDelivered * $engasUnitCost, 2) : null;
@@ -1342,8 +1433,12 @@ class DeliverySubsidyController extends Controller
                     $baseItem?->ris_number ?? $deliverySubsidy->ris_number,
                     $expirationDate ?: ($baseItem?->expiration_date?->format('Y-m-d')),
                     $engasUnitCost ?? $baseItem?->engas_unit_cost,
-                    $dsItem->account_code ?: ($baseItem->account_code ?? null)
+                    $dsItem->account_code ?: ($baseItem->account_code ?? null),
+                    $deliverySubsidy->id
                 );
+
+                // Lock the exact stock row before the quantity read-modify-write.
+                $item = Item::whereKey($item->id)->lockForUpdate()->first() ?? $item;
 
                 if ($item->id !== $dsItem->item_id || $dsItem->unit_cost != $actualUnitCost) {
                     $dsItemUpdate = [
@@ -1392,7 +1487,8 @@ class DeliverySubsidyController extends Controller
                     $deliverySubsidy->id,
                     $deliverySubsidy->ris_number,
                     $deliverySubsidy->dr_number,
-                    'active'
+                    'active',
+                    $deliverySubsidy->subsidy_code
                 );
 
                 StockCardEntry::create([
@@ -1439,7 +1535,18 @@ class DeliverySubsidyController extends Controller
             if (! empty($notifRows)) {
                 \App\Models\SystemNotification::insert($notifRows);
             }
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Delivery recording failed', [
+                'delivery_subsidy_id' => $deliverySubsidy->id,
+                'error'               => $e->getMessage(),
+                'trace'               => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()->route('delivery_subsidies.show', $deliverySubsidy)
             ->with('success', 'Shipment recorded and stock updated.');
@@ -1561,7 +1668,8 @@ class DeliverySubsidyController extends Controller
         $cascadeSvc     = new DeliverySubsidyCascadeService();
         $cascadeSummary = [];
 
-        DB::transaction(function () use ($request, $deliverySubsidy, $delivery, $cascadeSvc, $cascadeSummary) {
+        try {
+            DB::transaction(function () use ($request, $deliverySubsidy, $delivery, $cascadeSvc, $cascadeSummary) {
             $affectedItemIds = [];
 
             // Snapshot header values before any edits so the audit trail shows
@@ -1578,7 +1686,10 @@ class DeliverySubsidyController extends Controller
 
             foreach ($request->items as $idx => $line) {
                 /** @var DeliveryItem $di */
-                $di = DeliveryItem::with(['item', 'deliverySubsidyItem'])->findOrFail($line['di_id']);
+                $di = DeliveryItem::with(['deliverySubsidyItem'])
+                    ->whereKey($line['di_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
                 if ($di->delivery_id !== $delivery->id) {
                     continue;
@@ -1597,7 +1708,7 @@ class DeliverySubsidyController extends Controller
                 $oldCost   = (float) $di->unit_cost;
 
                 $dsItem = $di->deliverySubsidyItem;
-                $oldItem = $di->item;
+                $oldItem = Item::whereKey($di->item_id)->lockForUpdate()->first();
 
                 if (! $dsItem) {
                     continue;
@@ -1636,8 +1747,13 @@ class DeliverySubsidyController extends Controller
                             $dsItem->item?->ris_number ?? $deliverySubsidy->ris_number,
                             $newExpiry ?: ($dsItem->item?->expiration_date?->format('Y-m-d')),
                             $newEngas ?? $dsItem->item?->engas_unit_cost,
-                            $dsItem->account_code ?: ($dsItem->item?->account_code ?? null)
+                            $dsItem->account_code ?: ($dsItem->item?->account_code ?? null),
+                            $deliverySubsidy->id
                         );
+
+                        // Lock the exact stock row before the quantity read-modify-write.
+                        $item = Item::whereKey($item->id)->lockForUpdate()->first() ?? $item;
+
                         $item->update([
                             'quantity'   => $item->quantity + $newQty,
                             'unit_cost'  => $newCost,
@@ -1680,7 +1796,8 @@ class DeliverySubsidyController extends Controller
                     $deliverySubsidy->id,
                     $deliverySubsidy->ris_number,
                     $deliverySubsidy->dr_number,
-                    'active'
+                    'active',
+                    $deliverySubsidy->subsidy_code
                 );
                 $affectedItemIds[$item->id] = true;
 
@@ -1830,7 +1947,19 @@ class DeliverySubsidyController extends Controller
             }
 
             $cascadeSvc->recordAudit($deliverySubsidy->id, $changedFields, $cascadeSummary);
-        });
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Delivery edit failed', [
+                'delivery_subsidy_id' => $deliverySubsidy->id,
+                'delivery_id'         => $delivery->id,
+                'error'               => $e->getMessage(),
+                'trace'               => $e->getTraceAsString(),
+            ]);
+
+            return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
+        }
 
         return redirect()
             ->route('delivery_subsidies.show', $deliverySubsidy)
