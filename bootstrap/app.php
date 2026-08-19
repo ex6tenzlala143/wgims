@@ -17,6 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.create'       => \App\Http\Middleware\AdminCreateOnly::class,
             'admin.only.strict'  => \App\Http\Middleware\AdminOnlyStrict::class,
         ]);
+
+        // Runs on every web request after the session middleware:
+        // 1. Kills sessions of deactivated accounts before controllers run.
+        // 2. Marks all responses no-store so logged-out users can never see
+        //    protected pages via Back button, bookmark, or browser cache.
+        $middleware->web(append: [
+            \App\Http\Middleware\EnsureUserIsActive::class,
+            \App\Http\Middleware\NoCache::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

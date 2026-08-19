@@ -130,6 +130,13 @@ class UserController extends Controller
 
         $user->update($data);
 
+        // Deactivating an account must revoke its "Remember me" token so the
+        // account can never silently re-authenticate from a remembered cookie.
+        if (! $request->boolean('is_active', true) && $user->remember_token) {
+            $user->remember_token = null;
+            $user->save();
+        }
+
         if ($noWarehouseRole) {
             // Admins and warehouse managers have no warehouse assignments
             $user->warehouses()->sync([]);
