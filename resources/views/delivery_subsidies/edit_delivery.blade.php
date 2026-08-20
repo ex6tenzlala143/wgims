@@ -21,7 +21,6 @@
         <strong>Admin Edit Mode.</strong>
         Changing quantities will automatically adjust item stock levels, stock card entries,
         RIS (requisition items), and stock transfer records.
-        The delta between old and new quantity is applied — no stock is double-counted.
     </div>
 </div>
 
@@ -93,7 +92,7 @@
             <div class="card">
                 <div class="card-header">
                     <h3><i class="fas fa-boxes"></i> Item Detail</h3>
-                    <span style="font-size:12px;color:var(--text-muted)">Adjust quantities, unit cost, warehouse, ENGAS unit cost and DR#. Stock levels update automatically — the delta is applied, never double-counted.</span>
+                    <span style="font-size:12px;color:var(--text-muted)">Adjust quantities, unit cost, warehouse, ENGAS unit cost and DR#. Stock levels update automatically.</span>
                 </div>
 
                 <div style="padding:20px 20px 4px">

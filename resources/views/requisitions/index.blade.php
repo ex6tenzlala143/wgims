@@ -18,7 +18,7 @@
         <form method="GET" style="margin:0">
             {{-- Search row --}}
             <div class="search-row">
-                <div class="search-input" style="width:380px">
+                <div class="search-input">
                     <i class="fas fa-search"></i>
                     <input type="text" name="search" class="form-control" placeholder="Search RIS#, DR#, office, purpose..." value="{{ request('search') }}">
                 </div>
@@ -43,6 +43,13 @@
             </div>
         </form>
     </div>
+    @if(request('search'))
+    <div class="filter-notice">
+        <i class="fas fa-filter"></i>
+        Showing <strong>{{ $requisitions->total() }}</strong> result(s) for "<strong>{{ request('search') }}</strong>"
+        <a href="{{ route('requisitions.index', request()->except(['search', 'page'])) }}">Clear search</a>
+    </div>
+    @endif
     <div class="table-wrapper">
         <table>
             <thead>

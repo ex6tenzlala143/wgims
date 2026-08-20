@@ -120,9 +120,7 @@
                 <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
                     {{ $ris->date_approved?->format('M d, Y') ?? '—' }}
                     &nbsp;·&nbsp;
-                    <span class="badge badge-secondary">{{ $ris->warehouse_names ?? ($ris->warehouse->code ?? '—') }}</span>
-                    &nbsp;·&nbsp;
-                    {{ $ris->warehouse_names ?? ($ris->warehouse->name ?? '—') }}
+                    <span class="badge badge-secondary">{{ $ris->warehouse_names ?? ($ris->warehouse->name ?? '—') }}</span>
                     @if($ris->office)
                     &nbsp;·&nbsp; Office: {{ $ris->office }}
                     @endif
@@ -136,8 +134,7 @@
 
             {{-- Item count --}}
             <span style="font-size:12px;color:var(--text-muted);flex-shrink:0">
-                {{ $items->count() }} item(s) &nbsp;·&nbsp;
-                <strong style="color:var(--primary)">₱{{ number_format($subtotal, 2) }}</strong>
+                {{ $items->count() }} item(s)
             </span>
         </div>
 

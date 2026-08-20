@@ -34,6 +34,7 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
             'name'     => 'Mark Admin ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_ADMIN,
+            'is_active' => true,
         ]);
     }
 

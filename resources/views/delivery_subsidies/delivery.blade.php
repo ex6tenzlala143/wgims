@@ -302,17 +302,6 @@
 
                 <hr style="border-color:var(--border);margin:12px 0">
 
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;text-align:center">
-                    <div style="background:#f0f9ff;border-radius:8px;padding:10px">
-                        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Requested</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested, 2) }}</div>
-                    </div>
-                    <div style="background:#f0fff4;border-radius:8px;padding:10px">
-                        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Delivered</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--success)">{{ number_format($totalDelivered, 2) }}</div>
-                    </div>
-                </div>
-
                 <div style="background:#fff;border:2px solid var(--primary);border-radius:8px;padding:12px;margin-bottom:12px;text-align:center">
                     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">This Shipment</div>
                     <div id="sidebar-qty" style="font-size:28px;font-weight:800;color:var(--primary)">0.00</div>

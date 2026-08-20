@@ -19,7 +19,6 @@
     <div>
         <strong>Admin Edit Mode.</strong>
         Changing quantities adjusts stock at both the source and destination warehouse.
-        The delta (new − old) is applied — stock is never double-counted.
     </div>
 </div>
 

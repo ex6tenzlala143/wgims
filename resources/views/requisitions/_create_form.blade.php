@@ -137,10 +137,6 @@
                             <div style="font-size:26px;font-weight:800;color:var(--primary);line-height:1.1" id="ris-grand-total">0</div>
                             <div id="ris-item-count" style="font-size:12px;color:var(--text-muted);margin-top:2px">0 line items</div>
                         </div>
-                        <div class="summary-note">
-                            <i class="fas fa-info-circle" style="color:var(--primary)"></i>
-                            Only the item description and quantity are needed here. The warehouse, unit cost and DR number are set per item when the RIS is dispatched.
-                        </div>
                     </aside>
                 </div>
             </div>

@@ -29,6 +29,7 @@ class RequisitionCorrectionTest extends TestCase
             'name'     => 'RC Admin ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_ADMIN,
+            'is_active' => true,
         ]);
     }
 
@@ -42,6 +43,7 @@ class RequisitionCorrectionTest extends TestCase
             'name'     => 'RC Staff ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_STAFF,
+            'is_active' => true,
         ]);
     }
 

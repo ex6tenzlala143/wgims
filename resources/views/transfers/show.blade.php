@@ -185,9 +185,6 @@
                 <i class="fas fa-exchange-alt" style="color:var(--primary);margin-right:6px"></i>
                 Dispatch Progress
             </span>
-            <span style="font-size:13px;color:var(--text-muted)">
-                <span class="badge {{ $transfer->getStatusBadgeClass() }}">{{ $transfer->getStatusLabel() }}</span>
-            </span>
         </div>
 
         {{-- Progress bar --}}
@@ -238,11 +235,6 @@
             <strong>{{ $transfer->toWarehouse->name }}</strong>
             @if($transfer->toWarehouse->code)
             <span style="color:var(--text-muted)">({{ $transfer->toWarehouse->code }})</span>
-            @endif
-            @if(!$isComplete && auth()->user()->role !== \App\Models\User::ROLE_STAFF)
-            <a href="{{ route('transfers.dispatch', $transfer) }}" style="margin-left:auto;color:var(--primary);font-weight:600;font-size:13px">
-                {{ $totalTransferred > 0 ? 'Dispatch remaining →' : 'Dispatch items →' }}
-            </a>
             @endif
         </div>
     </div>

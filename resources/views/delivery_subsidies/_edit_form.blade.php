@@ -46,7 +46,7 @@
     <div class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
         <div class="modal-header">
             <div style="min-width:0">
-                <h2 id="editModalTitle"><i class="fas fa-edit"></i> Edit Delivery/Subsidy <span id="edit-ris-ref" style="color:var(--text-muted);font-weight:600"></span></h2>
+                <h2 id="editModalTitle"><i class="fas fa-edit"></i> Edit Subsidy <span id="edit-ris-ref" style="color:var(--text-muted);font-weight:600"></span></h2>
                 <div class="modal-subtitle" id="edit-modal-subtitle">Editing the subsidy header and its line items. Unit cost and warehouse are assigned at dispatch.</div>
             </div>
             <button type="button" class="modal-close" onclick="closeEditModal()" aria-label="Close"><i class="fas fa-times"></i></button>
@@ -55,9 +55,20 @@
         <form action="#" method="POST" id="edit-form" class="subsidy-form" novalidate>
             @csrf
             <input type="hidden" name="_method" value="PUT">
-            <input type="hidden" name="quantity_requested" id="edit-quantity-requested">
             <div class="modal-body">
                 <div id="edit-form-top-error" style="display:none"></div>
+
+                <div id="edit-related-warning" class="edit-related-warning" style="display:none">
+                    <div style="display:flex;gap:12px;align-items:flex-start">
+                        <i class="fas fa-exclamation-triangle" style="font-size:20px;margin-top:2px"></i>
+                        <div>
+                            <strong>This subsidy already has related transactions.</strong>
+                            <div id="edit-related-warning-detail" style="margin-top:4px;font-size:12.5px;line-height:1.5">
+                                Deliveries, stock cards and inventory records exist for this request. The RIS number, supplier and DR number are locked, and lines that already have delivered stock can only have their requested quantity changed. Delivered stock and inventory are never modified here.
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="subsidy-form-grid">
                     <div class="subsidy-main">
@@ -73,19 +84,25 @@
                                         <input type="date" name="date" id="edit-date" class="form-control" required>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Supplier/Subsidy <span style="color:red">*</span></label>
+                                        <label class="form-label">Supplier/Subsidy <span style="color:red">*</span> <i class="fas fa-lock" id="edit-supplier-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
                                         <select name="supplier_id" id="edit-supplier" class="form-control" required>
                                             <option value="">— Select Supplier/Subsidy —</option>
                                             @foreach($suppliers as $s)
                                             <option value="{{ $s->id }}">{{ $s->name }}</option>
                                             @endforeach
                                         </select>
+                                        <div id="edit-supplier-note" style="display:none;font-size:11px;color:var(--text-muted);margin-top:4px">
+                                            <i class="fas fa-info-circle"></i> Locked because deliveries have been recorded.
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="form-row cols-2">
                                     <div class="form-group">
-                                        <label class="form-label">RIS No. <span style="color:red">*</span></label>
+                                        <label class="form-label">RIS No. <span style="color:red">*</span> <i class="fas fa-lock" id="edit-ris-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
                                         <input type="text" name="ris_number" id="edit-ris-number" class="form-control" placeholder="e.g. RIS-2026-001" required>
+                                        <div id="edit-ris-note" style="display:none;font-size:11px;color:var(--text-muted);margin-top:4px">
+                                            <i class="fas fa-info-circle"></i> Locked because deliveries have been recorded.
+                                        </div>
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label">Place of Delivery</label>
@@ -93,17 +110,15 @@
                                     </div>
                                 </div>
                                 <div class="form-row cols-2">
-                                    <div class="form-group">
+                                    <div class="form-group" id="edit-status-group">
                                         <label class="form-label">Status <span style="color:red">*</span></label>
                                         <select name="status" id="edit-status" class="form-control" required>
                                             <option value="pending">Pending</option>
-                                            <option value="partial">Partial Delivery</option>
-                                            <option value="fully_delivered">Fully Delivered</option>
                                             <option value="cancelled">Cancelled</option>
                                         </select>
                                         <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
                                             <i class="fas fa-info-circle"></i>
-                                            <strong>Fully Delivered</strong> can only be set once the delivered quantity matches the requested quantity.
+                                            Status is recomputed automatically from the requested and delivered quantities once deliveries are recorded.
                                         </div>
                                     </div>
                                     <div class="form-group">
@@ -118,7 +133,7 @@
                         <section class="card form-section">
                             <div class="card-header">
                                 <h3><i class="fas fa-list" style="color:var(--primary)"></i> Line Items</h3>
-                                <button type="button" class="btn btn-sm btn-primary" onclick="editAddRow()"><i class="fas fa-plus"></i> Add Item</button>
+                                <button type="button" class="btn btn-sm btn-primary" id="edit-add-row-btn" onclick="editAddRow()"><i class="fas fa-plus"></i> Add Item</button>
                             </div>
                             <div class="card-body" style="padding:0">
                                 <div class="table-wrapper">
@@ -150,13 +165,8 @@
                             <div id="edit-item-count" style="font-size:12px;color:var(--text-muted);margin-top:2px">0 line items</div>
                         </div>
                         <div class="summary-note">
-                            <div id="edit-cascade-warning" style="display:none;font-size:12px;line-height:1.6;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;color:#92400e">
-                                <i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i>
-                                This record already has deliveries — editing the RIS number cascades to linked items, and lines that already have deliveries cannot be removed.
-                            </div>
-                            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6">
-                                <i class="fas fa-info-circle" style="color:var(--primary)"></i>
-                                Unit cost and destination warehouse are set per item when the delivery is dispatched.
+                            <div id="edit-requested-note" style="font-size:12px;line-height:1.6;color:var(--text-muted)">
+                                The requested quantity is always recomputed from the line items so the header and the lines can never drift apart.
                             </div>
                         </div>
                     </aside>
@@ -164,6 +174,12 @@
             </div>
 
             <div class="modal-footer">
+                <div id="edit-confirm-wrap" style="display:none;flex:1;min-width:0;font-size:12.5px;line-height:1.5;color:var(--text-muted)">
+                    <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;margin:0">
+                        <input type="checkbox" id="edit-confirm-check" style="margin-top:3px">
+                        <span><strong style="color:var(--danger)">I understand</strong> — this subsidy already has related transactions. I only want to edit the request details; delivered stock and inventory records will not be changed.</span>
+                    </label>
+                </div>
                 <button type="button" class="btn btn-secondary" onclick="closeEditModal()"><i class="fas fa-times"></i> Cancel</button>
                 <button type="submit" class="btn btn-primary" style="min-width:170px;justify-content:center"><i class="fas fa-save"></i> Save Changes</button>
             </div>
@@ -271,6 +287,31 @@
         padding: 14px 24px;
         border-top: 1px solid var(--border);
         background: #ffffff;
+    }
+    .edit-related-warning {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #7f1d1d;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+    }
+    .edit-related-warning i { color: var(--danger); }
+    .edit-locked-field {
+        background: #f1f5f9 !important;
+        color: #64748b !important;
+        cursor: not-allowed !important;
+    }
+    .edit-delivered-note {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+        line-height: 1.4;
     }
     body.modal-open { overflow: hidden; }
 
@@ -424,6 +465,7 @@
     var editRowCount    = 0;
     var editLoading     = false;
     var editCurrentId   = null;
+    var editConfirmRequired = false;
     var editDataUrl     = '{{ route('delivery_subsidies.edit_data', ['deliverySubsidy' => '__ID__']) }}';
     var editUpdateUrl   = '{{ route('delivery_subsidies.update', ['deliverySubsidy' => '__ID__']) }}';
     var allOptions      = {!! json_encode($datalistOptions) !!};
@@ -521,13 +563,41 @@
         var qty = document.querySelector('#edit-row-' + idx + ' .edit-qty-input');
         if (qty) qty.value = item.quantity !== undefined ? item.quantity : '';
 
-        // Lines that already have deliveries cannot be removed
-        if (item.has_deliveries) {
+        // Lines that already have delivered stock are locked: only the requested
+        // quantity may change; the item identity cannot be re-pointed or removed.
+        if (item.locked) {
             var btn = document.getElementById('edit-remove-' + idx);
             if (btn) {
                 btn.disabled = true;
                 btn.title = 'This line already has recorded deliveries and cannot be removed';
                 btn.innerHTML = '<i class="fas fa-lock"></i>';
+            }
+            if (desc) {
+                desc.readOnly = true;
+                desc.classList.add('edit-locked-field');
+                desc.title = 'This line has delivered stock — the item cannot be changed';
+            }
+            var unitSel = document.getElementById('edit-unit-' + idx);
+            if (unitSel) {
+                unitSel.setAttribute('data-orig', item.unit || '');
+                unitSel.classList.add('edit-locked-field');
+            }
+            var catSel = document.getElementById('edit-category-' + idx);
+            if (catSel) {
+                catSel.setAttribute('data-orig', item.category || '');
+                catSel.classList.add('edit-locked-field');
+            }
+            var expiry = document.getElementById('edit-expiry-' + idx);
+            if (expiry) {
+                expiry.readOnly = true;
+                expiry.classList.add('edit-locked-field');
+            }
+            if (qty) {
+                qty.min = item.qty_delivered;
+                var note = document.createElement('div');
+                note.className = 'edit-delivered-note';
+                note.textContent = 'Delivered: ' + Number(item.qty_delivered || 0).toLocaleString('en-PH', { maximumFractionDigits: 2 }) + ' — cannot go below this.';
+                qty.parentElement.appendChild(note);
             }
         }
     }
@@ -654,10 +724,57 @@
         var ref = document.getElementById('edit-ris-ref');
         if (ref) ref.textContent = data.ris_number ? '#' + data.ris_number : '';
 
-        var warn = document.getElementById('edit-cascade-warning');
-        if (warn) warn.style.display = data.has_deliveries ? 'block' : 'none';
+        // ── Locked mode (deliveries exist): freeze the historical identity, ──
+        //    hide the status picker, require explicit confirmation to save.
+        var locked = !!data.has_deliveries;
+        editConfirmRequired = locked;
+
+        var risInput = document.getElementById('edit-ris-number');
+        if (risInput) {
+            risInput.readOnly = locked;
+            risInput.classList.toggle('edit-locked-field', locked);
+        }
+        var supplierSel = document.getElementById('edit-supplier');
+        if (supplierSel) {
+            supplierSel.setAttribute('data-orig', data.supplier_id || '');
+            supplierSel.classList.toggle('edit-locked-field', locked);
+        }
+        var statusGroup = document.getElementById('edit-status-group');
+        if (statusGroup) statusGroup.style.display = locked ? 'none' : '';
+        var addBtn = document.getElementById('edit-add-row-btn');
+        if (addBtn) addBtn.disabled = locked;
+        var confirmWrap = document.getElementById('edit-confirm-wrap');
+        if (confirmWrap) confirmWrap.style.display = locked ? 'flex' : 'none';
+        var confirmCheck = document.getElementById('edit-confirm-check');
+        if (confirmCheck) confirmCheck.checked = false;
+        var warn = document.getElementById('edit-related-warning');
+        if (warn) warn.style.display = locked ? 'block' : 'none';
+        var risLock = document.getElementById('edit-ris-lock');
+        if (risLock) risLock.style.display = locked ? 'inline' : 'none';
+        var supplierLock = document.getElementById('edit-supplier-lock');
+        if (supplierLock) supplierLock.style.display = locked ? 'inline' : 'none';
+        var risNote = document.getElementById('edit-ris-note');
+        if (risNote) risNote.style.display = locked ? 'block' : 'none';
+        var supplierNote = document.getElementById('edit-supplier-note');
+        if (supplierNote) supplierNote.style.display = locked ? 'block' : 'none';
+        var sub = document.getElementById('edit-modal-subtitle');
+        if (sub) {
+            sub.textContent = locked
+                ? 'Only the request details can be edited: date, place of delivery, remarks and requested quantities. Delivered stock and inventory are never changed.'
+                : 'Editing the subsidy header and its line items. Unit cost and warehouse are assigned at dispatch.';
+        }
 
         (data.items || []).forEach(function (item) { editAddRow(item); });
+
+        // In locked mode no lines may be added or removed — only quantities
+        // on the existing lines (the Add Item button is already disabled above).
+        if (locked) {
+            document.querySelectorAll('#edit-items-body .remove-row').forEach(function (btn) {
+                btn.disabled = true;
+                btn.title = 'Lines cannot be added or removed once deliveries exist';
+                btn.innerHTML = '<i class="fas fa-lock"></i>';
+            });
+        }
 
         editCalcTotal();
         editUpdateCount();
@@ -688,6 +805,17 @@
 
     var editForm = document.getElementById('edit-form');
     if (editForm) {
+        // Locked-mode guard for the supplier select (readonly is not supported
+        // on <select> — silently reset any attempted change).
+        var supplierSel = document.getElementById('edit-supplier');
+        if (supplierSel) {
+            supplierSel.addEventListener('change', function () {
+                if (this.classList.contains('edit-locked-field')) {
+                    this.value = this.getAttribute('data-orig') || '';
+                }
+            });
+        }
+
         editForm.addEventListener('submit', function (e) {
             e.preventDefault();
             if (!editCurrentId) return;
@@ -697,6 +825,28 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
             editClearErrors();
+
+            // This subsidy already has related transactions — require explicit
+            // confirmation before anything is saved.
+            if (editConfirmRequired) {
+                var confirmCheck = document.getElementById('edit-confirm-check');
+                if (!confirmCheck || !confirmCheck.checked) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    var top = document.getElementById('edit-form-top-error');
+                    if (top) {
+                        top.style.display = 'block';
+                        top.className = 'edit-form-error';
+                        top.innerHTML = '';
+                        var msg = document.createElement('div');
+                        msg.textContent = 'Tick the confirmation box to continue — this subsidy already has related transactions and only the request details will be changed.';
+                        top.appendChild(msg);
+                    }
+                    var body = editForm.querySelector('.modal-body');
+                    if (body) body.scrollTop = 0;
+                    return;
+                }
+            }
 
             var fd = new FormData(editForm);
 

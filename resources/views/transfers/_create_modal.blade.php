@@ -511,7 +511,7 @@ function populateTransferItemSelect(selectEl) {
     transferSourceItems.forEach(item => {
         const opt = document.createElement('option');
         opt.value = item.id;
-        opt.textContent = `${item.description} (${item.unit}) — ${item.stock_number || 'No SN'} | Qty: ${item.quantity}`;
+        opt.textContent = `${item.description} — ${item.stock_number || 'No SN'}`;
         opt.dataset.unit = item.unit;
         opt.dataset.unitCost = item.unit_cost;
         opt.dataset.engasUnitCost = item.engas_unit_cost || 'null';

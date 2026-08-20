@@ -55,13 +55,18 @@ class StockTransferController extends Controller
             $query->whereDate('transfer_date', '<=', $request->date_to);
         }
 
-        // Free-text search: transfer number or original Subsidy/RIS reference
+        // Free-text search: transfer number, original Subsidy/RIS/DR reference,
+        // Subsidy ID, or source/destination warehouse name (case-insensitive
+        // partial match via LIKE, always server-side).
         if ($request->filled('q')) {
             $q = trim((string) $request->q);
             $query->where(function ($qq) use ($q) {
                 $qq->where('transfer_number', 'like', "%{$q}%")
                     ->orWhere('source_ris_number', 'like', "%{$q}%")
-                    ->orWhere('source_dr_number', 'like', "%{$q}%");
+                    ->orWhere('source_dr_number', 'like', "%{$q}%")
+                    ->orWhere('source_subsidy_code', 'like', "%{$q}%")
+                    ->orWhereHas('fromWarehouse', fn ($w) => $w->where('name', 'like', "%{$q}%"))
+                    ->orWhereHas('toWarehouse', fn ($w) => $w->where('name', 'like', "%{$q}%"));
             });
         }
 

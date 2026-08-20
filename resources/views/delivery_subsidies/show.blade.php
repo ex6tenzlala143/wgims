@@ -26,9 +26,6 @@
         <button type="button" class="btn btn-secondary" onclick="openEditModal({{ $deliverySubsidy->id }})">
             <i class="fas fa-edit"></i> Edit Subsidy
         </button>
-        <button type="button" class="btn btn-primary" onclick="openCorrectSubsidyModal()">
-            <i class="fas fa-sync-alt"></i> Correct Subsidy
-        </button>
         @endif
         @if(auth()->user()->isAdmin())
         <a href="{{ route('delivery_subsidies.audit_log', $deliverySubsidy->id) }}" class="btn btn-outline">
@@ -101,14 +98,6 @@
                 <div style="font-size:30px;font-weight:800;color:var(--primary)">₱{{ number_format($deliverySubsidy->total_amount, 2) }}</div>
             </div>
             <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
-                <div style="background:#f7fafc;border-radius:8px;padding:10px">
-                    <div style="color:var(--text-muted)">Qty Requested</div>
-                    <div style="font-weight:700;font-size:18px">{{ number_format($deliverySubsidy->quantity_requested, 2) }}</div>
-                </div>
-                <div style="background:#f7fafc;border-radius:8px;padding:10px">
-                    <div style="color:var(--text-muted)">Qty Delivered</div>
-                    <div style="font-weight:700;font-size:18px;color:var(--success)">{{ number_format($deliverySubsidy->totalDelivered(), 2) }}</div>
-                </div>
                 <div style="background:#f7fafc;border-radius:8px;padding:10px">
                     <div style="color:var(--text-muted)">Items Ordered</div>
                     <div style="font-weight:700;font-size:18px">{{ $deliverySubsidy->items->count() }}</div>
@@ -693,6 +682,5 @@
 
 @if(auth()->user()->canWrite())
 @include('delivery_subsidies._edit_form')
-@include('delivery_subsidies._correct_subsidy_modal')
 @endif
 @endsection

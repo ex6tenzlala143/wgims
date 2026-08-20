@@ -13,10 +13,14 @@ return new class extends Migration
     public function up(): void
     {
         // Sync existing item catalog items to inherit account codes from their parent categories
+        // (correlated subquery form, no table alias — runs on both MySQL and SQLite)
         DB::statement('
-            UPDATE item_catalog_items ci
-            INNER JOIN item_categories cat ON ci.item_category_id = cat.id
-            SET ci.account_code = cat.account_code
+            UPDATE item_catalog_items
+            SET account_code = (
+                SELECT cat.account_code
+                FROM item_categories cat
+                WHERE cat.id = item_catalog_items.item_category_id
+            )
         ');
     }
 

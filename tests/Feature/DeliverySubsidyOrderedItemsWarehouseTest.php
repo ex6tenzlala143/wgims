@@ -24,6 +24,7 @@ class DeliverySubsidyOrderedItemsWarehouseTest extends TestCase
             'name'     => 'Ord Wh Admin ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_ADMIN,
+            'is_active' => true,
         ]);
     }
 

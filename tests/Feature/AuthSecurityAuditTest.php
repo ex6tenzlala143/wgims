@@ -134,8 +134,7 @@ class AuthSecurityAuditTest extends TestCase
             '/items', '/items/create', '/items/1', '/items/1/edit',
             '/delivery-subsidies', '/delivery-subsidies/create', '/delivery-subsidies/1',
             '/delivery-subsidies/1/delivery', '/delivery-subsidies/1/edit',
-            '/delivery-subsidies/1/edit-data', '/delivery-subsidies/1/correction-data',
-            '/delivery-subsidies/1/audit-log', '/delivery-subsidies/1/deliveries/1/edit',
+            '/delivery-subsidies/1/edit-data', '/delivery-subsidies/1/audit-log', '/delivery-subsidies/1/deliveries/1/edit',
             '/requisitions', '/requisitions/create', '/requisitions/1',
             '/requisitions/1/approve', '/requisitions/1/signatories', '/requisitions/1/print',
             '/requisitions/1/edit', '/requisitions/1/correction-data', '/requisitions/1/audit-log',
@@ -291,7 +290,6 @@ class AuthSecurityAuditTest extends TestCase
 
         $this->put('/items/1', [])->assertRedirect(route('login'));
         $this->put('/delivery-subsidies/1', [])->assertRedirect(route('login'));
-        $this->put('/delivery-subsidies/1/correct', [])->assertRedirect(route('login'));
         $this->put('/delivery-subsidies/1/deliveries/1', [])->assertRedirect(route('login'));
         $this->put('/requisitions/1', [])->assertRedirect(route('login'));
         $this->put('/requisitions/1/signatories', [])->assertRedirect(route('login'));

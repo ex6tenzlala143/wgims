@@ -573,11 +573,13 @@
         .search-input input { padding-left: 32px; }
 
         .card-header-filters { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
-        .search-row { display: flex; gap: 8px; align-items: center; }
-        .search-row .search-input { width: 320px; }
+        .search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .search-row .search-input { flex: 1 1 260px; max-width: 380px; }
         .search-row .search-input input { width: 100%; }
         .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--border); }
         .filter-row .form-control { width: auto; min-width: 150px; }
+        .filter-notice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; padding: 10px 16px; background: var(--info-bg); border: 1px solid var(--info); border-radius: 8px; color: var(--info-text); margin: 12px 20px 0; }
+        .filter-notice a { margin-left: auto; color: var(--info-text); font-weight: 600; text-decoration: none; }
 
         /* ── Pagination ───────────────────────────────────────────────────── */
         .pagination {

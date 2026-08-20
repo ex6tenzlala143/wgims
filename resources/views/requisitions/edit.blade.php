@@ -186,7 +186,6 @@
 
                         <div class="ris-item-meta">
                             <span>Unit <strong>{{ $ri->unit ?? ($ri->item?->unit ?? '—') }}</strong></span>
-                            <span>Requested <strong>{{ number_format($ri->quantity_requested, 2) }}</strong></span>
                             @if($ri->dispatchItems->isNotEmpty())
                                 <span>Dispatched From <strong>{{ $ri->dispatchItems->pluck('item.warehouse.name')->unique()->filter()->implode(', ') ?: '—' }}</strong></span>
                             @endif

@@ -28,6 +28,7 @@ class RequisitionDispatchEditTest extends TestCase
             'name'     => 'DE Admin ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_ADMIN,
+            'is_active' => true,
         ]);
     }
 
@@ -41,6 +42,7 @@ class RequisitionDispatchEditTest extends TestCase
             'name'     => 'DE Staff ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_STAFF,
+            'is_active' => true,
         ]);
     }
 

@@ -36,6 +36,7 @@ class SubsidyLineageThroughTransfersTest extends TestCase
             'name'     => 'Lineage Admin ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_ADMIN,
+            'is_active' => true,
         ]);
     }
 

@@ -31,6 +31,7 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             'name'     => 'Del Rev Admin ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_ADMIN,
+            'is_active' => true,
         ]);
     }
 

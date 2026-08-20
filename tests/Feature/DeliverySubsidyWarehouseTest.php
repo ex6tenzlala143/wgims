@@ -30,6 +30,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             'name'     => 'Admin Test ' . $i,
             'password' => bcrypt('secret'),
             'role'     => User::ROLE_ADMIN,
+            'is_active' => true,
         ]);
     }
 

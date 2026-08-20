@@ -23,8 +23,12 @@ return new class extends Migration {
         });
 
         Schema::table('delivery_subsidy_items', function (Blueprint $table) {
-            // Check if foreign key exists before dropping (legacy name from old schema)
-            $table->dropForeign('purchase_order_items_item_id_foreign');
+            // Legacy constraint name from the old schema — it only exists on
+            // MySQL, and dropping a foreign key BY NAME is not supported on
+            // SQLite (which generates its own constraint names). Skip it there.
+            if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+                $table->dropForeign('purchase_order_items_item_id_foreign');
+            }
             $table->unsignedBigInteger('item_id')->nullable()->change();
             $table->foreign('item_id')->references('id')->on('items')->nullOnDelete();
 

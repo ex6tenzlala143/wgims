@@ -18,10 +18,18 @@
 
 {{-- Filters --}}
 <div class="card" style="margin-bottom:16px">
-    <div class="card-body">
+    <div class="card-header-filters">
         <form method="GET" action="{{ route('transfers.index') }}">
-            <div class="filters-bar">
-                <input type="text" name="q" class="form-control" value="{{ request('q') }}" placeholder="Search transfer # / RIS #">
+            {{-- Search row --}}
+            <div class="search-row">
+                <div class="search-input">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="q" class="form-control" placeholder="Search transfer #, RIS #, DR #, Subsidy ID, warehouse..." value="{{ request('q') }}">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+            </div>
+            {{-- Filter row --}}
+            <div class="filter-row">
                 <select name="related_to_deleted_subsidy" class="form-control">
                     <option value="">All Transfers</option>
                     <option value="yes" {{ request('related_to_deleted_subsidy') === 'yes' ? 'selected' : '' }}>Related to Deleted Subsidy</option>
@@ -44,10 +52,17 @@
                 <input type="date" name="date_from" class="form-control" value="{{ request('date_from') }}" placeholder="From date">
                 <input type="date" name="date_to" class="form-control" value="{{ request('date_to') }}" placeholder="To date">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
-                <a href="{{ route('transfers.index') }}" class="btn btn-secondary">Clear</a>
+                <a href="{{ route('transfers.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
             </div>
         </form>
     </div>
+    @if(request('q'))
+    <div class="filter-notice">
+        <i class="fas fa-filter"></i>
+        Showing <strong>{{ $transfers->total() }}</strong> result(s) for "<strong>{{ request('q') }}</strong>"
+        <a href="{{ route('transfers.index', request()->except(['q', 'page'])) }}">Clear search</a>
+    </div>
+    @endif
 </div>
 
 <div class="card">

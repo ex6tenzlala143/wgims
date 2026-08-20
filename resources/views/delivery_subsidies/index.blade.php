@@ -14,39 +14,57 @@
 </div>
 
 <div class="card">
-    <div class="card-header">
-        <form method="GET" class="filters-bar" style="margin:0;width:100%">
-            <select name="status" class="form-control">
-                <option value="">All Status</option>
-                <option value="pending" {{ request('status')=='pending'?'selected':'' }}>Pending</option>
-                <option value="partial" {{ request('status')=='partial'?'selected':'' }}>Partial Delivery</option>
-                <option value="fully_delivered" {{ request('status')=='fully_delivered'?'selected':'' }}>Fully Delivered</option>
-                <option value="cancelled" {{ request('status')=='cancelled'?'selected':'' }}>Cancelled</option>
-            </select>
-            @if(auth()->user()->hasAdminAccess())
-            <select name="warehouse_id" class="form-control">
-                <option value="">All Warehouses</option>
-                @foreach($warehouses as $c)
-                <option value="{{ $c->id }}" {{ request('warehouse_id')==$c->id?'selected':'' }}>{{ $c->name }}</option>
-                @endforeach
-            </select>
-            <select name="account_code" class="form-control">
-                <option value="">All Account Codes</option>
-                @foreach($accountCodes as $code => $label)
-                <option value="{{ $code }}" {{ request('account_code')==$code?'selected':'' }}>{{ $label }}</option>
-                @endforeach
-            </select>
-            @endif
-            <select name="description" class="form-control">
-                <option value="">All Items</option>
-                @foreach($descriptions as $desc)
-                <option value="{{ $desc }}" {{ request('description')===$desc?'selected':'' }}>{{ $desc }}</option>
-                @endforeach
-            </select>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
-            <a href="{{ route('delivery_subsidies.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
+    <div class="card-header-filters">
+        <form method="GET" style="margin:0">
+            {{-- Search row --}}
+            <div class="search-row">
+                <div class="search-input">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="search" class="form-control" placeholder="Search RIS #, DR #, Subsidy ID, supplier, item..." value="{{ request('search') }}">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+            </div>
+            {{-- Filter row --}}
+            <div class="filter-row">
+                <select name="status" class="form-control">
+                    <option value="">All Status</option>
+                    <option value="pending" {{ request('status')=='pending'?'selected':'' }}>Pending</option>
+                    <option value="partial" {{ request('status')=='partial'?'selected':'' }}>Partial Delivery</option>
+                    <option value="fully_delivered" {{ request('status')=='fully_delivered'?'selected':'' }}>Fully Delivered</option>
+                    <option value="cancelled" {{ request('status')=='cancelled'?'selected':'' }}>Cancelled</option>
+                </select>
+                @if(auth()->user()->hasAdminAccess())
+                <select name="warehouse_id" class="form-control">
+                    <option value="">All Warehouses</option>
+                    @foreach($warehouses as $c)
+                    <option value="{{ $c->id }}" {{ request('warehouse_id')==$c->id?'selected':'' }}>{{ $c->name }}</option>
+                    @endforeach
+                </select>
+                <select name="account_code" class="form-control">
+                    <option value="">All Account Codes</option>
+                    @foreach($accountCodes as $code => $label)
+                    <option value="{{ $code }}" {{ request('account_code')==$code?'selected':'' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+                @endif
+                <select name="description" class="form-control">
+                    <option value="">All Items</option>
+                    @foreach($descriptions as $desc)
+                    <option value="{{ $desc }}" {{ request('description')===$desc?'selected':'' }}>{{ $desc }}</option>
+                    @endforeach
+                </select>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
+                <a href="{{ route('delivery_subsidies.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
+            </div>
         </form>
     </div>
+    @if(request('search'))
+    <div class="filter-notice">
+        <i class="fas fa-filter"></i>
+        Showing <strong>{{ $pos->total() }}</strong> result(s) for "<strong>{{ request('search') }}</strong>"
+        <a href="{{ route('delivery_subsidies.index', request()->except(['search', 'page'])) }}">Clear search</a>
+    </div>
+    @endif
     <div class="table-wrapper">
         <table>
             <thead>

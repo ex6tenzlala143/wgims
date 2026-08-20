@@ -73,8 +73,6 @@ Route::middleware('auth')->group(function () {
     Route::middleware('admin.write')->group(function () {
         Route::get('/delivery-subsidies/{deliverySubsidy}/edit',                    [DeliverySubsidyController::class, 'edit'])->name('delivery_subsidies.edit');
         Route::get('/delivery-subsidies/{deliverySubsidy}/edit-data',               [DeliverySubsidyController::class, 'editData'])->name('delivery_subsidies.edit_data');
-        Route::get('/delivery-subsidies/{deliverySubsidy}/correction-data',         [DeliverySubsidyController::class, 'correctionData'])->name('delivery_subsidies.correction_data');
-        Route::put('/delivery-subsidies/{deliverySubsidy}/correct',                 [DeliverySubsidyController::class, 'correct'])->name('delivery_subsidies.correct');
         Route::put('/delivery-subsidies/{deliverySubsidy}',                         [DeliverySubsidyController::class, 'update'])->name('delivery_subsidies.update');
         Route::delete('/delivery-subsidies/{deliverySubsidy}',                      [DeliverySubsidyController::class, 'destroy'])->name('delivery_subsidies.destroy');
         Route::patch('/delivery-subsidies/{deliverySubsidy}/archive',               [DeliverySubsidyController::class, 'archive'])->name('delivery_subsidies.archive');

@@ -158,10 +158,6 @@
                             <div style="font-size:26px;font-weight:800;color:var(--primary);line-height:1.1" id="grand-total">0</div>
                             <div id="item-count" style="font-size:12px;color:var(--text-muted);margin-top:2px">0 line items</div>
                         </div>
-                        <div class="summary-note">
-                            <i class="fas fa-info-circle" style="color:var(--primary)"></i>
-                            Unit cost and destination warehouse are set per item when the delivery is dispatched.
-                        </div>
                     </aside>
                 </div>
             </div>

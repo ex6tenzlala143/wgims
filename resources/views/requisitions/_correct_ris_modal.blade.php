@@ -408,8 +408,9 @@
             html += '<input type="number" name="items[' + i + '][quantity_requested]" id="cr-qty-' + i + '"'
                 + ' class="form-control cr-qty" min="' + (ri.locked ? ri.quantity_issued : 0.01) + '" step="0.01"'
                 + ' value="' + ri.quantity_requested + '" required oninput="crItemChanged(' + i + ')">';
-            html += '<small style="color:var(--text-muted);font-size:11px">' + fmt(ri.quantity_issued) + ' already issued'
-                + (ri.locked ? ' · cannot go below' : '') + '</small>';
+            if (ri.locked) {
+                html += '<small style="color:var(--text-muted);font-size:11px">Cannot go below ' + fmt(ri.quantity_issued) + ' (already issued)</small>';
+            }
             html += '</div>';
 
             html += '<div class="cr-num">';

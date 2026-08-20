@@ -38,24 +38,20 @@
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Category</td><td><span class="badge badge-info">{{ $item->getCategoryLabel() }}</span></td></tr>
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Account Code</td><td><span class="badge badge-primary">{{ $item->account_code }}</span></td></tr>
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Warehouse</td><td>{{ $item->warehouse->name ?? '—' }}</td></tr>
-                @if($item->source_subsidy_status)
+                @if($item->sourceSubsidyCode() || in_array($item->source_subsidy_status, ['deleted', 'archived'], true))
                 <tr>
                     <td style="padding:8px 0;color:var(--text-muted)">Source Subsidy</td>
                     <td style="padding:8px 0">
-                        @include('partials.subsidy-source-badge', [
-                            'status' => $item->source_subsidy_status,
-                            'ris'    => $item->sourceSubsidyReference(),
-                            'dr'     => $item->sourceDrReference(),
-                            'code'   => $item->sourceSubsidyCode(),
-                            'prefix' => 'FROM',
-                        ])
-                        @if($item->source_subsidy_ris || $item->source_subsidy_dr)
-                        <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
-                            RIS: <code>{{ $item->sourceSubsidyReference() ?? '—' }}</code>
-                            @if($item->sourceDrReference())
-                            · DR: <code>{{ $item->sourceDrReference() }}</code>
-                            @endif
-                        </div>
+                        @if(in_array($item->source_subsidy_status, ['deleted', 'archived'], true))
+                            @include('partials.subsidy-source-badge', [
+                                'status' => $item->source_subsidy_status,
+                                'ris'    => $item->sourceSubsidyReference(),
+                                'dr'     => $item->sourceDrReference(),
+                                'code'   => $item->sourceSubsidyCode(),
+                                'prefix' => 'FROM',
+                            ])
+                        @elseif($item->sourceSubsidyCode())
+                            <code style="font-weight:700;color:var(--primary)">{{ $item->sourceSubsidyCode() }}</code>
                         @endif
                     </td>
                 </tr>
