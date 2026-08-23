@@ -14,6 +14,22 @@
     </div>
 </div>
 
+@php $hasBeenDispatched = $transfer->items->contains(fn ($line) => (int) $line->quantity > 0) || $transfer->status !== 'pending'; @endphp
+
+@if($hasBeenDispatched)
+<div class="alert alert-danger" style="margin-bottom:20px;border:2px solid #feb2b2">
+    <i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i>
+    <div>
+        <strong>Warning:</strong> This Stock Transfer has already been dispatched.
+        Editing it will affect inventory balances and stock card records.
+        Please verify the correction before continuing.
+        <div style="margin-top:6px;font-size:12px">
+            Status: <span class="badge {{ $transfer->getStatusBadgeClass() }}">{{ $transfer->getStatusLabel() }}</span>
+            · Corrections are applied atomically to both warehouses and recorded in the audit trail.
+        </div>
+    </div>
+</div>
+@else
 <div class="alert alert-warning" style="margin-bottom:20px">
     <i class="fas fa-exclamation-triangle"></i>
     <div>
@@ -21,6 +37,7 @@
         Changing quantities adjusts stock at both the source and destination warehouse.
     </div>
 </div>
+@endif
 
 <form action="{{ route('transfers.update', $transfer) }}" method="POST" id="edit-transfer-form">
     @csrf @method('PUT')
@@ -120,8 +137,11 @@
                                            id="qty-{{ $idx }}"
                                            class="form-control"
                                            value="{{ old("items.{$idx}.quantity", $line->quantity) }}"
-                                           min="1" step="1" required
+                                           min="1" max="{{ $maxNewQty[$line->id] }}" step="1" required
                                            oninput="recalcRow({{ $idx }})">
+                                    @if($maxNewQty[$line->id] !== (int) $line->quantity)
+                                    <div style="font-size:10px;color:var(--text-muted);margin-top:2px">max {{ number_format($maxNewQty[$line->id]) }}</div>
+                                    @endif
                                     @error("items.{$idx}.quantity")
                                     <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
                                     @enderror
@@ -228,6 +248,17 @@ function recalcGrand() {
 
 // Never allow a double-click to save the same transfer edit twice.
 guardFormSubmit(document.getElementById('edit-transfer-form'));
+
+@if($hasBeenDispatched)
+// Require an explicit confirmation before correcting a dispatched transfer.
+document.getElementById('edit-transfer-form').addEventListener('submit', function (e) {
+    if (!confirm('Warning: This Stock Transfer has already been dispatched. '
+        + 'Editing it will affect inventory balances and stock card records. '
+        + 'Please verify the correction before continuing.')) {
+        e.preventDefault();
+    }
+});
+@endif
 </script>
 @endpush
 @endsection
