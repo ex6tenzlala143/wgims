@@ -107,6 +107,7 @@ class RequisitionDispatchEditTest extends TestCase
     {
         $this->actingAs($this->admin())
             ->post(route('requisitions.store'), [
+                'ris_number'     => 'RIS-EDIT-' . strtoupper(\Illuminate\Support\Str::random(6)) . '-' . time() . rand(100,999),
                 'purpose'        => 'Edit dispatch test',
                 'date_requested' => '2026-08-01',
                 'items'          => [

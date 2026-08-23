@@ -5,8 +5,9 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1>Edit Requisition #{{ $requisition->ris_number }}</h1>
+        <h1>Edit Requisition {{ $requisition->ris_code ?? $requisition->ris_id }} <span style="font-weight:400;color:var(--text-muted);font-size:16px">/ {{ $requisition->ris_number }}</span></h1>
         <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / <a href="{{ route('requisitions.index') }}">Requisitions</a> / Edit</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">RIS ID: <span style="font-family:monospace;color:var(--primary);font-weight:600">{{ $requisition->ris_code ?? $requisition->ris_id }}</span> &nbsp;·&nbsp; RIS No.: <strong>{{ $requisition->ris_number }}</strong></div>
     </div>
 </div>
 
@@ -19,25 +20,30 @@
             <div class="card-body">
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">RIS Number</label>
-                        <input type="text" class="form-control" value="{{ $requisition->ris_number }}" readonly style="background:var(--surface-soft);font-weight:600">
+                        <label class="form-label">RIS ID <span style="font-size:10px;color:var(--text-muted)">system, not editable</span></label>
+                        <input type="text" class="form-control" value="{{ $requisition->ris_code ?? $requisition->ris_id }}" readonly style="background:var(--surface-soft);font-family:monospace;color:var(--primary);font-weight:700">
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">RIS No. <span style="color:red">*</span></label>
+                        <input type="text" name="ris_number" class="form-control {{ $errors->has('ris_number') ? 'is-invalid' : '' }}" value="{{ old('ris_number', $requisition->ris_number) }}" required>
+                        @error('ris_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">Date Requested <span style="color:red">*</span></label>
                         <input type="date" name="date_requested" class="form-control" value="{{ old('date_requested', $requisition->date_requested->format('Y-m-d')) }}" required>
                     </div>
-                </div>
-                <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">Entity Name</label>
                         <input type="text" name="entity_name" class="form-control" value="{{ old('entity_name', $requisition->entity_name) }}">
                     </div>
+                </div>
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">Fund Cluster</label>
                         <input type="text" name="fund_cluster" class="form-control" value="{{ old('fund_cluster', $requisition->fund_cluster) }}">
                     </div>
-                </div>
-                <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">Responsibility Center Code</label>
                         <input type="text" name="responsibility_center_code" class="form-control" value="{{ old('responsibility_center_code', $requisition->responsibility_center_code) }}">

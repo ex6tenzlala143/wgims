@@ -300,7 +300,15 @@
                     @endif
                     <td style="text-align:right">{{ $poi->amount !== null ? '₱' . number_format($poi->amount, 2) : '—' }}</td>
                     <td>
-                        @if($poi->item && $poi->item->stock_number)
+                        @php $assignedCards = $poi->assigned_stock_cards; @endphp
+                        @if($assignedCards->isNotEmpty())
+                            @foreach($assignedCards as $sc)
+                                <a href="{{ route('stock_cards.item_history', $sc->id) }}"
+                                   style="font-family:monospace;font-size:12px;color:var(--primary);text-decoration:none;font-weight:600;display:block;line-height:1.6">
+                                    {{ $sc->stock_number }}
+                                </a>
+                            @endforeach
+                        @elseif($poi->item && $poi->item->stock_number)
                             <a href="{{ route('stock_cards.item_history', $poi->item->id) }}"
                                style="font-family:monospace;font-size:12px;color:var(--primary);text-decoration:none;font-weight:600">
                                 {{ $poi->item->stock_number }}
@@ -358,7 +366,15 @@
                         <i class="fas fa-warehouse"></i> {{ $poi->warehouse->name }}
                     </span>
                 @endif
-                @if($poi->item && $poi->item->stock_number)
+                @php $headerCards = $poi->assigned_stock_cards; @endphp
+                @if($headerCards->isNotEmpty())
+                    @foreach($headerCards as $hc)
+                        <a href="{{ route('stock_cards.item_history', $hc->id) }}"
+                           style="font-family:monospace;font-size:11px;background:#ebf4ff;padding:1px 6px;border-radius:4px;color:var(--primary);margin-left:6px;text-decoration:none">
+                            {{ $hc->stock_number }}
+                        </a>
+                    @endforeach
+                @elseif($poi->item && $poi->item->stock_number)
                     <code style="font-size:11px;background:#ebf4ff;padding:1px 6px;border-radius:4px;color:var(--primary);margin-left:6px">
                         {{ $poi->item->stock_number }}
                     </code>
@@ -407,6 +423,8 @@
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Shipment DR No.</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Date</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Warehouse</th>
+                        <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Expiration</th>
+                        <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Stock Card</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Qty This Shipment</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Cumulative</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Unit Cost</th>
@@ -446,6 +464,25 @@
                                 <span style="color:var(--text-muted);font-size:12px">—</span>
                             @endif
                         </td>
+                        <td style="padding:10px 14px">
+                            {{-- Expiration of the exact stock record (batch) this dispatch delivered into --}}
+                            @php $shipExp = $row['di']->item?->expiration_date; @endphp
+                            @if($shipExp)
+                                <span style="font-size:12px;white-space:nowrap">{{ $shipExp->format('M d, Y') }}</span>
+                            @else
+                                <span style="color:var(--text-muted);font-size:12px">—</span>
+                            @endif
+                        </td>
+                        <td style="padding:10px 14px">
+                            @if($row['di']->item && $row['di']->item->stock_number)
+                                <a href="{{ route('stock_cards.item_history', $row['di']->item->id) }}"
+                                   style="font-family:monospace;font-size:12px;color:var(--primary);text-decoration:none;font-weight:600;white-space:nowrap">
+                                    {{ $row['di']->item->stock_number }}
+                                </a>
+                            @else
+                                <span style="color:var(--text-muted);font-size:12px">—</span>
+                            @endif
+                        </td>
                         <td style="padding:10px 14px;text-align:right;font-weight:700;color:var(--primary)">
                             +{{ number_format($row['di']->quantity_delivered, 2) }}
                         </td>
@@ -464,8 +501,8 @@
                             @endif
                         </td>
                         <td style="padding:10px 14px;text-align:right">
-                            @if($row['di']->engas_total_cost !== null)
-                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($row['di']->engas_total_cost, 2) }}</span>
+                            @if($row['di']->engas_total_value !== null)
+                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($row['di']->engas_total_value, 2) }}</span>
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
@@ -481,7 +518,7 @@
                 </tbody>
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
-                        <td colspan="4" style="padding:10px 20px;font-size:13px">Total Delivered</td>
+                        <td colspan="6" style="padding:10px 20px;font-size:13px">Total Delivered</td>
                         <td style="padding:10px 14px;text-align:right;color:var(--success)">
                             {{ number_format($poi->qty_delivered, 2) }}
                         </td>
@@ -497,7 +534,8 @@
                         @if(auth()->user()->hasAdminAccess())
                         <td></td>
                         <td style="padding:10px 14px;text-align:right;color:var(--primary)">
-                            @php $engasLineTotal = $allDiForItem->sum(fn($r) => $r['di']->engas_total_cost); @endphp
+                            {{-- Cumulative ENGAS = Σ (each shipment's qty × that shipment's own ENGAS unit cost) --}}
+                            @php $engasLineTotal = $allDiForItem->sum(fn($r) => $r['di']->engas_total_value); @endphp
                             {{ $engasLineTotal > 0 ? '₱'.number_format($engasLineTotal, 2) : '—' }}
                         </td>
                         @endif
@@ -561,6 +599,7 @@
                         <th>Description</th>
                         <th>Unit</th>
                         <th>Warehouse</th>
+                        <th>Expiration</th>
                         <th>DR No.</th>
                         <th style="text-align:right">Qty Delivered</th>
                         <th style="text-align:right">Unit Cost</th>
@@ -602,6 +641,14 @@
                             @endif
                         </td>
                         <td>
+                            {{-- Expiration of the exact stock record (batch) this dispatch delivered into --}}
+                            @if($di->item?->expiration_date)
+                                <span style="font-size:12px;white-space:nowrap">{{ $di->item->expiration_date->format('M d, Y') }}</span>
+                            @else
+                                <span style="color:var(--text-muted);font-size:12px">—</span>
+                            @endif
+                        </td>
+                        <td>
                             @if($di->dr_number)
                                 <code style="font-size:12px;background:#ebf4ff;padding:2px 6px;border-radius:4px;color:var(--primary)">
                                     {{ $di->dr_number }}
@@ -622,8 +669,8 @@
                             @endif
                         </td>
                         <td style="text-align:right">
-                            @if($di->engas_total_cost !== null)
-                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($di->engas_total_cost, 2) }}</span>
+                            @if($di->engas_total_value !== null)
+                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($di->engas_total_value, 2) }}</span>
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
@@ -647,13 +694,13 @@
                 </tbody>
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:600">
-                        <td colspan="7" style="text-align:right;font-size:13px">Delivery Total:</td>
+                        <td colspan="8" style="text-align:right;font-size:13px">Delivery Total:</td>
                         <td style="text-align:right">
                             ₱{{ number_format($delivery->items->sum(fn($di) => $di->quantity_delivered * $di->unit_cost), 2) }}
                         </td>
                         @if(auth()->user()->hasAdminAccess())
                         <td colspan="2" style="text-align:right;color:var(--primary)">
-                            @php $engasShipTotal = $delivery->items->sum(fn($di) => $di->engas_total_cost); @endphp
+                            @php $engasShipTotal = $delivery->items->sum(fn($di) => $di->engas_total_value); @endphp
                             {{ $engasShipTotal > 0 ? '₱'.number_format($engasShipTotal, 2) : '—' }}
                         </td>
                         @endif

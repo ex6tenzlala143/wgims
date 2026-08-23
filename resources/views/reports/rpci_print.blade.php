@@ -186,7 +186,7 @@
         <option value="legal">Legal / Long Bond (216 × 356 mm)</option>
     </select>
     <button class="btn-print" onclick="window.print()">🖨&nbsp; Print</button>
-    <a class="btn-back" href="{{ route('rpci_report', request()->query()) }}">← Back to RPCI</a>
+    <a class="btn-back" href="{{ route('rpci_report', request()->query()) }}" onclick="if(history.length>1 && document.referrer && new URL(document.referrer).origin===location.origin){ history.back(); return false; }">← Back to RPCI</a>
     <span class="toolbar-sep"></span>
     <span style="color:#90cdf4;font-size:11px">RPCI — COA Format</span>
 </div>

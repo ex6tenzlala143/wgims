@@ -265,28 +265,13 @@ class ReportController extends Controller
             ->orderBy('description')
             ->get();
 
-        // Merge items by: description + unit_cost + engas_unit_cost + expiration_date + warehouse_id
-        $mergedItems = $items->groupBy(function ($item) {
-            return implode('|', [
-                $item->warehouse_id,
-                $item->description,
-                round((float) $item->unit_cost, 2),
-                $item->engas_unit_cost !== null ? round((float) $item->engas_unit_cost, 2) : 'null',
-                $item->expiration_date ? $item->expiration_date->format('Y-m-d') : 'null',
-            ]);
-        })->map(function ($group) {
-            // Representative item with summed quantity
-            $representative = $group->first();
-            $merged = clone $representative;
-            $merged->quantity = $group->sum('quantity');
-            $merged->_source_items = $group->values(); // Keep source records
-            $merged->_is_merged = $group->count() > 1;
-            return $merged;
-        })->values();
+        // Do NOT merge — display each inventory record separately.
+        // Retains individual traceability (warehouse, cost, ENGAS, expiration, subsidy/RIS).
+        // Total quantity per item name is shown separately in the view.
 
-        // Group: warehouse → category → item-name → merged inventory records
+        // Group: warehouse → category → item-name → individual inventory records
         $balances = [];
-        foreach ($mergedItems->groupBy('warehouse_id') as $wid => $warehouseItems) {
+        foreach ($items->groupBy('warehouse_id') as $wid => $warehouseItems) {
             $warehouse   = $warehouseItems->first()->warehouse;
             $catBalances = [];
 
@@ -453,6 +438,7 @@ class ReportController extends Controller
         if ($search = $request->search) {
             $query->where(function ($q) use ($search) {
                 $q->where('ris_number', 'like', "%{$search}%")
+                  ->orWhere('ris_code', 'like', "%{$search}%")
                   ->orWhere('office', 'like', "%{$search}%")
                   ->orWhere('purpose', 'like', "%{$search}%");
             });
@@ -561,23 +547,7 @@ class ReportController extends Controller
             ->orderBy('description')
             ->get();
 
-        // Merge items by: description + unit_cost + engas_unit_cost + expiration_date + warehouse_id
-        $mergedItems = $items->groupBy(function ($item) {
-            return implode('|', [
-                $item->warehouse_id,
-                $item->description,
-                round((float) $item->unit_cost, 2),
-                $item->engas_unit_cost !== null ? round((float) $item->engas_unit_cost, 2) : 'null',
-                $item->expiration_date ? $item->expiration_date->format('Y-m-d') : 'null',
-            ]);
-        })->map(function ($group) {
-            $representative = $group->first();
-            $merged = clone $representative;
-            $merged->quantity = $group->sum('quantity');
-            $merged->_source_items = $group->values();
-            $merged->_is_merged = $group->count() > 1;
-            return $merged;
-        })->values();
+        // Do NOT merge — one row per stock record.
 
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
@@ -612,7 +582,7 @@ class ReportController extends Controller
         });
 
         $seen = [];
-        foreach ($mergedItems->groupBy('warehouse_id') as $warehouseItems) {
+        foreach ($items->groupBy('warehouse_id') as $warehouseItems) {
             foreach ($warehouseItems->groupBy('category') as $catKey => $catItems) {
                 $cat = Item::getCategories()[$catKey] ?? ['label' => ucfirst($catKey), 'account_code' => ''];
                 foreach ($catItems as $item) {
@@ -627,7 +597,7 @@ class ReportController extends Controller
                     $sheet->setCellValue("A{$row}", $item->warehouse->name ?? '');
                     $sheet->setCellValue("B{$row}", $cat['account_code']);
                     $sheet->setCellValue("C{$row}", $cat['label']);
-                    $sheet->setCellValue("D{$row}", $item->description . ($item->_is_merged ? ' [MERGED]' : ''));
+                    $sheet->setCellValue("D{$row}", $item->description);
                     $sheet->setCellValue("E{$row}", $item->unit);
                     $sheet->setCellValue("F{$row}", $item->quantity);
                     $sheet->setCellValue("G{$row}", $showTotal ? round((float) ($totalQtyByNameAndWarehouse[$key] ?? 0), 4) : '');

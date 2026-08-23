@@ -71,6 +71,7 @@ class RequisitionController extends Controller
         if ($search = $request->search) {
             $query->where(function ($q) use ($search) {
                 $q->where('ris_number', 'like', "%{$search}%")
+                  ->orWhere('ris_code', 'like', "%{$search}%")
                   ->orWhere('dr_number', 'like', "%{$search}%")
                   ->orWhereHas('items', fn ($i) => $i->where('dr_number', 'like', "%{$search}%"))
                   ->orWhereHas('items.dispatchItems', fn ($d) => $d->where('dr_number', 'like', "%{$search}%"))
@@ -176,6 +177,7 @@ class RequisitionController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            'ris_number' => 'nullable|string|max:255|unique:requisitions,ris_number',
             'purpose' => 'required|string',
             'date_requested' => 'required|date',
             'province' => 'nullable|string|max:255',
@@ -226,8 +228,9 @@ class RequisitionController extends Controller
                     ->first();
             }
 
+            $risNumber = $request->filled('ris_number') ? $request->ris_number : Requisition::generateRisNumber();
             $ris = Requisition::create([
-                'ris_number' => Requisition::generateRisNumber(),
+                'ris_number' => $risNumber,
                 'dr_number' => null, // DR number is now stored per dispatch
                 'warehouse_id' => null, // warehouse is chosen per dispatch
                 'created_by' => $user->id,
@@ -243,6 +246,7 @@ class RequisitionController extends Controller
                 'requested_by_name' => $request->requested_by_name,
                 'requested_by_designation' => $request->requested_by_designation,
             ]);
+            // ris_code (RIS ID) is auto-generated in the model boot hook (RIS-000001)
 
             foreach ($request->items as $line) {
                 $catalog = $catalogItems->get((int) $line['catalog_item_id']);
@@ -318,6 +322,7 @@ class RequisitionController extends Controller
         abort_unless(Auth::user()->canWrite(), 403);
 
         $request->validate([
+            'ris_number' => 'nullable|string|max:255|unique:requisitions,ris_number,' . $requisition->id,
             'entity_name' => 'nullable|string|max:255',
             'fund_cluster' => 'nullable|string|max:255',
             'office' => 'nullable|string|max:255',
@@ -375,7 +380,8 @@ class RequisitionController extends Controller
 
         try {
             DB::transaction(function () use ($request, $requisition, $existingItems) {
-            $requisition->update([
+            $requisition->update(array_filter([
+                'ris_number' => $request->filled('ris_number') ? $request->ris_number : $requisition->ris_number,
                 'entity_name' => $request->entity_name,
                 'fund_cluster' => $request->fund_cluster,
                 'dr_number' => null, // DR number is now stored per dispatch
@@ -390,7 +396,7 @@ class RequisitionController extends Controller
                 'requested_by_name' => $request->requested_by_name,
                 'requested_by_designation' => $request->requested_by_designation,
                 'status' => $request->status,
-            ]);
+            ], fn($v) => $v !== null));
 
             // Remove lines dropped from the form — only those never dispatched.
             $keptIds = collect($request->items)->pluck('id')->filter()->map(fn ($id) => (int) $id);
@@ -550,7 +556,9 @@ class RequisitionController extends Controller
         });
 
         return response()->json([
+            'ris_code'      => $requisition->ris_code,
             'ris_number'    => $requisition->ris_number,
+            'ris_id'        => $requisition->ris_code,
             'status'        => $requisition->status,
             'is_completed'  => $requisition->status === 'approved',
             'entity_name'   => $requisition->entity_name,
@@ -594,6 +602,7 @@ class RequisitionController extends Controller
         abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
 
         $request->validate([
+            'ris_number'     => 'required|string|max:255|unique:requisitions,ris_number,' . $requisition->id,
             'entity_name'    => 'nullable|string|max:255',
             'fund_cluster'   => 'nullable|string|max:255',
             'office'         => 'nullable|string|max:255',
@@ -630,7 +639,7 @@ class RequisitionController extends Controller
             DB::transaction(function () use ($request, $requisition, $existingItems, $user, &$changes, &$oldTotal, &$oldStatus) {
             // ── Header ──────────────────────────────────────────────────────
             $headerMap = [
-                'entity_name', 'fund_cluster', 'office', 'division', 'province',
+                'ris_number', 'entity_name', 'fund_cluster', 'office', 'division', 'province',
                 'municipality', 'responsibility_center_code', 'purpose',
                 'date_requested', 'requested_by_name', 'requested_by_designation',
             ];
@@ -803,15 +812,19 @@ class RequisitionController extends Controller
 
     public function approve(Requisition $requisition)
     {
-        if (! Auth::user()->canApprove()) {
+        $user = Auth::user();
+
+        if (! $user->canApprove()) {
             abort(403);
         }
+
+        // Non-admin approvers can only approve requisitions for their warehouses
+        abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
 
         $requisition->load(['items.item', 'items.warehouse', 'items.dispatchItems.item.warehouse']);
 
         // Warehouses the dispatcher may issue from (their assigned ones, or all
         // active warehouses for admins).
-        $user = Auth::user();
         if ($user->hasAdminAccess()) {
             $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
         } else {
@@ -823,9 +836,14 @@ class RequisitionController extends Controller
 
     public function processApproval(Request $request, Requisition $requisition)
     {
-        if (! Auth::user()->canApprove()) {
+        $user = Auth::user();
+
+        if (! $user->canApprove()) {
             abort(403);
         }
+
+        // Non-admin approvers can only approve requisitions for their warehouses
+        abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
 
         $rules = [
             'items' => 'required|array',

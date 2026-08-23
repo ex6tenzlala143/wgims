@@ -6,6 +6,7 @@ use App\Models\DeliverySubsidy;
 use App\Models\Item;
 use App\Models\Requisition;
 use App\Models\StockTransfer;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -69,14 +70,14 @@ class AuthSecurityAuditTest extends TestCase
         ]);
     }
 
-    private function makeTransfer(): StockTransfer
+    private function makeTransfer(User $transferredBy): StockTransfer
     {
         return StockTransfer::create([
             'transfer_number'   => StockTransfer::generateTransferNumber(),
             'from_warehouse_id' => $this->makeWarehouse()->id,
             'to_warehouse_id'   => $this->makeWarehouse()->id,
             'transfer_date'     => now()->toDateString(),
-            'transferred_by'    => 1,
+            'transferred_by'    => $transferredBy->id,
             'status'            => 'pending',
         ]);
     }
@@ -98,10 +99,15 @@ class AuthSecurityAuditTest extends TestCase
 
     private function makeSubsidy(User $creator): DeliverySubsidy
     {
+        $supplier = Supplier::create([
+            'name'      => 'Sec Supplier '.self::$seq,
+            'is_active' => true,
+        ]);
+
         return DeliverySubsidy::create([
             'ris_number'     => 'RIS-SEC-'.Str::upper(Str::random(6)),
             'dr_number'      => 'DR-SEC-'.Str::upper(Str::random(6)),
-            'supplier_id'    => 1,
+            'supplier_id'    => $supplier->id,
             'created_by'     => $creator->id,
             'date'           => now()->toDateString(),
             'status'         => 'pending',
@@ -254,11 +260,17 @@ class AuthSecurityAuditTest extends TestCase
         $admin = $this->makeUser(User::ROLE_ADMIN);
         $this->loginViaForm($admin);
 
-        // While authenticated, protected pages must be served with no-store so
-        // the browser cannot cache them for Back-button / bfcache reuse.
+        // While authenticated, protected GETs use `private, no-cache, must-revalidate`
+        // (no `no-store`) so the browser may keep the page in bfcache for smooth
+        // Back/Forward without a skeleton flash. Security is still enforced:
+        // the `pageshow` handler verifies the session on bfcache restores and
+        // `Clear-Site-Data` on logout clears the cache entry. The server still
+        // redirects to login once the session is gone.
         $response = $this->get('/requisitions');
         $response->assertOk();
-        $response->assertHeaderContains('Cache-Control', 'no-store');
+        $response->assertHeaderContains('Cache-Control', 'private');
+        $response->assertHeaderContains('Cache-Control', 'no-cache');
+        $response->assertHeaderContains('Cache-Control', 'must-revalidate');
 
         $this->logoutViaForm();
 
@@ -356,7 +368,7 @@ class AuthSecurityAuditTest extends TestCase
 
         $item    = $this->makeItem();
         $subsidy = $this->makeSubsidy($wm);
-        $transfer = $this->makeTransfer();
+        $transfer = $this->makeTransfer($wm);
         $warehouse = $this->makeWarehouse();
         $targetUser = $this->makeUser(User::ROLE_STAFF);
         $requisition = $this->makeRequisition($wm);
@@ -525,8 +537,9 @@ class AuthSecurityAuditTest extends TestCase
 
         foreach (['/', '/requisitions', '/items', '/delivery-subsidies', '/users'] as $uri) {
             $this->get($uri)
-                ->assertHeaderContains('Cache-Control', 'no-store')
+                ->assertHeaderContains('Cache-Control', 'private')
                 ->assertHeaderContains('Cache-Control', 'no-cache')
+                ->assertHeaderContains('Cache-Control', 'must-revalidate')
                 ->assertHeader('Pragma', 'no-cache')
                 ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         }

@@ -81,6 +81,12 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect()->route('login');
+        $response = redirect()->route('login');
+        // Explicitly tell the browser to clear the bfcache entry for the
+        // just-logged-out session so a subsequent Back cannot restore a
+        // protected page from memory.
+        $response->headers->set('Clear-Site-Data', '"cache", "storage"');
+        $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
+        return $response;
     }
 }

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Requisition extends Model
 {
     protected $fillable = [
-        'ris_number', 'dr_number', 'warehouse_id', 'created_by', 'approved_by',
+        'ris_code', 'ris_number', 'dr_number', 'warehouse_id', 'created_by', 'approved_by',
         'entity_name', 'fund_cluster', 'office', 'division', 'province', 'municipality',
         'responsibility_center_code', 'purpose', 'date_requested', 'date_approved', 'status',
         'requested_by_name', 'requested_by_designation',
@@ -17,6 +17,35 @@ class Requisition extends Model
     ];
 
     protected $casts = ['date_requested' => 'date', 'date_approved' => 'date'];
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        // Permanent system RIS ID (RIS-000001) derived from the auto-increment id.
+        // Never reused, never user-editable — mirrors DeliverySubsidy subsidy_code.
+        static::created(function (Requisition $requisition): void {
+            if (! $requisition->ris_code) {
+                $code = 'RIS-' . str_pad((string) $requisition->id, 6, '0', STR_PAD_LEFT);
+                static::whereKey($requisition->id)->update(['ris_code' => $code]);
+                $requisition->ris_code = $code;
+            }
+        });
+    }
+
+    /**
+     * Alias so $requisition->ris_id works as the system-generated RIS ID.
+     * Database column is ris_code (consistent with subsidy_code).
+     */
+    public function getRisIdAttribute(): ?string
+    {
+        return $this->attributes['ris_code'] ?? null;
+    }
+
+    public function setRisIdAttribute(?string $value): void
+    {
+        $this->attributes['ris_code'] = $value;
+    }
 
     public function warehouse()
     {

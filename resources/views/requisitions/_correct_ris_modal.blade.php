@@ -236,6 +236,14 @@
                 <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin:0 0 12px">RIS Header</h3>
                 <div class="cr-grid">
                     <div class="form-group">
+                        <label class="form-label">RIS ID <span style="font-size:10px;color:var(--text-muted)">system, not editable</span></label>
+                        <input type="text" id="cr-ris-code" class="form-control" readonly style="background:var(--surface-soft);font-family:monospace;color:var(--primary);font-weight:700">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">RIS No. <span class="req">*</span></label>
+                        <input type="text" name="ris_number" id="cr-ris-number" class="form-control" required>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Date Requested <span class="req">*</span></label>
                         <input type="date" name="date_requested" id="cr-date-requested" class="form-control" required>
                     </div>
@@ -503,9 +511,11 @@
             .then(function (data) {
                 STATE = data;
 
-                $('cr-ris-ref').textContent = '#' + data.ris_number;
+                $('cr-ris-ref').textContent = (data.ris_code || data.ris_id || '') + ' / ' + (data.ris_number || '');
                 $('correct-ris-form').action = '{{ route("requisitions.correct", ["requisition" => $requisition->id]) }}';
 
+                $('cr-ris-code').value = data.ris_code || data.ris_id || '';
+                $('cr-ris-number').value = data.ris_number || '';
                 $('cr-date-requested').value = data.date_requested || '';
                 $('cr-entity-name').value = data.entity_name || '';
                 $('cr-fund-cluster').value = data.fund_cluster || '';

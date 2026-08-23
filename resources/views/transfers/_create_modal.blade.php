@@ -228,6 +228,7 @@
     .transfer-modal .form-section:last-child { margin-bottom: 0; }
     .transfer-modal .table-wrapper {
         overflow-x: auto;
+        overflow-y: visible;
         -webkit-overflow-scrolling: touch;
     }
     .transfer-modal .line-items-table {
@@ -235,6 +236,7 @@
         min-width: 900px;
         border-collapse: separate;
         border-spacing: 0;
+        table-layout: fixed;
     }
     .transfer-modal .line-items-table thead th {
         position: sticky;
@@ -248,6 +250,9 @@
     .transfer-modal .line-items-table th,
     .transfer-modal .line-items-table td {
         padding: 12px 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 280px;
     }
     .transfer-modal .line-items-table td {
         border-bottom: 1px solid var(--border);
@@ -259,12 +264,39 @@
     .transfer-modal .line-items-table input[type="number"],
     .transfer-modal .line-items-table select {
         width: 100%;
-        min-width: 120px;
+        min-width: 0;
+        max-width: 100%;
         padding: 10px 12px;
         font-size: 13px;
         border-radius: 6px;
         border: 1px solid #cbd5e0;
         box-sizing: border-box;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /* Searchable combobox inside transfer line-items — constrain width so long option text
+       does not force the table cell to expand and trigger horizontal overflow */
+    .transfer-modal .line-items-table .ss {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: flex !important;
+        overflow: hidden;
+    }
+    .transfer-modal .line-items-table .ss .ss-btn {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+    .transfer-modal .line-items-table .ss .ss-value {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .transfer-modal .line-items-table input[readonly] {
         background: #f7fafc;
@@ -426,19 +458,54 @@ function openTransferModal() {
     m.classList.add('open');
     document.body.classList.add('modal-open');
     document.addEventListener('keydown', onTransferModalEsc);
-    
-    // Add first row if empty
-    if (document.querySelectorAll('#transfer-items-body tr').length === 0) {
-        addTransferRow();
-    }
-    
-    // Load items if admin and warehouse already selected
-    @if(auth()->user()->hasAdminAccess())
-    const fromWh = document.getElementById('from_warehouse_id');
-    if (fromWh && fromWh.value) loadSourceItems();
-    @endif
-    
-    syncWarehouseOptions();
+
+    // Ensure the modal is visible before measuring/enhancing selects
+    // (the searchable component needs correct bounding rects)
+    requestAnimationFrame(function () {
+        // Add first row if empty — use a timeout to ensure SS is ready
+        if (document.querySelectorAll('#transfer-items-body tr').length === 0) {
+            addTransferRow();
+        } else {
+            // Re-enhance any existing rows that may have lost their wrapper
+            // (e.g., after bfcache restore or previous close without reset)
+            document.querySelectorAll('select.transfer-item-select').forEach(function (sel) {
+                if (!sel.ss && window.SS && typeof window.SS.refresh === 'function') {
+                    window.SS.refresh(sel.parentNode);
+                }
+                if (sel.ss) sel.ss.sync();
+            });
+            // Refresh the current source items for existing rows
+            const fromWhExisting = document.getElementById('from_warehouse_id') || document.querySelector('input[name="from_warehouse_id"]');
+            if (fromWhExisting && fromWhExisting.value) {
+                // Re-populate with current transferSourceItems if already loaded
+                if (transferSourceItems && transferSourceItems.length) {
+                    document.querySelectorAll('select.transfer-item-select').forEach(function (sel) {
+                        const cur = sel.value;
+                        populateTransferItemSelect(sel);
+                        // Restore only if still valid
+                        if (cur && transferSourceItems.some(function (it) { return String(it.id) === String(cur); })) {
+                            sel.value = cur;
+                        } else {
+                            sel.value = '';
+                        }
+                        if (sel.ss) sel.ss.sync();
+                    });
+                } else {
+                    loadSourceItems();
+                }
+            }
+        }
+
+        // Load items if admin and warehouse already selected and not yet loaded
+        @if(auth()->user()->hasAdminAccess())
+        const fromWh = document.getElementById('from_warehouse_id');
+        if (fromWh && fromWh.value && (!transferSourceItems || !transferSourceItems.length)) {
+            loadSourceItems();
+        }
+        @endif
+
+        syncWarehouseOptions();
+    });
 }
 
 function closeTransferModal() {
@@ -453,23 +520,119 @@ function onTransferModalEsc(e) {
     if (e.key === 'Escape') closeTransferModal();
 }
 
-// Load items from source warehouse
+// Load items from source warehouse — refreshes every Item dropdown so it
+// only shows stock from the selected source warehouse and remains a
+// fully searchable/clickable combobox. Handles both admin (select) and
+// non-admin (hidden input) source warehouse fields.
 function loadSourceItems() {
-    const warehouseId = document.getElementById('from_warehouse_id')?.value;
-    if (!warehouseId) { 
-        transferSourceItems = []; 
-        return; 
+    const fromSelect = document.getElementById('from_warehouse_id');
+    const fromInput  = document.querySelector('input[name="from_warehouse_id"]');
+    const warehouseId = (fromSelect && fromSelect.value) || (fromInput && fromInput.value) || '';
+    const allItemSelects = document.querySelectorAll('select.transfer-item-select');
+
+    if (!warehouseId) {
+        transferSourceItems = [];
+        // Clear every Item dropdown and reset dependent fields so no stale
+        // stock from a previous warehouse remains visible.
+        // Use `select.` prefix — the searchable wrapper also carries the class.
+        allItemSelects.forEach(function (sel) {
+            const idx = sel.name ? sel.name.match(/\[(\d+)\]/)?.[1] : null;
+            populateTransferItemSelect(sel);
+            sel.value = '';
+            sel.disabled = false;
+            // Ensure the searchable wrapper is (re)initialized and synced
+            if (window.SS && typeof window.SS.refresh === 'function') {
+                // Force re-enhance if the component was destroyed
+                if (!sel.ss) window.SS.refresh(sel.parentNode);
+            }
+            if (sel.ss) sel.ss.sync();
+            if (idx !== null) {
+                const u = document.getElementById('transfer-unit-' + idx);
+                const a = document.getElementById('transfer-avail-' + idx);
+                const e = document.getElementById('transfer-engas-' + idx);
+                const c = document.getElementById('transfer-cost-' + idx);
+                const t = document.getElementById('transfer-total-' + idx);
+                if (u) u.value = '';
+                if (a) a.value = '';
+                if (e) { e.value = ''; e.style.color = ''; }
+                if (c) c.value = '';
+                if (t) t.value = '';
+            }
+        });
+        recalcTransferGrandTotal();
+        return;
     }
 
-    fetch(`{{ route('transfers.items_for_warehouse') }}?warehouse_id=${warehouseId}`)
-        .then(r => r.json())
-        .then(data => {
-            transferSourceItems = data;
-            // Refresh all existing row selects
-            document.querySelectorAll('.transfer-item-select').forEach(sel => {
-                const currentVal = sel.value;
+    // Show a temporary loading placeholder and disable the selects so the
+    // user cannot open an empty/stale dropdown while the fetch is in flight.
+    allItemSelects.forEach(function (sel) {
+        // Use DOM API to avoid breaking the searchable wrapper
+        sel.innerHTML = '';
+        const loadingOpt = document.createElement('option');
+        loadingOpt.value = '';
+        loadingOpt.textContent = '— Loading items… —';
+        sel.appendChild(loadingOpt);
+        sel.disabled = true;
+        if (sel.ss) sel.ss.sync();
+        else if (window.SS && typeof window.SS.refresh === 'function') window.SS.refresh(sel.parentNode);
+    });
+
+    fetch(`{{ route('transfers.items_for_warehouse') }}?warehouse_id=${encodeURIComponent(warehouseId)}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+        credentials: 'same-origin'
+    })
+        .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function (data) {
+            transferSourceItems = Array.isArray(data) ? data : [];
+            document.querySelectorAll('select.transfer-item-select').forEach(function (sel) {
+                // Preserve the selection only if that item still belongs to the
+                // newly selected warehouse; otherwise reset to placeholder.
+                const prevVal = sel.value;
+                const stillExists = prevVal && transferSourceItems.some(function (it) { return String(it.id) === String(prevVal); });
+                sel.disabled = false;
                 populateTransferItemSelect(sel);
-                sel.value = currentVal;
+                // Ensure wrapper exists (re-enhance if needed) before sync
+                if (!sel.ss && window.SS && typeof window.SS.refresh === 'function') {
+                    window.SS.refresh(sel.parentNode);
+                }
+                if (stillExists) {
+                    sel.value = prevVal;
+                    if (sel.ss) sel.ss.sync();
+                    const idx = sel.name.match(/\[(\d+)\]/)?.[1];
+                    if (idx !== undefined) onTransferItemChange(sel, idx);
+                } else {
+                    sel.value = '';
+                    if (sel.ss) sel.ss.sync();
+                    const idx2 = sel.name.match(/\[(\d+)\]/)?.[1];
+                    if (idx2 !== undefined) {
+                        const u2 = document.getElementById('transfer-unit-' + idx2);
+                        const a2 = document.getElementById('transfer-avail-' + idx2);
+                        const e2 = document.getElementById('transfer-engas-' + idx2);
+                        const c2 = document.getElementById('transfer-cost-' + idx2);
+                        const t2 = document.getElementById('transfer-total-' + idx2);
+                        if (u2) u2.value = '';
+                        if (a2) a2.value = '';
+                        if (e2) { e2.value = ''; e2.style.color = ''; }
+                        if (c2) c2.value = '';
+                        if (t2) t2.value = '';
+                    }
+                }
+            });
+            recalcTransferGrandTotal();
+        })
+        .catch(function () {
+            // On error, re-enable with an empty list and a retry hint.
+            transferSourceItems = [];
+            document.querySelectorAll('select.transfer-item-select').forEach(function (sel) {
+                sel.disabled = false;
+                populateTransferItemSelect(sel);
+                // Replace placeholder with an error hint
+                if (sel.options.length) sel.options[0].textContent = '— Failed to load items —';
+                if (!sel.ss && window.SS && typeof window.SS.refresh === 'function') window.SS.refresh(sel.parentNode);
+                if (sel.ss) sel.ss.sync();
             });
         });
 }
@@ -506,9 +669,19 @@ function syncWarehouseOptions() {
 }
 
 function populateTransferItemSelect(selectEl) {
+    if (!selectEl) return;
     const currentVal = selectEl.value;
-    selectEl.innerHTML = '<option value="">— Select Item —</option>';
-    transferSourceItems.forEach(item => {
+    const isDisabled = selectEl.disabled;
+    // Clear and rebuild with proper <option> elements — each option is a distinct DOM node
+    // so the searchable combobox (layouts/app.blade.php) renders them as separate <li> rows
+    // instead of a single concatenated text string. We preserve the disabled state
+    // across the rebuild so the wrapper's `ss-disabled` class stays accurate.
+    selectEl.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '— Select Item —';
+    selectEl.appendChild(ph);
+    (transferSourceItems || []).forEach(item => {
         const opt = document.createElement('option');
         opt.value = item.id;
         opt.textContent = `${item.description} — ${item.stock_number || 'No SN'}`;
@@ -518,7 +691,29 @@ function populateTransferItemSelect(selectEl) {
         opt.dataset.available = item.quantity;
         selectEl.appendChild(opt);
     });
-    if (currentVal) selectEl.value = currentVal;
+    // Restore value only if it still exists in the new list; otherwise keep placeholder
+    if (currentVal) {
+        const exists = Array.from(selectEl.options).some(function (o) { return o.value === String(currentVal); });
+        if (exists) selectEl.value = String(currentVal);
+        else selectEl.value = '';
+    }
+    // Ensure the searchable wrapper exists — if the component was destroyed
+    // (e.g., by a Livewire/Alpine re-render) or never initialized, re-enhance.
+    if (!selectEl.ss && window.SS && typeof window.SS.refresh === 'function') {
+        window.SS.refresh(selectEl.parentNode);
+    }
+    // Sync the visible button text and disabled state. The global `SS` handles
+    // both the `ss-disabled` class and the `ss-value` text.
+    if (window.SS && typeof window.SS.sync === 'function') window.SS.sync(selectEl);
+    // Also sync via the instance directly in case the global helper is stale
+    if (selectEl.ss && typeof selectEl.ss.sync === 'function') selectEl.ss.sync();
+    // If the dropdown panel is currently open, re-render its filtered list
+    if (selectEl.ss && typeof selectEl.ss.renderOptions === 'function' && selectEl.ss.open) {
+        selectEl.ss.renderOptions();
+    }
+    // Preserve disabled state explicitly (some browsers clear it on innerHTML)
+    selectEl.disabled = isDisabled;
+    if (window.SS && typeof window.SS.sync === 'function') window.SS.sync(selectEl);
 }
 
 function addTransferRow() {
@@ -528,7 +723,7 @@ function addTransferRow() {
     tr.id = `transfer-row-${idx}`;
     tr.innerHTML = `
         <td data-label="Item">
-            <select name="items[${idx}][item_id]" class="transfer-item-select" required onchange="onTransferItemChange(this, ${idx})">
+            <select name="items[${idx}][item_id]" class="transfer-item-select form-control" required onchange="onTransferItemChange(this, ${idx})" data-placeholder="— Select Item —">
                 <option value="">— Select Item —</option>
             </select>
         </td>
@@ -551,7 +746,23 @@ function addTransferRow() {
         </td>
     `;
     tbody.appendChild(tr);
-    populateTransferItemSelect(tr.querySelector('.transfer-item-select'));
+    const newSel = tr.querySelector('.transfer-item-select');
+    // Ensure the global searchable select is initialized for this dynamic row
+    // before we populate it, so the visible button is created.
+    if (window.SS && typeof window.SS.refresh === 'function') {
+        window.SS.refresh(tr);
+    }
+    populateTransferItemSelect(newSel);
+    // Force a sync after the wrapper is created (MutationObserver is async)
+    // so the placeholder is visible immediately even before the observer fires.
+    if (newSel && !newSel.ss) {
+        // Fallback: if SS hasn't enhanced yet, do it on next tick
+        setTimeout(function () {
+            if (window.SS && typeof window.SS.refresh === 'function') window.SS.refresh(tr);
+            if (newSel.ss) newSel.ss.sync();
+            else populateTransferItemSelect(newSel);
+        }, 0);
+    }
 }
 
 function onTransferItemChange(sel, idx) {

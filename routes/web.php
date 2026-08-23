@@ -87,8 +87,11 @@ Route::middleware('auth')->group(function () {
 
     // ── Requisitions ──────────────────────────────────────────────────────────
     Route::get('/requisitions',                                   [RequisitionController::class, 'index'])->name('requisitions.index');
-    Route::get('/requisitions/create',                            [RequisitionController::class, 'create'])->name('requisitions.create');
-    Route::post('/requisitions',                                  [RequisitionController::class, 'store'])->name('requisitions.store');
+    // Create/store require at least warehouse manager role (center_staff cannot create)
+    Route::middleware('admin.create')->group(function () {
+        Route::get('/requisitions/create',                        [RequisitionController::class, 'create'])->name('requisitions.create');
+        Route::post('/requisitions',                              [RequisitionController::class, 'store'])->name('requisitions.store');
+    });
     Route::get('/requisitions/{requisition}',                     [RequisitionController::class, 'show'])->name('requisitions.show');
     Route::get('/requisitions/{requisition}/approve',             [RequisitionController::class, 'approve'])->name('requisitions.approve');
     Route::post('/requisitions/{requisition}/approve',            [RequisitionController::class, 'processApproval'])->name('requisitions.process_approval');
@@ -203,7 +206,9 @@ Route::middleware('auth')->group(function () {
     // Username availability check
     Route::get('/api/check-username', [UserController::class, 'checkUsername'])->name('users.check_username');
 
-    // ── API helpers ───────────────────────────────────────────────────────────
+    // ── API helpers (throttled: 120 requests/minute per user) ────────────────
+    Route::middleware('throttle:120,1')->group(function () {
+
     Route::get('/api/check-dr', function (Request $req) {
         return response()->json(['exists' => DeliverySubsidy::where('dr_number', $req->string('dr_number'))->exists()]);
     })->name('ds.check_number');
@@ -252,6 +257,8 @@ Route::middleware('auth')->group(function () {
             'expiry_match' => false,
         ]);
     })->name('item.stock_card_lookup');
+
+    }); // end throttle:120,1 group
 
     // ── Notifications ─────────────────────────────────────────────────────────
     // read-all must come before the {notification} wildcard

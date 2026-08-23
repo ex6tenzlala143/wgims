@@ -132,6 +132,8 @@
                     <th style="text-align:right">Engas Unit Cost</th>
                     <th style="text-align:right">Engas Total Value</th>
                     @endif
+                    <th>Expiration</th>
+                    <th>Originated Subsidy</th>
                     <th style="text-align:right">Total Value</th>
                 </tr>
             </thead>
@@ -139,104 +141,86 @@
                 @foreach($b['categories'] as $cat)
                 <tr style="background:#ebf4ff">
                     <td><span class="badge badge-primary">{{ $cat['account_code'] }}</span></td>
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 7 : 5 }}"><strong>{{ $cat['label'] }}</strong></td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}"><strong>{{ $cat['label'] }}</strong></td>
                     <td style="text-align:right;font-weight:700">₱{{ number_format($cat['total_value'], 2) }}</td>
                 </tr>
                 @foreach($cat['groups'] as $group)
-                @php
-                    $firstItem = $group['items']->first();
-                    $isMerged = $group['items']->count() > 1 || ($firstItem->_is_merged ?? false);
-                @endphp
+                @foreach($group['items'] as $item)
                 <tr>
                     <td></td>
                     <td></td>
                     <td>
-                        {{ $firstItem->description }}
-                        @if($isMerged)
-                        <span class="badge badge-info" style="font-size:10px;margin-left:6px" title="Merged from {{ $group['items']->count() }} record(s)">
-                            <i class="fas fa-layer-group"></i> Merged
-                        </span>
-                        @endif
-                        @if($firstItem->source_subsidy_status)
-                        <div style="margin-top:5px">
-                            @include('partials.subsidy-source-badge', [
-                                'status' => $firstItem->source_subsidy_status,
-                                'ris'    => $firstItem->sourceSubsidyReference(),
-                                'dr'     => $firstItem->sourceDrReference(),
-                                'code'   => $firstItem->sourceSubsidyCode(),
-                                'prefix' => 'FROM',
-                            ])
-                        </div>
-                        @endif
-                    </td>
-                    <td>{{ $firstItem->unit }}</td>
-                    <td style="text-align:right">{{ number_format($firstItem->quantity, 2) }}</td>
-                    <td style="text-align:right">₱{{ number_format($firstItem->unit_cost, 2) }}</td>
-                    @if(auth()->user()->hasAdminAccess())
-                    <td style="text-align:right">
-                        @if($firstItem->engas_unit_cost !== null)
-                            <span style="color:var(--primary);font-weight:600">₱{{ number_format($firstItem->engas_unit_cost, 2) }}</span>
-                        @else
-                            <span style="color:var(--text-muted)">—</span>
-                        @endif
-                    </td>
-                    <td style="text-align:right">
-                        @if($firstItem->engas_unit_cost !== null)
-                            <span style="color:var(--primary);font-weight:600">₱{{ number_format($firstItem->quantity * $firstItem->engas_unit_cost, 2) }}</span>
-                        @else
-                            <span style="color:var(--text-muted)">—</span>
-                        @endif
-                    </td>
-                    @endif
-                    <td style="text-align:right">₱{{ number_format($firstItem->quantity * $firstItem->unit_cost, 2) }}</td>
-                </tr>
-                @if($isMerged && $group['items']->count() > 1)
-                {{-- Show source records breakdown --}}
-                @foreach($group['items'] as $item)
-                <tr style="background:#f8fafc;font-size:12px;color:var(--text-muted)">
-                    <td></td>
-                    <td colspan="2" style="padding-left:32px">
-                        <i class="fas fa-angle-right"></i> Source Record
+                        <div style="font-weight:600">{{ $item->description }}</div>
                         @if($item->stock_number)
-                            <code style="font-size:11px;margin-left:6px">{{ $item->stock_number }}</code>
+                            <div style="margin-top:2px"><code style="font-size:11px">{{ $item->stock_number }}</code></div>
                         @endif
                     </td>
-                    <td></td>
-                    <td style="text-align:right">{{ number_format($item->_source_items ? $item->_source_items->sum('quantity') : $item->quantity, 2) }}</td>
+                    <td>{{ $item->unit }}</td>
+                    <td style="text-align:right">{{ number_format($item->quantity, 2) }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
                         @if($item->engas_unit_cost !== null)
-                            ₱{{ number_format($item->engas_unit_cost, 2) }}
+                            <span style="color:var(--primary);font-weight:600">₱{{ number_format($item->engas_unit_cost, 2) }}</span>
                         @else
-                            —
+                            <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td style="text-align:right">
                         @if($item->engas_unit_cost !== null)
-                            ₱{{ number_format(($item->_source_items ? $item->_source_items->sum('quantity') : $item->quantity) * $item->engas_unit_cost, 2) }}
+                            <span style="color:var(--primary);font-weight:600">₱{{ number_format($item->quantity * $item->engas_unit_cost, 2) }}</span>
                         @else
-                            —
+                            <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     @endif
-                    <td style="text-align:right">₱{{ number_format(($item->_source_items ? $item->_source_items->sum('quantity') : $item->quantity) * $item->unit_cost, 2) }}</td>
+                    <td style="white-space:nowrap">
+                        @if($item->expiration_date)
+                            <span style="{{ \Carbon\Carbon::parse($item->expiration_date)->isPast() ? 'color:var(--danger);font-weight:700' : '' }}">{{ \Carbon\Carbon::parse($item->expiration_date)->format('m/d/Y') }}</span>
+                        @else
+                            <span style="color:var(--text-muted)">—</span>
+                        @endif
+                    </td>
+                    <td>
+                        @php
+                            $originRis = $item->ris_number ?? $item->source_subsidy_ris ?? null;
+                            $originDr  = $item->sourceDrReference();
+                        @endphp
+                        @if($originRis)
+                            <div style="font-size:12px">
+                                <span style="font-weight:600">{{ $originRis }}</span>
+                                @if($item->source_subsidy_status)
+                                    <div style="margin-top:3px">
+                                        @include('partials.subsidy-source-badge', [
+                                            'status' => $item->source_subsidy_status,
+                                            'ris'    => $item->sourceSubsidyReference(),
+                                            'dr'     => $item->sourceDrReference(),
+                                            'code'   => $item->sourceSubsidyCode(),
+                                            'prefix' => 'FROM',
+                                        ])
+                                    </div>
+                                @endif
+                            </div>
+                        @else
+                            <span style="color:var(--text-muted)">—</span>
+                        @endif
+                    </td>
+                    <td style="text-align:right">₱{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
                 </tr>
                 @endforeach
-                @endif
                 <tr style="background:#f0f7ff;font-weight:600">
                     <td></td>
                     <td></td>
-                    <td colspan="2" style="color:var(--primary)">Total Qty for "{{ $firstItem->description }}"</td>
+                    <td colspan="2" style="color:var(--primary)"><span>Total Qty</span> for "{{ $group['description'] }}"</td>
                     <td style="text-align:right;font-weight:700">{{ number_format($group['total_qty'], 2) }}</td>
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 4 : 2 }}"></td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 6 : 4 }}"></td>
                 </tr>
                 @endforeach
                 @endforeach
             </tbody>
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 6 }}" style="text-align:right">WAREHOUSE TOTAL:</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 10 : 8 }}" style="text-align:right">WAREHOUSE TOTAL:</td>
                     <td style="text-align:right">₱{{ number_format($b['grand_total'], 2) }}</td>
                 </tr>
             </tfoot>

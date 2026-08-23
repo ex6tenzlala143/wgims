@@ -222,7 +222,7 @@
                             <span class="total-cell">
                                 <span class="tlabel">ENGAS Total</span>
                                 <span class="tvalue engas" id="etotal-{{ $idx }}">
-                                    ₱{{ number_format($di->engas_total_cost ?? ($di->quantity_delivered * $di->engas_unit_cost), 2) }}
+                                    ₱{{ number_format($di->engas_total_value, 2) }}
                                 </span>
                             </span>
                         </div>
@@ -240,7 +240,7 @@
                     <span class="total-cell">
                         <span class="tlabel">ENGAS Grand Total</span>
                         <span class="tvalue engas" id="grand-engas-total">
-                            ₱{{ number_format($delivery->items->sum(fn($di) => $di->engas_total_cost ?? ($di->quantity_delivered * $di->engas_unit_cost)), 2) }}
+                            ₱{{ number_format($delivery->items->sum(fn($di) => $di->engas_total_value), 2) }}
                         </span>
                     </span>
                 </div>

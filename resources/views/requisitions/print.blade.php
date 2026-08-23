@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RIS #{{ $requisition->ris_number }}</title>
+    <title>RIS {{ $requisition->ris_code ?? $requisition->ris_id }} / {{ $requisition->ris_number }}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -131,9 +131,9 @@
         <option value="legal">Legal / Long Bond (216 × 356 mm)</option>
     </select>
     <button class="btn-print" onclick="window.print()">🖨&nbsp; Print</button>
-    <a class="btn-back" href="{{ route('requisitions.show', $requisition->id) }}">← Back</a>
+    <a class="btn-back" href="{{ route('requisitions.show', $requisition->id) }}" onclick="if(history.length>1 && document.referrer && new URL(document.referrer).origin===location.origin){ history.back(); return false; }">← Back</a>
     <span class="toolbar-sep"></span>
-    <span style="color:#90cdf4;font-size:11px">RIS #{{ $requisition->ris_number }} — Appendix 63</span>
+    <span style="color:#90cdf4;font-size:11px">RIS {{ $requisition->ris_code ?? $requisition->ris_id }} / {{ $requisition->ris_number }} — Appendix 63</span>
 </div>
 
 {{-- ── Print page ── --}}
@@ -179,7 +179,9 @@
                 Responsibility Center Code:&nbsp;
                 <span class="underline-field sm">{{ $requisition->responsibility_center_code ?? '' }}</span>
                 <br>
-                RIS Number:&nbsp;
+                RIS ID:&nbsp;
+                <strong style="font-family:monospace">{{ $requisition->ris_code ?? $requisition->ris_id }}</strong>
+                &nbsp;&nbsp;RIS No.:&nbsp;
                 <strong>{{ $requisition->ris_number }}</strong>
             </td>
         </tr>

@@ -1,16 +1,16 @@
 @extends('layouts.app')
-@section('title', 'Correction History — RIS #' . $requisition->ris_number)
+@section('title', 'Correction History — RIS ' . ($requisition->ris_code ?? $requisition->ris_id) . ' / ' . $requisition->ris_number)
 @section('page-title', 'Correction History')
 @php use Illuminate\Support\Str; @endphp
 
 @section('content')
 <div class="page-header">
     <div>
-        <h1>Correction History — RIS #{{ $requisition->ris_number }}</h1>
+        <h1>Correction History — RIS {{ $requisition->ris_code ?? $requisition->ris_id }} / {{ $requisition->ris_number }}</h1>
         <div class="breadcrumb">
             <a href="{{ route('dashboard') }}">Dashboard</a> /
             <a href="{{ route('requisitions.index') }}">Requisitions</a> /
-            <a href="{{ route('requisitions.show', $requisition->id) }}">RIS #{{ $requisition->ris_number }}</a> /
+            <a href="{{ route('requisitions.show', $requisition->id) }}">RIS {{ $requisition->ris_code ?? $requisition->ris_id }} / {{ $requisition->ris_number }}</a> /
             Correction History
         </div>
     </div>

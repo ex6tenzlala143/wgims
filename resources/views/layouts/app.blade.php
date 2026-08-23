@@ -59,6 +59,10 @@
             overflow-x: auto;
             display: flex;
         }
+        /* Skeleton / loading — suppressed on bfcache restores (pageshow.persisted) */
+        body.loaded .skeleton,
+        body.loaded .skeleton-wrapper,
+        body.loaded [data-loading="true"] { display: none !important; }
 
         /* ── Sidebar ──────────────────────────────────────────────────────── */
         .sidebar {
@@ -399,8 +403,9 @@
             font-size: 13px; outline: none; background: #fff; color: var(--text);
         }
         .ss-panel .ss-search:focus { border-color: var(--primary); }
-        .ss-panel .ss-list { margin: 0; padding: 6px; list-style: none; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+        .ss-panel .ss-list { display: block; margin: 0; padding: 6px; list-style: none; overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
         .ss-panel .ss-item {
+            display: block; width: 100%; box-sizing: border-box;
             padding: 8px 10px; border-radius: 6px; font-size: 13px; color: var(--text);
             cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
@@ -691,6 +696,54 @@
         }
     </style>
     @stack('styles')
+    <script>
+    // ── Back/Forward bfcache handling — prevents skeleton flash on Back ──────
+    // `no-store` previously disabled bfcache, forcing a full reload + skeleton
+    // flash on Back. Now authenticated GETs allow bfcache (private, no-cache)
+    // and this handler makes restores instant: hide any loading UI and, if
+    // the session ended (logout/deactivation), force a reload to login.
+    (function () {
+        // Mark initial load as complete so any CSS that hides .page-content
+        // until `body.loaded` does not flash on bfcache restores.
+        function markLoaded() { document.body.classList.add('loaded'); }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                requestAnimationFrame(markLoaded);
+            });
+        } else {
+            markLoaded();
+        }
+        window.addEventListener('pageshow', function (e) {
+            if (!e.persisted) return;
+            // Page was restored from bfcache — hide any skeleton/loading UI
+            // immediately before the browser paints, so the user sees the
+            // already-rendered content with no flash.
+            markLoaded();
+            document.querySelectorAll('.skeleton, .skeleton-wrapper, .loading-overlay, [data-loading="true"]').forEach(function (el) {
+                el.style.display = 'none';
+            });
+            // Close any open searchable panels that may have been left open
+            // and re-initialize any searchable selects that lost their wrapper
+            // during the bfcache restore (some browsers detach the wrapper).
+            document.querySelectorAll('.ss-panel').forEach(function (el) { el.remove(); });
+            if (window.SS && typeof window.SS.refresh === 'function') {
+                try { window.SS.refresh(document); } catch (err) {}
+            }
+            // Verify the session is still valid; if we get 401 the user logged
+            // out or was deactivated — a reload will redirect to login via the
+            // auth middleware instead of showing a cached protected page.
+            try {
+                fetch('{{ route("notifications.unread") }}', {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                }).then(function (r) {
+                    if (r.status === 401) window.location.reload();
+                }).catch(function () {});
+            } catch (err) {}
+        });
+    })();
+    </script>
 </head>
 <body>
     @php

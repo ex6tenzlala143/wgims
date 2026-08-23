@@ -39,7 +39,7 @@
     <button onclick="window.print()" style="padding:8px 16px;background:#1a56db;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px">
         🖨 Print
     </button>
-    <a href="{{ route('transfers.show', $transfer) }}" style="margin-left:10px;font-size:13px;color:#1a56db">← Back to Detail</a>
+    <a href="{{ route('transfers.show', $transfer) }}" style="margin-left:10px;font-size:13px;color:#1a56db" onclick="if(history.length>1 && document.referrer && new URL(document.referrer).origin===location.origin){ history.back(); return false; }">← Back to Detail</a>
 </div>
 
 <div class="header">

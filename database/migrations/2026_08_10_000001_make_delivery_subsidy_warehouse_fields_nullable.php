@@ -23,11 +23,29 @@ return new class extends Migration {
         });
 
         Schema::table('delivery_subsidy_items', function (Blueprint $table) {
-            // Legacy constraint name from the old schema — it only exists on
-            // MySQL, and dropping a foreign key BY NAME is not supported on
-            // SQLite (which generates its own constraint names). Skip it there.
+            // The item_id foreign key exists under different names depending
+            // on the database history: legacy databases (pre-migration schema)
+            // use 'purchase_order_items_item_id_foreign', while fresh databases
+            // get Laravel's default 'delivery_subsidy_items_item_id_foreign'.
+            // SQLite generates its own constraint names and cannot drop by
+            // name, so it is skipped there. Drop whichever name actually
+            // exists before re-adding the constraint, otherwise MySQL fails
+            // with a duplicate-constraint error (errno 121).
             if (Schema::getConnection()->getDriverName() !== 'sqlite') {
-                $table->dropForeign('purchase_order_items_item_id_foreign');
+                foreach (['purchase_order_items_item_id_foreign', 'delivery_subsidy_items_item_id_foreign'] as $fkName) {
+                    $fkExists = (bool) DB::selectOne(
+                        "SELECT COUNT(*) AS c FROM information_schema.TABLE_CONSTRAINTS
+                         WHERE CONSTRAINT_SCHEMA = DATABASE()
+                           AND TABLE_NAME = 'delivery_subsidy_items'
+                           AND CONSTRAINT_NAME = ?
+                           AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
+                        [$fkName]
+                    )->c;
+
+                    if ($fkExists) {
+                        $table->dropForeign($fkName);
+                    }
+                }
             }
             $table->unsignedBigInteger('item_id')->nullable()->change();
             $table->foreign('item_id')->references('id')->on('items')->nullOnDelete();

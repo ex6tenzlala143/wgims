@@ -116,7 +116,7 @@
         {{-- Left: RIS metadata --}}
         <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
             <div>
-                <div style="font-weight:700;font-size:15px">{{ $ris->ris_number }}</div>
+                <div style="font-weight:700;font-size:15px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS ID:</span> <span style="font-family:monospace;color:var(--primary)">{{ $ris->ris_code ?? $ris->ris_id }}</span></span><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS No.:</span> <span style="font-weight:600">{{ $ris->ris_number }}</span></span></div>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
                     {{ $ris->date_approved?->format('M d, Y') ?? '—' }}
                     &nbsp;·&nbsp;

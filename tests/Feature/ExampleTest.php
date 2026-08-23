@@ -14,6 +14,7 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200);
+        // The dashboard requires authentication; guests are redirected to login.
+        $response->assertRedirect(route('login'));
     }
 }

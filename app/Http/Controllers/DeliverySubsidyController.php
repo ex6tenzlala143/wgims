@@ -245,6 +245,7 @@ class DeliverySubsidyController extends Controller
             'supplier', 'warehouse', 'creator',
             'items.item', 'items.warehouse',
             'items.deliveryItems.warehouse',
+            'items.deliveryItems.item',
             'deliveries.items.item',
             'deliveries.items.warehouse',
             'deliveries.items.deliverySubsidyItem',

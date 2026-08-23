@@ -20,7 +20,7 @@
             <div class="search-row">
                 <div class="search-input">
                     <i class="fas fa-search"></i>
-                    <input type="text" name="search" class="form-control" placeholder="Search RIS#, DR#, office, purpose..." value="{{ request('search') }}">
+                    <input type="text" name="search" class="form-control" placeholder="Search RIS ID, RIS No., DR#, office, purpose..." value="{{ request('search') }}">
                 </div>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
             </div>
@@ -54,7 +54,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>RIS Number</th>
+                    <th>RIS ID / RIS No.</th>
                     <th>DR No.</th>
                     <th>Date</th>
                     <th>Warehouse</th>
@@ -78,7 +78,16 @@
                 @endphp
                 <tr>
                     <td>
-                        <strong>{{ $ris->ris_number }}</strong>
+                        <div style="line-height:1.6">
+                            <div style="display:flex;align-items:baseline;gap:6px">
+                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;min-width:46px">RIS ID:</span>
+                                <strong style="color:var(--primary);font-family:monospace">{{ $ris->ris_code ?? $ris->ris_id }}</strong>
+                            </div>
+                            <div style="display:flex;align-items:baseline;gap:6px">
+                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;min-width:46px">RIS No.:</span>
+                                <span style="font-weight:600">{{ $ris->ris_number }}</span>
+                            </div>
+                        </div>
                         @if($subSnapshot)
                         <div style="margin-top:5px">
                             @include('partials.subsidy-source-badge', [

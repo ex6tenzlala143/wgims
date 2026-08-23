@@ -104,6 +104,7 @@ class RequisitionCorrectionTest extends TestCase
     {
         $this->actingAs($this->admin())
             ->post(route('requisitions.store'), [
+                'ris_number'     => 'RIS-CORR-' . strtoupper(\Illuminate\Support\Str::random(6)) . '-' . time() . rand(100,999),
                 'purpose'        => $purpose,
                 'date_requested' => '2026-08-01',
                 'items'          => [
@@ -145,6 +146,7 @@ class RequisitionCorrectionTest extends TestCase
         $line = $ris->items()->firstOrFail();
 
         $payload = [
+            'ris_number'     => $ris->ris_number,
             'purpose'        => $ris->purpose,
             'date_requested' => '2026-08-01',
             'items'          => [
@@ -156,7 +158,7 @@ class RequisitionCorrectionTest extends TestCase
             ],
         ];
 
-        foreach (['purpose', 'date_requested', 'office', 'division', 'entity_name'] as $field) {
+        foreach (['ris_number', 'purpose', 'date_requested', 'office', 'division', 'entity_name'] as $field) {
             if (isset($overrides[$field])) {
                 $payload[$field] = $overrides[$field];
             }

@@ -40,42 +40,54 @@
                             <div class="card-body">
                                 <div class="form-row cols-2">
                                     <div class="form-group">
+                                        <label class="form-label">RIS No. <span style="color:red">*</span></label>
+                                        <input type="text" name="ris_number" class="form-control {{ $errors->has('ris_number') ? 'is-invalid' : '' }}" value="{{ old('ris_number') }}" placeholder="e.g. RIS-CAM-2026-001" required>
+                                        @error('ris_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        <small style="color:var(--text-muted);font-size:11px">Official reference number (user-entered). RIS ID will be auto-generated.</small>
+                                    </div>
+                                    <div class="form-group">
                                         <label class="form-label">Date Requested <span style="color:red">*</span></label>
                                         <input type="date" name="date_requested" class="form-control" value="{{ old('date_requested', date('Y-m-d')) }}" required>
                                     </div>
+                                </div>
+                                <div class="form-row cols-2">
                                     <div class="form-group">
                                         <label class="form-label">Requested By</label>
                                         <input type="text" name="requested_by_name" class="form-control" value="{{ old('requested_by_name', auth()->user()->name) }}">
                                     </div>
-                                </div>
-                                <div class="form-row cols-2">
                                     <div class="form-group">
                                         <label class="form-label">Requested By Designation</label>
                                         <input type="text" name="requested_by_designation" class="form-control" value="{{ old('requested_by_designation') }}">
                                     </div>
+                                </div>
+                                <div class="form-row cols-2">
                                     <div class="form-group">
                                         <label class="form-label">Entity Name</label>
                                         <input type="text" name="entity_name" class="form-control" value="{{ old('entity_name', 'DSWD Region X') }}">
                                     </div>
-                                </div>
-                                <div class="form-row cols-2">
                                     <div class="form-group">
                                         <label class="form-label">Fund Cluster</label>
                                         <input type="text" name="fund_cluster" class="form-control" value="{{ old('fund_cluster') }}">
                                     </div>
+                                </div>
+                                <div class="form-row cols-2">
                                     <div class="form-group">
                                         <label class="form-label">Responsibility Center Code</label>
                                         <input type="text" name="responsibility_center_code" class="form-control" value="{{ old('responsibility_center_code') }}">
                                     </div>
-                                </div>
-                                <div class="form-row cols-2">
                                     <div class="form-group">
                                         <label class="form-label">Office</label>
                                         <input type="text" name="office" class="form-control" value="{{ old('office') }}">
                                     </div>
+                                </div>
+                                <div class="form-row cols-2">
                                     <div class="form-group">
                                         <label class="form-label">Division</label>
                                         <input type="text" name="division" class="form-control" value="{{ old('division') }}">
+                                    </div>
+                                    <div class="form-group" style="visibility:hidden" aria-hidden="true">
+                                        <label class="form-label">&nbsp;</label>
+                                        <input type="text" class="form-control" tabindex="-1" readonly>
                                     </div>
                                 </div>
                                 <div class="form-group" style="margin-bottom:0">

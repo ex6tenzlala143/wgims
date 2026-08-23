@@ -68,6 +68,27 @@ class DeliverySubsidyItem extends Model
     }
 
     /**
+     * All distinct stock records (Items) that actually hold the delivered
+     * quantity for this ordered line. When the same Subsidy item is delivered
+     * in several shipments with different unit cost / ENGAS / expiration /
+     * warehouse, each shipment resolves to a different Item row; this gathers
+     * all of them, deduplicated, so the Ordered Items table can show every
+     * stock card — not just $this->item (which only points to the last one).
+     *
+     * Eager-load `deliveryItems.item` from the show route to avoid N+1.
+     *
+     * @return Collection<int, Item>
+     */
+    public function getAssignedStockCardsAttribute(): Collection
+    {
+        return $this->deliveryItems
+            ->map(fn ($di) => $di->item)
+            ->filter(fn ($i) => $i && $i->stock_number)
+            ->unique('id')
+            ->values();
+    }
+
+    /**
      * Per-dispatch summary rows for this ordered item.
      *
      * One row per distinct (warehouse, unit cost, ENGAS unit cost) combination

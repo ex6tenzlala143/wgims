@@ -5,7 +5,7 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1>Signatories — RIS #{{ $requisition->ris_number }}</h1>
+        <h1>Signatories — RIS {{ $requisition->ris_code ?? $requisition->ris_id }} / {{ $requisition->ris_number }}</h1>
         <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / <a href="{{ route('requisitions.index') }}">Requisitions</a> / Signatories</div>
     </div>
 </div>

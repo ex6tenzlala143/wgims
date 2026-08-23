@@ -53,6 +53,24 @@ class DeliveryItem extends Model
         return $this->belongsTo(Delivery::class);
     }
 
+    /**
+     * ENGAS total for THIS dispatch, always derived from its own delivered
+     * quantity × its own ENGAS unit cost.
+     *
+     * The stored `engas_total_cost` column is a write-time snapshot; legacy
+     * rows may hold NULL or stale values (e.g. after older edits). Deriving
+     * here keeps every shipment row, per-item cumulative total and shipment
+     * grand total consistent without rewriting historical records.
+     */
+    public function getEngasTotalValueAttribute(): ?float
+    {
+        if ($this->engas_unit_cost === null) {
+            return null;
+        }
+
+        return round((float) $this->quantity_delivered * (float) $this->engas_unit_cost, 2);
+    }
+
     public function deliverySubsidyItem()
     {
         return $this->belongsTo(DeliverySubsidyItem::class);
