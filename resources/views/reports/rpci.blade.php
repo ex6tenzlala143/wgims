@@ -94,7 +94,7 @@
                     <td>{{ $item->unit }}</td>
                     <td><span class="badge badge-info" style="font-size:10px">{{ $item->getCategoryLabel() }}</span></td>
                     @if(auth()->user()->hasAdminAccess())<td>{{ $item->warehouse->name ?? '-' }}</td>@endif
-                    <td style="text-align:right">{{ number_format($item->quantity, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($item->quantity) }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">

@@ -103,7 +103,7 @@
                 <div class="form-group">
                     <label class="form-label">Reorder Point</label>
                     <input type="number" name="reorder_point" class="form-control"
-                        value="{{ old('reorder_point', 0) }}" min="0" step="0.01" style="max-width:200px">
+                        value="{{ old('reorder_point', 0) }}" min="0" step="1" style="max-width:200px">
                     <small style="color:var(--text-muted);font-size:11px">Alert when stock falls below this quantity.</small>
                 </div>
             </div>

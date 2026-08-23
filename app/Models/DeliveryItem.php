@@ -20,7 +20,7 @@ class DeliveryItem extends Model
     ];
 
     protected $casts = [
-        'quantity_delivered' => 'float',
+        'quantity_delivered' => 'integer',
         'unit_cost'          => 'float',
         'engas_unit_cost'    => 'float',
         'engas_total_cost'   => 'float',

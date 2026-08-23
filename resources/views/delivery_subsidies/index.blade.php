@@ -124,14 +124,14 @@
                     @endif
                     <td style="text-align:right">₱{{ number_format($subsidy->total_amount, 2) }}</td>
                     <td style="text-align:right;white-space:nowrap">
-                        {{ $requested > 0 ? number_format($requested, 2) : '—' }}
+                        {{ $requested > 0 ? number_format($requested) : '—' }}
                     </td>
                     <td>
                         @if($requested > 0)
                         <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;display:flex;justify-content:space-between">
-                            <span>{{ number_format($delivered, 2) }} delivered</span>
+                            <span>{{ number_format($delivered) }} delivered</span>
                             <span style="color:{{ $remaining > 0 ? 'var(--warning)' : 'var(--success)' }};font-weight:600">
-                                {{ $remaining > 0 ? number_format($remaining, 2).' left' : '✓ Complete' }}
+                                {{ $remaining > 0 ? number_format($remaining).' left' : '✓ Complete' }}
                             </span>
                         </div>
                         <div style="background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden">

@@ -113,15 +113,15 @@
                     <td><strong>{{ $item->description }}</strong></td>
                     <td style="text-align:right">
                         @if($item->quantity <= 0)
-                            <span style="color:var(--danger);font-weight:700">{{ number_format($item->quantity, 2) }}</span>
+                            <span style="color:var(--danger);font-weight:700">{{ number_format($item->quantity) }}</span>
                             <span class="badge badge-danger" style="font-size:10px;margin-left:4px">Out of Stock</span>
                         @elseif($item->reorder_point > 0 && $item->quantity <= $item->reorder_point)
                             <span style="color:var(--warning);font-weight:700" title="Below reorder point">
-                                {{ number_format($item->quantity, 2) }}
+                                {{ number_format($item->quantity) }}
                                 <i class="fas fa-exclamation-triangle" style="font-size:10px"></i>
                             </span>
                         @else
-                            <span style="color:var(--success);font-weight:600">{{ number_format($item->quantity, 2) }}</span>
+                            <span style="color:var(--success);font-weight:600">{{ number_format($item->quantity) }}</span>
                         @endif
                     </td>
                     <td>{{ $item->expiration_date ? $item->expiration_date->format('M d, Y') : '—' }}</td>
@@ -193,7 +193,7 @@
                                 <tr style="border-bottom:1px solid #e2e8f0">
                                     <td style="padding:6px"><code>{{ $source->stock_number ?? '—' }}</code></td>
                                     <td style="padding:6px">{{ $source->description }}</td>
-                                    <td style="padding:6px;text-align:right">{{ number_format($source->quantity, 2) }}</td>
+                                    <td style="padding:6px;text-align:right">{{ number_format($source->quantity) }}</td>
                                     <td style="padding:6px">{{ $source->expiration_date ? $source->expiration_date->format('M d, Y') : '—' }}</td>
                                     <td style="padding:6px;text-align:right">₱{{ number_format($source->unit_cost, 2) }}</td>
                                     <td style="padding:6px;text-align:right">

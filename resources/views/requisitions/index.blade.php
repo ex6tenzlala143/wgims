@@ -116,15 +116,15 @@
                     <td>
                         @if($risReq > 0)
                         <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;display:flex;justify-content:space-between">
-                            <span>{{ number_format($risIss, 2) }} issued</span>
+                            <span>{{ number_format($risIss) }} issued</span>
                             <span style="color:{{ $risRem > 0 ? 'var(--warning)' : 'var(--success)' }};font-weight:600">
-                                {{ $risRem > 0 ? number_format($risRem, 2).' left' : '✓ Done' }}
+                                {{ $risRem > 0 ? number_format($risRem).' left' : '✓ Done' }}
                             </span>
                         </div>
                         <div style="background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden">
                             <div style="background:{{ $risBar }};width:{{ $risPct }}%;height:100%;border-radius:999px"></div>
                         </div>
-                        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ $risPct }}% of {{ number_format($risReq, 2) }}</div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ $risPct }}% of {{ number_format($risReq) }}</div>
                         @else
                         <span style="color:var(--text-muted);font-size:12px">—</span>
                         @endif

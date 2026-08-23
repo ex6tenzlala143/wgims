@@ -373,7 +373,7 @@
     }
 
     function fmt(n) {
-        return Number(n).toLocaleString('en-PH', { maximumFractionDigits: 2 });
+        return Number(n).toLocaleString('en-PH', { maximumFractionDigits: 0 });
     }
 
     function itemOptionsHtml(selectedId) {
@@ -414,7 +414,7 @@
             html += '<div>';
             html += '<label class="form-label" style="white-space:nowrap">Requested Qty</label>';
             html += '<input type="number" name="items[' + i + '][quantity_requested]" id="cr-qty-' + i + '"'
-                + ' class="form-control cr-qty" min="' + (ri.locked ? ri.quantity_issued : 0.01) + '" step="0.01"'
+                + ' class="form-control cr-qty" min="' + (ri.locked ? ri.quantity_issued : 1) + '" step="1"'
                 + ' value="' + ri.quantity_requested + '" required oninput="crItemChanged(' + i + ')">';
             if (ri.locked) {
                 html += '<small style="color:var(--text-muted);font-size:11px">Cannot go below ' + fmt(ri.quantity_issued) + ' (already issued)</small>';

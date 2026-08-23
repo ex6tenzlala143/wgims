@@ -12,7 +12,7 @@ class RequisitionDispatchItem extends Model
     ];
 
     protected $casts = [
-        'quantity_issued'  => 'float',
+        'quantity_issued'  => 'integer',
         'unit_cost'        => 'float',
         'engas_unit_cost'  => 'float',
         'expiration_date'  => 'date',

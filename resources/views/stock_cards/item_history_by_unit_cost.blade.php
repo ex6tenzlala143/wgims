@@ -27,7 +27,7 @@
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Current Balance</div>
-            <div style="font-size:24px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity, 2) }}</div>
+            <div style="font-size:24px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity) }}</div>
         </div>
     </div>
     <div class="card">
@@ -50,8 +50,8 @@
         </div>
         <div style="display:flex;gap:20px;font-size:13px">
             <div><span style="color:var(--text-muted)">Unit Cost:</span> <strong>₱{{ number_format($batch['unit_cost'], 2) }}</strong></div>
-            <div><span style="color:var(--text-muted)">Original Qty:</span> <strong>{{ number_format($batch['original_qty'], 2) }}</strong></div>
-            <div><span style="color:var(--text-muted)">Remaining:</span> <strong style="color:{{ $batch['depleted'] ? 'var(--text-muted)' : 'var(--success)' }}">{{ number_format($batch['remaining_qty'], 2) }}</strong></div>
+            <div><span style="color:var(--text-muted)">Original Qty:</span> <strong>{{ number_format($batch['original_qty']) }}</strong></div>
+            <div><span style="color:var(--text-muted)">Remaining:</span> <strong style="color:{{ $batch['depleted'] ? 'var(--text-muted)' : 'var(--success)' }}">{{ number_format($batch['remaining_qty']) }}</strong></div>
         </div>
     </div>
     @if(count($batch['movements']) > 0)
@@ -71,7 +71,7 @@
                     <td>{{ $mv['date'] ? $mv['date']->format('M d, Y') : '—' }}</td>
                     <td>{{ $mv['reference'] }}</td>
                     <td><span class="badge badge-warning">Issue</span></td>
-                    <td style="text-align:right">{{ number_format($mv['qty'], 2) }}</td>
+                    <td style="text-align:right">{{ number_format($mv['qty']) }}</td>
                 </tr>
                 @endforeach
             </tbody>

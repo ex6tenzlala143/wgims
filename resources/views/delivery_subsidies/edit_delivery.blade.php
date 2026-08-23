@@ -50,7 +50,7 @@
                                 <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— auto = sum of items below</span>
                             </label>
                             <input type="number" name="quantity_delivered" id="qty-delivered-header"
-                                   class="form-control" step="0.01" readonly tabindex="-1"
+                                   class="form-control" step="1" readonly tabindex="-1"
                                    value="{{ old('quantity_delivered', $delivery->quantity_delivered) }}"
                                    style="background:#f7fafc;color:var(--text-muted)">
                             <div id="progress-hint" style="font-size:11px;margin-top:4px"></div>
@@ -116,7 +116,7 @@
                                     @if($di->item?->stock_number)
                                         · <code style="font-size:11px">{{ $di->item->stock_number }}</code>
                                     @endif
-                                    · Current stock: <strong>{{ number_format($di->item->quantity ?? 0, 2) }}</strong>
+                                    · Current stock: <strong>{{ number_format($di->item->quantity ?? 0) }}</strong>
                                 </div>
                             </div>
                         </div>
@@ -147,14 +147,14 @@
                                        id="qty-{{ $idx }}"
                                        class="form-control qty-delivered-input"
                                        value="{{ $oldQtyVal }}"
-                                       min="0" step="0.01"
+                                       min="0" step="1"
                                        max="{{ $editMaxQty }}"
                                        data-max="{{ $editMaxQty }}"
                                        required
                                        oninput="recalcRow({{ $idx }})">
                                 <div class="hint" style="margin-top:4px">
-                                    Max <strong>{{ number_format($editMaxQty, 2) }}</strong>
-                                    ({{ number_format($lineMax, 2) }} remaining)
+                                    Max <strong>{{ number_format($editMaxQty) }}</strong>
+                                    ({{ number_format($lineMax) }} remaining)
                                 </div>
                                 @error("items.{$idx}.quantity_delivered")
                                     <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
@@ -266,7 +266,7 @@
                     </div>
                     <div style="margin-bottom:10px">
                         <span style="color:var(--text-muted)">Total Qty Requested</span><br>
-                        <strong>{{ number_format($deliverySubsidy->quantity_requested, 2) }}</strong>
+                        <strong>{{ number_format($deliverySubsidy->quantity_requested) }}</strong>
                     </div>
                     <div style="margin-bottom:12px">
                         <span style="color:var(--text-muted)">Original Delivery Date</span><br>
@@ -278,7 +278,7 @@
                         <div style="color:var(--text-muted);margin-bottom:6px;font-weight:600">After saving this shipment:</div>
                         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
                             <span>This shipment qty</span>
-                            <strong id="sidebar-this">{{ number_format($delivery->quantity_delivered, 2) }}</strong>
+                            <strong id="sidebar-this">{{ number_format($delivery->quantity_delivered) }}</strong>
                         </div>
                         <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
                             <span>Status will be</span>
@@ -310,8 +310,8 @@
 
 @push('scripts')
 <script>
-const totalRequested  = {{ (float) $deliverySubsidy->quantity_requested }};
-const otherDelivered  = {{ (float) ($deliverySubsidy->totalDelivered() - $delivery->quantity_delivered) }};
+const totalRequested  = {{ (int) $deliverySubsidy->quantity_requested }};
+const otherDelivered  = {{ (int) ($deliverySubsidy->totalDelivered() - $delivery->quantity_delivered) }};
 
 function recalcRow(idx) {
     const qty   = parseFloat(document.getElementById('qty-'   + idx)?.value) || 0;
@@ -364,7 +364,7 @@ function recalcGrand() {
 
     // Header quantity is always the sum of the per-item quantities
     const header = document.getElementById('qty-delivered-header');
-    if (header) header.value = qtySum.toFixed(2);
+    if (header) header.value = qtySum;
 }
 
 function updateProgress() {
@@ -375,7 +375,7 @@ function updateProgress() {
 
     const sThis   = document.getElementById('sidebar-this');
     const sStatus = document.getElementById('sidebar-status');
-    if (sThis)   sThis.textContent = thisQty.toFixed(2);
+    if (sThis)   sThis.textContent = thisQty.toLocaleString('en-PH', { maximumFractionDigits: 0 });
     if (sStatus) {
         if (cumul >= totalRequested - epsilon) {
             sStatus.innerHTML = '<span style="color:var(--success)">Fully Delivered</span>';
@@ -395,7 +395,7 @@ function updateProgress() {
             hint.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Completes the request</span>';
         } else {
             hint.innerHTML = '<span style="color:#d69e2e"><i class="fas fa-exclamation-triangle"></i> '
-                + remaining.toFixed(2) + ' will still remain</span>';
+                + remaining.toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' will still remain</span>';
         }
     }
 }

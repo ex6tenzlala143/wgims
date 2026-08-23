@@ -54,8 +54,8 @@
                             @endif
                         </div>
                         <div style="display:flex;gap:18px;font-size:12px;text-align:right">
-                            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Requested</div><strong>{{ number_format($ri->quantity_requested, 2) }}</strong></div>
-                            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Already Issued</div><strong style="color:var(--success)">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued, 2) : '—' }}</strong></div>
+                            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Requested</div><strong>{{ number_format($ri->quantity_requested) }}</strong></div>
+                            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Already Issued</div><strong style="color:var(--success)">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '—' }}</strong></div>
                             <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Outstanding</div>
                                 @if($isDone)
                                     <span class="badge badge-success" style="font-size:10px">—</span>
@@ -128,7 +128,7 @@
                                    name="items[{{ $ri->id }}][quantity_issued]"
                                    id="qty-{{ $ri->id }}"
                                    class="form-control"
-                                   min="0" step="0.01"
+                                   min="0" step="1"
                                    value="{{ old('items.' . $ri->id . '.quantity_issued', 0) }}"
                                    oninput="checkDispatch('{{ $ri->id }}')">
                             @error("items.{$ri->id}.quantity_issued")
@@ -283,7 +283,7 @@ function onWhChange(idx, restoreItemId) {
                 data-stock="${i.quantity}"
                 data-sn="${i.stock_number || ''}"
                 data-unit="${i.unit || ''}"
-            >${i.description}${i.stock_number ? ' [' + i.stock_number + ']' : ''} · ₱${Number(i.unit_cost || 0).toFixed(2)} · ${Number(i.quantity).toFixed(2)} ${i.unit || ''}</option>`
+            >${i.description}${i.stock_number ? ' [' + i.stock_number + ']' : ''} · ₱${Number(i.unit_cost || 0).toFixed(2)} · ${Number(i.quantity).toLocaleString('en-PH', { maximumFractionDigits: 0 })} ${i.unit || ''}</option>`
         ).join('');
         itemSel.innerHTML = '<option value="">— Select Stock Record —</option>' + opts;
         itemSel.disabled = false;
@@ -334,7 +334,7 @@ function fillDispatchItem(sel, idx) {
 
     if (stockEl) {
         const stock = parseFloat(opt.dataset.stock || 0);
-        stockEl.textContent = 'Available on this record: ' + Number(stock).toLocaleString('en-PH', { maximumFractionDigits: 2 });
+        stockEl.textContent = 'Available on this record: ' + Number(stock).toLocaleString('en-PH', { maximumFractionDigits: 0 });
         stockEl.style.color = stock > 0 ? 'var(--success)' : 'var(--danger)';
     }
 

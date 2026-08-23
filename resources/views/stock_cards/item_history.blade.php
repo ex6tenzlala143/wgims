@@ -36,7 +36,7 @@
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Current Balance</div>
-            <div style="font-size:24px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity, 2) }}</div>
+            <div style="font-size:24px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity) }}</div>
         </div>
     </div>
     <div class="card">
@@ -91,11 +91,11 @@
                         @endif
                     </td>
                     <td style="font-size:12px">{{ $entry->from_to ?? '—' }}</td>
-                    <td style="text-align:right;color:var(--success)">{{ $entry->receipt_qty > 0 ? number_format($entry->receipt_qty, 2) : '—' }}</td>
+                    <td style="text-align:right;color:var(--success)">{{ $entry->receipt_qty > 0 ? number_format($entry->receipt_qty) : '—' }}</td>
                     <td style="text-align:right">{{ $entry->receipt_unit_cost > 0 ? '₱'.number_format($entry->receipt_unit_cost, 2) : '—' }}</td>
                     <td style="text-align:right">{{ $entry->receipt_total_cost > 0 ? '₱'.number_format($entry->receipt_total_cost, 2) : '—' }}</td>
-                    <td style="text-align:right;color:var(--danger)">{{ $entry->issue_qty > 0 ? number_format($entry->issue_qty, 2) : '—' }}</td>
-                    <td style="text-align:right"><strong>{{ number_format($entry->balance_qty, 2) }}</strong></td>
+                    <td style="text-align:right;color:var(--danger)">{{ $entry->issue_qty > 0 ? number_format($entry->issue_qty) : '—' }}</td>
+                    <td style="text-align:right"><strong>{{ number_format($entry->balance_qty) }}</strong></td>
                     <td style="text-align:right">₱{{ number_format($entry->balance_total_cost, 2) }}</td>
                 </tr>
                 @empty

@@ -71,7 +71,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Reorder Point</label>
-                    <input type="number" name="reorder_point" class="form-control" value="{{ old('reorder_point', $item->reorder_point) }}" min="0" step="0.01" style="max-width:200px">
+                    <input type="number" name="reorder_point" class="form-control" value="{{ old('reorder_point', $item->reorder_point) }}" min="0" step="1" style="max-width:200px">
                 </div>
             </div>
             {{-- Engas Unit Cost — admin only --}}

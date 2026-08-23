@@ -297,8 +297,8 @@
                 <td class="left">{{ $item->description }}@if($item->ris_number) <span style="font-size:7.5pt;color:#555">({{ $item->ris_number }})</span>@endif</td>
                 <td>{{ $item->unit }}</td>
                 <td class="right">{{ number_format($item->unit_cost, 2) }}</td>
-                <td class="right">{{ number_format($item->quantity, 2) }}</td>
-                <td class="right">{{ number_format($item->quantity, 2) }}</td>
+                <td class="right">{{ number_format($item->quantity) }}</td>
+                <td class="right">{{ number_format($item->quantity) }}</td>
                 <td class="right">{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
                 <td></td>
             </tr>
@@ -330,8 +330,8 @@
             {{-- Grand Total --}}
             <tr class="grand-total">
                 <td colspan="5" style="text-align:right">GRAND TOTAL:</td>
-                <td class="right">{{ number_format($grandTotalQty, 2) }}</td>
-                <td class="right">{{ number_format($grandTotalQty, 2) }}</td>
+                <td class="right">{{ number_format($grandTotalQty) }}</td>
+                <td class="right">{{ number_format($grandTotalQty) }}</td>
                 <td class="right">{{ number_format($grandTotalValue, 2) }}</td>
                 <td></td>
             </tr>

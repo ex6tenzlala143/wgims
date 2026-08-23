@@ -79,11 +79,11 @@ class InventoryBalanceReportTest extends TestCase
 
         // Total Qty is shown ONCE per Item + Warehouse group — here the summary
         // line for the three Food Pack records in Warehouse A is 175.
-        $this->assertEquals(1, substr_count($html, '>175.00<'));
+        $this->assertEquals(1, substr_count($html, '>175<'));
         // Individual quantities remain separate rows: 100, 50, 25.
-        $this->assertEquals(3, substr_count($html, '>100.00<')); // Food Pack row + Rice row + Rice summary
-        $this->assertEquals(3, substr_count($html, '>50.00<'));  // row + WH B row + WH B summary
-        $this->assertEquals(1, substr_count($html, '>25.00<'));
+        $this->assertEquals(3, substr_count($html, '>100<')); // Food Pack row + Rice row + Rice summary
+        $this->assertEquals(3, substr_count($html, '>50<'));  // row + WH B row + WH B summary
+        $this->assertEquals(1, substr_count($html, '>25<'));
         // One "Total Qty" summary per group (Food Pack A, Rice A, Food Pack B).
         $this->assertEquals(3, substr_count($html, '>Total Qty<'));
         // No merge badge — every record is its own row.
@@ -111,8 +111,8 @@ class InventoryBalanceReportTest extends TestCase
         // Each item/warehouse group shows its Total Qty once. Values repeat only
         // when a group has a single record (row + its own summary).
         $html = $response->getContent();
-        $this->assertEquals(2, substr_count($html, '>100.00<')); // Food Pack A row + summary
-        $this->assertEquals(4, substr_count($html, '>50.00<'));  // Rice A row+summary, Food Pack B row+summary
+        $this->assertEquals(2, substr_count($html, '>100<')); // Food Pack A row + summary
+        $this->assertEquals(4, substr_count($html, '>50<'));  // Rice A row+summary, Food Pack B row+summary
         $this->assertEquals(3, substr_count($html, '>Total Qty<'));
         // No merge badge — every record is its own row.
         $this->assertStringNotContainsString('variants)', $html);
@@ -181,7 +181,7 @@ class InventoryBalanceReportTest extends TestCase
         $this->actingAs($this->admin())
             ->get(route('inventory_balance_report'))
             ->assertOk()
-            ->assertSee('125.00', false);
+            ->assertSee('125', false);
 
         // Simulate stock landing on one variant (e.g. a new subsidy dispatch).
         $item->update(['quantity' => 150, 'is_active' => true]);
@@ -189,6 +189,6 @@ class InventoryBalanceReportTest extends TestCase
         $this->actingAs($this->admin())
             ->get(route('inventory_balance_report'))
             ->assertOk()
-            ->assertSee('175.00', false);
+            ->assertSee('175', false);
     }
 }

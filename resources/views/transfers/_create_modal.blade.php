@@ -732,7 +732,7 @@ function addTransferRow() {
         <td data-label="ENGAS Cost"><input type="text" id="transfer-engas-${idx}" readonly placeholder="—"></td>
         <td data-label="Qty to Transfer">
             <input type="number" name="items[${idx}][quantity]" id="transfer-qty-${idx}"
-                   step="0.0001" min="0.0001" placeholder="0" required oninput="recalcTransferRow(${idx})">
+                   step="1" min="1" placeholder="0" required oninput="recalcTransferRow(${idx})">
         </td>
         <td data-label="Unit Cost">
             <input type="number" name="items[${idx}][unit_cost]" id="transfer-cost-${idx}"

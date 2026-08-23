@@ -17,8 +17,8 @@ class StockTransferItem extends Model
     ];
 
     protected $casts = [
-        'quantity'           => 'float',
-        'quantity_requested' => 'float',
+        'quantity'           => 'integer',
+        'quantity_requested' => 'integer',
         'unit_cost'          => 'float',
     ];
 

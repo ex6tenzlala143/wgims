@@ -115,7 +115,7 @@
             </td>
             <td>{{ $line->sourceItem->unit }}</td>
             <td>{{ $line->sourceItem->getCategoryLabel() }}</td>
-            <td class="text-right">{{ number_format($line->quantity, 4) }}</td>
+            <td class="text-right">{{ number_format($line->quantity) }}</td>
             <td class="text-right">{{ number_format($line->unit_cost, 2) }}</td>
             <td class="text-right">{{ number_format($lineTotal, 2) }}</td>
         </tr>

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class RequisitionItem extends Model
 {
     protected $fillable = ['requisition_id', 'catalog_item_id', 'item_id', 'description', 'unit', 'account_code', 'warehouse_id', 'quantity_requested', 'quantity_issued', 'stock_available', 'remarks', 'unit_cost', 'engas_unit_cost', 'expiration_date', 'dr_number'];
-    protected $casts = ['quantity_requested' => 'float', 'quantity_issued' => 'float', 'stock_available' => 'boolean', 'unit_cost' => 'float', 'engas_unit_cost' => 'float', 'expiration_date' => 'date'];
+    protected $casts = ['quantity_requested' => 'integer', 'quantity_issued' => 'integer', 'stock_available' => 'boolean', 'unit_cost' => 'float', 'engas_unit_cost' => 'float', 'expiration_date' => 'date'];
 
     public function requisition()
     {

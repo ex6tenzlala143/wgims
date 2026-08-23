@@ -752,7 +752,7 @@ function risCalcTotal() {
         total += parseFloat(el.value) || 0;
     });
     const el = document.getElementById('ris-grand-total');
-    if (el) el.textContent = total.toLocaleString('en-PH', { maximumFractionDigits: 2 });
+    if (el) el.textContent = total.toLocaleString('en-PH', { maximumFractionDigits: 0 });
 }
 
 function risAddRow() {
@@ -769,7 +769,7 @@ function risAddRow() {
             '<input type="hidden" name="items[' + idx + '][catalog_item_id]" id="ris-catalog-item-id-' + idx + '">' +
         '</td>' +
         '<td data-label="Requested Quantity">' +
-            '<input type="number" name="items[' + idx + '][quantity_requested]" id="ris-qty-' + idx + '" class="ris-qty-input form-control" min="0.01" step="0.01" placeholder="e.g. 500" oninput="risCalcTotal()" required>' +
+            '<input type="number" name="items[' + idx + '][quantity_requested]" id="ris-qty-' + idx + '" class="ris-qty-input form-control" min="1" step="1" placeholder="e.g. 500" oninput="risCalcTotal()" required>' +
         '</td>' +
         '<td><button type="button" class="remove-row" onclick="risRemoveRow(\'ris-row-' + idx + '\')"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);

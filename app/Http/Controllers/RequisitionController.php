@@ -184,7 +184,7 @@ class RequisitionController extends Controller
             'municipality' => 'nullable|string|max:255',
             'items' => 'required|array|min:1',
             'items.*.catalog_item_id' => 'required|exists:item_catalog_items,id',
-            'items.*.quantity_requested' => 'required|numeric|min:0.01',
+            'items.*.quantity_requested' => 'required|integer|min:1',
         ]);
 
         $user = Auth::user();
@@ -338,7 +338,7 @@ class RequisitionController extends Controller
             'items' => 'required|array|min:1',
             'items.*.id' => 'nullable|integer|exists:requisition_items,id',
             'items.*.catalog_item_id' => 'required|exists:item_catalog_items,id',
-            'items.*.quantity_requested' => 'required|numeric|min:0.01',
+            'items.*.quantity_requested' => 'required|integer|min:1',
         ]);
 
         $existingItems = $requisition->items()->withCount('dispatchItems')->get()->keyBy('id');
@@ -622,7 +622,7 @@ class RequisitionController extends Controller
             'items' => 'required|array|min:1',
             'items.*.id'               => 'required|integer|exists:requisition_items,id',
             'items.*.catalog_item_id'  => 'nullable|exists:item_catalog_items,id',
-            'items.*.quantity_requested' => 'required|numeric|min:0.01',
+            'items.*.quantity_requested' => 'required|integer|min:1',
         ]);
 
         $existingItems = $requisition->items()->with('dispatchItems')->get()->keyBy('id');
@@ -679,7 +679,7 @@ class RequisitionController extends Controller
             foreach ($request->items as $idx => $line) {
                 $ri     = $existingItems->get((int) $line['id']);
                 $oldQty = (float) $ri->quantity_requested;
-                $newQty = round((float) $line['quantity_requested'], 4);
+                $newQty = (int) round((float) $line['quantity_requested']);
                 $locked = $ri->quantity_issued > 0 || $ri->dispatchItems->isNotEmpty();
 
                 // Inventory protection: the request can never drop below what is
@@ -687,8 +687,8 @@ class RequisitionController extends Controller
                 if ($newQty + 0.0001 < $ri->quantity_issued) {
                     throw ValidationException::withMessages([
                         "items.{$idx}.quantity_requested" =>
-                            'Requested quantity ('.number_format($newQty, 2).') cannot be less than the '
-                            .number_format($ri->quantity_issued, 2).' already issued. '
+                            'Requested quantity ('.number_format($newQty).') cannot be less than the '
+                            .number_format($ri->quantity_issued).' already issued. '
                             .'Correct the issued dispatch(s) first, then fix the request.',
                     ]);
                 }
@@ -738,9 +738,9 @@ class RequisitionController extends Controller
             // inventory records are untouched — only the request is reclassified.
             $requisition->updateFulfilmentStatus();
 
-            $newTotal = (float) $existingItems->sum('quantity_requested');
+            $newTotal = (int) $existingItems->sum('quantity_requested');
             if (abs($newTotal - $oldTotal) > 0.0001) {
-                $changes['total_requested'] = ['old' => $oldTotal, 'new' => round($newTotal, 4)];
+                $changes['total_requested'] = ['old' => $oldTotal, 'new' => $newTotal];
             }
             if ($requisition->status !== $oldStatus) {
                 $changes['status'] = ['old' => $oldStatus, 'new' => $requisition->status];
@@ -854,7 +854,7 @@ class RequisitionController extends Controller
             'items' => 'required|array',
             'items.*.warehouse_id' => 'nullable|integer|exists:warehouses,id',
             'items.*.item_id' => 'nullable|integer|exists:items,id',
-            'items.*.quantity_issued' => 'required|numeric|min:0',
+            'items.*.quantity_issued' => 'required|integer|min:0',
             'items.*.dr_number' => 'nullable|string|max:100',
             'items.*.engas_unit_cost' => 'nullable|numeric|min:0',
             'items.*.expiration_date' => 'nullable|date',
@@ -888,7 +888,7 @@ class RequisitionController extends Controller
                     ->where('requisition_id', $requisition->id)
                     ->firstOrFail();
 
-                $wanted = (float) $data['quantity_issued'];
+                $wanted = (int) $data['quantity_issued'];
                 if ($wanted <= 0) {
                     continue;
                 }
@@ -926,7 +926,7 @@ class RequisitionController extends Controller
                         "items.{$riItemId}.quantity_issued" =>
                             'Insufficient stock on the selected record "'.$item->description.'"'
                             .' ('.$item->stock_number.' · ₱'.number_format($item->unit_cost, 2).'): '
-                            .'only '.number_format($item->quantity, 2).' available. '
+                            .'only '.number_format($item->quantity).' available. '
                             .'No other unit-cost record will be used.',
                     ]);
                 }
@@ -935,7 +935,7 @@ class RequisitionController extends Controller
                     throw ValidationException::withMessages([
                         "items.{$riItemId}.quantity_issued" =>
                             'Cannot issue more than the outstanding quantity '
-                            .'('.number_format($stillNeeded, 2).') for "'.$item->description.'".',
+                            .'('.number_format($stillNeeded).') for "'.$item->description.'".',
                     ]);
                 }
 
@@ -1124,7 +1124,7 @@ class RequisitionController extends Controller
         $request->validate([
             'warehouse_id'    => 'required|integer|exists:warehouses,id',
             'item_id'         => 'required|integer|exists:items,id',
-            'quantity_issued' => 'required|numeric|min:0.0001',
+            'quantity_issued' => 'required|integer|min:1',
             'unit_cost'       => 'required|numeric|min:0',
             'engas_unit_cost' => 'nullable|numeric|min:0',
             'expiration_date' => 'nullable|date',
@@ -1145,7 +1145,7 @@ class RequisitionController extends Controller
 
             $warehouseId = (int) $request->warehouse_id;
             $newItemId   = (int) $request->item_id;
-            $newQty      = round((float) $request->quantity_issued, 4);
+            $newQty      = (int) round((float) $request->quantity_issued);
             $newUnitCost = round((float) $request->unit_cost, 2);
             $newEngas    = ($request->engas_unit_cost !== null && $request->engas_unit_cost !== '')
                 ? round((float) $request->engas_unit_cost, 2)
@@ -1178,7 +1178,7 @@ class RequisitionController extends Controller
                 throw ValidationException::withMessages([
                     'quantity_issued' =>
                         'Cannot issue more than the outstanding quantity '
-                        .'('.number_format(max(0, $ri->quantity_requested - ($ri->quantity_issued - $oldQty)), 2)
+                        .'('.number_format(max(0, $ri->quantity_requested - ($ri->quantity_issued - $oldQty)))
                         .') for "'.$newItem->description.'".',
                 ]);
             }
@@ -1193,7 +1193,7 @@ class RequisitionController extends Controller
                     'quantity_issued' =>
                         'Insufficient stock on the selected record "'.$newItem->description.'"'
                         .' ('.$newItem->stock_number.' · ₱'.number_format($newItem->unit_cost, 2).'): '
-                        .'only '.number_format($availableOnRecord, 2).' available. '
+                        .'only '.number_format($availableOnRecord).' available. '
                         .'No other unit-cost record will be used.',
                 ]);
             }
@@ -1204,10 +1204,10 @@ class RequisitionController extends Controller
 
             // ── Reverse the old deduction, apply the new one ────────────────
             if ($oldItemId === $newItemId) {
-                $newItem->update(['quantity' => round((float) $newItem->quantity + $oldQty - $newQty, 4)]);
+                $newItem->update(['quantity' => (int) round((float) $newItem->quantity + $oldQty - $newQty)]);
             } else {
-                $oldItem->update(['quantity' => round((float) $oldItem->quantity + $oldQty, 4)]);
-                $newItem->update(['quantity' => round((float) $newItem->quantity - $newQty, 4)]);
+                $oldItem->update(['quantity' => (int) round((float) $oldItem->quantity + $oldQty)]);
+                $newItem->update(['quantity' => (int) round((float) $newItem->quantity - $newQty)]);
             }
 
             // ── Update the dispatch row (warehouse follows the stock record) ─
@@ -1278,7 +1278,7 @@ class RequisitionController extends Controller
 
             // ── Refresh the line cache (keeps totals + breakdowns consistent) ─
             $ri->update([
-                'quantity_issued' => round($lineTotalAfter, 4),
+                'quantity_issued' => (int) round($lineTotalAfter),
                 'stock_available' => (float) $newItem->quantity >= $ri->quantity_requested,
                 'dr_number'       => $request->dr_number ?: $ri->dr_number,
                 'engas_unit_cost' => $newEngas ?? $ri->engas_unit_cost,

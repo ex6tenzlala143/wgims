@@ -131,7 +131,7 @@
                                 Item <span class="ris-item-num">{{ $loop->iteration }}</span>
                                 @if($ri->quantity_issued > 0)
                                     <span class="badge badge-success" style="font-size:10px;margin-left:6px">
-                                        <i class="fas fa-check"></i> {{ number_format($ri->quantity_issued, 2) }} issued
+                                        <i class="fas fa-check"></i> {{ number_format($ri->quantity_issued) }} issued
                                     </span>
                                 @endif
                             </div>
@@ -167,12 +167,12 @@
                                        name="items[{{ $idx }}][quantity_requested]"
                                        id="qty-{{ $idx }}"
                                        class="form-control"
-                                       min="{{ $locked ? number_format($ri->quantity_issued, 2, '.', '') : '0.01' }}" step="0.01"
+                                       min="{{ $locked ? number_format($ri->quantity_issued, 0, '.', '') : '1' }}" step="1"
                                        value="{{ $ri->quantity_requested }}"
                                        {{ $locked ? 'disabled' : '' }} required>
                                 @if($locked)
                                     <small style="color:var(--text-muted);font-size:11px">
-                                        Cannot be reduced below the {{ number_format($ri->quantity_issued, 2) }} already issued.
+                                        Cannot be reduced below the {{ number_format($ri->quantity_issued) }} already issued.
                                     </small>
                                 @endif
                                 @error('items.' . $idx . '.quantity_requested')
@@ -232,7 +232,7 @@ const ITEMS_API_URL = '{{ route("requisitions.description_items") }}';
 
 function formatQty(value) {
     const n = parseFloat(value) || 0;
-    return n.toLocaleString('en-PH', { maximumFractionDigits: 2 });
+    return n.toLocaleString('en-PH', { maximumFractionDigits: 0 });
 }
 
 function buildOptionsFor(idx, selectedId) {
@@ -314,7 +314,7 @@ function addRisRow() {
             <div class="form-group">
                 <label class="form-label">Requested Quantity <span class="req">*</span></label>
                 <input type="number" name="items[${idx}][quantity_requested]"
-                       id="qty-${idx}" class="form-control" min="0.01" step="0.01" required
+                       id="qty-${idx}" class="form-control" min="1" step="1" required
                        oninput="checkStock(${idx})">
             </div>
             <div class="form-group">

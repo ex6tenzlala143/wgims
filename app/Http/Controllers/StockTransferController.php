@@ -127,7 +127,7 @@ class StockTransferController extends Controller
             'remarks'           => 'nullable|string|max:1000',
             'items'             => 'required|array|min:1',
             'items.*.item_id'   => 'required|exists:items,id',
-            'items.*.quantity'  => 'required|numeric|min:0.0001',
+            'items.*.quantity'  => 'required|integer|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0.01',
         ], [
             'to_warehouse_id.different' => 'Source warehouse and destination warehouse must be different.',
@@ -235,7 +235,7 @@ class StockTransferController extends Controller
                         'stock_transfer_id'   => $transfer->id,
                         'item_id'             => $sourceItem->id,
                         'destination_item_id' => $destItem->id,
-                        'quantity_requested'  => (float) $line['quantity'],
+                        'quantity_requested'  => (int) $line['quantity'],
                         'quantity'            => 0,
                         'unit_cost'           => $unitCost,
                     ]);
@@ -320,7 +320,7 @@ class StockTransferController extends Controller
             'dispatch_date' => 'required|date',
             'items'         => 'required|array|min:1',
             'items.*.sti_id'   => 'required|exists:stock_transfer_items,id',
-            'items.*.quantity' => 'required|numeric|min:0',
+            'items.*.quantity' => 'required|integer|min:0',
         ]);
 
         try {
@@ -344,7 +344,7 @@ class StockTransferController extends Controller
                         ->firstOrFail();
 
                     $remaining   = max(0, $sti->quantity_requested - $sti->quantity);
-                    $dispatchQty = min((float) $line['quantity'], $remaining);
+                    $dispatchQty = min((int) $line['quantity'], $remaining);
 
                     if ($dispatchQty <= 0) {
                         continue;
@@ -531,7 +531,7 @@ class StockTransferController extends Controller
             'remarks'       => 'nullable|string|max:1000',
             'items'         => 'required|array|min:1',
             'items.*.sti_id'   => 'required|exists:stock_transfer_items,id',
-            'items.*.quantity' => 'required|numeric|min:0.0001',
+            'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0.01',
         ]);
 
@@ -550,7 +550,7 @@ class StockTransferController extends Controller
                         ->firstOrFail();
 
                     $oldQty  = $sti->quantity;
-                    $newQty  = (float) $line['quantity'];
+                    $newQty  = (int) $line['quantity'];
                     $newCost = round((float) $line['unit_cost'], 2);
                     $delta   = $newQty - $oldQty;
 
@@ -788,7 +788,7 @@ if ($inEntry) {
                     $sti->destinationItem?->description ?? "Item #{$destItemId}",
                     $entry->reference ?: '(no reference)',
                     ucfirst(str_replace('_', ' ', (string) $entry->reference_type)),
-                    number_format($moved, 4).' unit(s)'
+                    number_format($moved).' unit(s)'
                 );
             }
         }

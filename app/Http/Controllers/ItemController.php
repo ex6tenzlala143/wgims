@@ -170,7 +170,7 @@ class ItemController extends Controller
             'warehouse_id'   => 'required|exists:warehouses,id',
             'expiration_date'   => 'nullable|date',
             'quantity_per_item' => 'nullable|integer|min:1',
-            'reorder_point'    => 'nullable|numeric|min:0',
+            'reorder_point'    => 'nullable|integer|min:0',
             'ris_number'       => 'nullable|string|max:255',
             'engas_unit_cost'  => 'nullable|numeric|min:0',
         ]);
@@ -230,7 +230,7 @@ class ItemController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'expiration_date'   => 'nullable|date',
             'quantity_per_item' => 'nullable|integer|min:1',
-            'reorder_point'     => 'nullable|numeric|min:0',
+            'reorder_point'     => 'nullable|integer|min:0',
             'ris_number'        => 'nullable|string|max:255',
             'engas_unit_cost'   => 'nullable|numeric|min:0',
         ]);

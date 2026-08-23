@@ -232,10 +232,10 @@
                         <div style="font-size:6.5pt;color:#333;margin-top:1px">Whse: {{ $requisition->warehouse->name }}</div>
                     @endif
                 </td>
-                <td class="right">{{ number_format($ri->quantity_requested, 2) }}</td>
+                <td class="right">{{ number_format($ri->quantity_requested) }}</td>
                 <td>{{ $ri->stock_available ? '✓' : '' }}</td>
                 <td>{{ !$ri->stock_available ? '✓' : '' }}</td>
-                <td class="right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued, 2) : '' }}</td>
+                <td class="right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '' }}</td>
                 <td class="left">{{ $ri->remarks ?? '' }}</td>
             </tr>
             @endforeach

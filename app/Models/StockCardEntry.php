@@ -16,8 +16,8 @@ class StockCardEntry extends Model
 
     protected $casts = [
         'entry_date' => 'date',
-        'receipt_qty' => 'float', 'receipt_unit_cost' => 'float', 'receipt_total_cost' => 'float',
-        'issue_qty' => 'float', 'balance_qty' => 'float', 'balance_unit_cost' => 'float', 'balance_total_cost' => 'float',
+        'receipt_qty' => 'integer', 'receipt_unit_cost' => 'float', 'receipt_total_cost' => 'float',
+        'issue_qty' => 'integer', 'balance_qty' => 'integer', 'balance_unit_cost' => 'float', 'balance_total_cost' => 'float',
     ];
 
     public function item()

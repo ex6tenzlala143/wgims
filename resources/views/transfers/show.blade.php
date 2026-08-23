@@ -92,7 +92,7 @@
             </tr>
             <tr>
                 <td style="padding:5px 0;color:var(--text-muted)">Transferred Quantity</td>
-                <td style="padding:5px 0;font-weight:600">{{ number_format($qtyTransferred, 4) }}</td>
+                <td style="padding:5px 0;font-weight:600">{{ number_format($qtyTransferred) }}</td>
             </tr>
             <tr>
                 <td style="padding:5px 0;color:var(--text-muted)">Date</td>
@@ -200,11 +200,11 @@
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center">
             <div style="background:#f0f9ff;border-radius:8px;padding:12px">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Qty Planned</div>
-                <div style="font-size:22px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested, 2) }}</div>
+                <div style="font-size:22px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested) }}</div>
             </div>
             <div style="background:#f0fff4;border-radius:8px;padding:12px">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Qty Dispatched</div>
-                <div style="font-size:22px;font-weight:800;color:var(--success)">{{ number_format($totalTransferred, 2) }}</div>
+                <div style="font-size:22px;font-weight:800;color:var(--success)">{{ number_format($totalTransferred) }}</div>
             </div>
             <div style="background:{{ $isComplete ? '#f0fff4' : '#fffff0' }};border-radius:8px;padding:12px;border:{{ $isComplete ? 'none' : '1px solid #faf089' }}">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">
@@ -213,7 +213,7 @@
                 @if($isComplete)
                     <div style="font-size:18px;font-weight:800;color:var(--success)"><i class="fas fa-check-circle"></i> Complete</div>
                 @else
-                    <div style="font-size:22px;font-weight:800;color:var(--warning)">{{ number_format($totalRemaining, 2) }}</div>
+                    <div style="font-size:22px;font-weight:800;color:var(--warning)">{{ number_format($totalRemaining) }}</div>
                     <div style="font-size:11px;color:var(--warning);margin-top:2px">units pending dispatch</div>
                 @endif
             </div>
@@ -299,11 +299,11 @@
                         <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
-                    <td style="text-align:right;font-weight:600">{{ number_format($line->quantity_requested, 4) }}</td>
-                    <td style="text-align:right;color:var(--success);font-weight:600">{{ number_format($line->quantity, 4) }}</td>
+                    <td style="text-align:right;font-weight:600">{{ number_format($line->quantity_requested) }}</td>
+                    <td style="text-align:right;color:var(--success);font-weight:600">{{ number_format($line->quantity) }}</td>
                     <td style="text-align:right">
                         @if($outstanding > 0)
-                            <span style="color:var(--warning);font-weight:700">{{ number_format($outstanding, 4) }}</span>
+                            <span style="color:var(--warning);font-weight:700">{{ number_format($outstanding) }}</span>
                         @else
                             <span class="badge badge-success"><i class="fas fa-check"></i> Done</span>
                         @endif

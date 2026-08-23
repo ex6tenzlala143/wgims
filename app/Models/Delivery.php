@@ -19,7 +19,7 @@ class Delivery extends Model
 
     protected $casts = [
         'delivery_date'      => 'date',
-        'quantity_delivered' => 'float',
+        'quantity_delivered' => 'integer',
     ];
 
     public function deliverySubsidy()

@@ -176,8 +176,8 @@ class SubsidySourceSnapshotSurfaceTest extends TestCase
             ->assertOk()
             ->assertSee('Source: Deleted Subsidy')
             ->assertSee('FROM DELETED SUBSIDY')
-            ->assertSee('>50.00<', false)   // Deleted Pack qty row present
-            ->assertDontSee('>70.00<', false); // Clean Pack row excluded from results
+            ->assertSee('>50<', false)   // Deleted Pack qty row present
+            ->assertDontSee('>70<', false); // Clean Pack row excluded from results
 
         $this->actingAs($this->admin())
             ->get(route('inventory_balance_report'))

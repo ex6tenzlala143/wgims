@@ -180,9 +180,9 @@
                     </td>
                     <td>{{ $ri->description ?? $ri->item?->description ?? '—' }}</td>
                     <td>{{ $ri->unit ?? $ri->item?->unit ?? '—' }}</td>
-                    <td style="text-align:right">{{ number_format($ri->quantity_requested, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($ri->quantity_requested) }}</td>
                     <td style="text-align:right;color:var(--success);font-weight:600">
-                        {{ number_format($ri->quantity_issued, 2) }}
+                        {{ number_format($ri->quantity_issued) }}
                     </td>
                     <td style="text-align:right">
                         @if($outstanding > 0)

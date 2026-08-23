@@ -156,7 +156,7 @@
                         @endif
                     </td>
                     <td>{{ $item->unit }}</td>
-                    <td style="text-align:right">{{ number_format($item->quantity, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($item->quantity) }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
@@ -212,7 +212,7 @@
                     <td></td>
                     <td></td>
                     <td colspan="2" style="color:var(--primary)"><span>Total Qty</span> for "{{ $group['description'] }}"</td>
-                    <td style="text-align:right;font-weight:700">{{ number_format($group['total_qty'], 2) }}</td>
+                    <td style="text-align:right;font-weight:700">{{ number_format($group['total_qty']) }}</td>
                     <td colspan="{{ auth()->user()->hasAdminAccess() ? 6 : 4 }}"></td>
                 </tr>
                 @endforeach

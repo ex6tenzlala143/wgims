@@ -98,7 +98,7 @@
                     <td style="text-align:right">{{ number_format($totalIssued, 2) }}</td>
                     <td style="text-align:right">
                         <strong class="{{ $item->quantity <= $item->reorder_point && $item->reorder_point > 0 ? 'badge badge-danger' : '' }}">
-                            {{ number_format($item->quantity, 2) }}
+                            {{ number_format($item->quantity) }}
                         </strong>
                     </td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>

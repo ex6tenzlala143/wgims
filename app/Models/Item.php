@@ -16,7 +16,7 @@ class Item extends Model
 
     protected $casts = [
         'is_active'          => 'boolean',
-        'quantity'           => 'float',
+        'quantity'           => 'integer',
         'unit_cost'          => 'float',
         'engas_unit_cost'    => 'float',
         'quantity_per_item'  => 'integer',

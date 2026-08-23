@@ -327,7 +327,7 @@ class ReportController extends Controller
                     return [
                         'description' => $first->description,
                         'unit'        => $first->unit,
-                        'total_qty'   => round($totalQty, 4),
+                        'total_qty'   => (int) round($totalQty),
                         'items'       => $groupItems->values(),
                     ];
                 })->values();
@@ -435,7 +435,9 @@ class ReportController extends Controller
             $sheet->setCellValue("I{$row}", $totalValue);
             $sheet->setCellValue("J{$row}", '');
 
-            $sheet->getStyle("E{$row}:I{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle("E{$row}:F{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle("G{$row}:H{$row}")->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle("I{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
             $row++;
         }
 
@@ -548,7 +550,8 @@ class ReportController extends Controller
                 $sheet->setCellValue("H{$row}", $ri->item->engas_unit_cost ?? '');
                 $sheet->setCellValue("I{$row}", $amount);
 
-                $sheet->getStyle("F{$row}:I{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+                $sheet->getStyle("F{$row}")->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle("G{$row}:I{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
                 $row++;
             }
         }
@@ -652,11 +655,12 @@ class ReportController extends Controller
                     $sheet->setCellValue("D{$row}", $item->description);
                     $sheet->setCellValue("E{$row}", $item->unit);
                     $sheet->setCellValue("F{$row}", $item->quantity);
-                    $sheet->setCellValue("G{$row}", $showTotal ? round((float) ($totalQtyByNameAndWarehouse[$key] ?? 0), 4) : '');
+                    $sheet->setCellValue("G{$row}", $showTotal ? (int) ($totalQtyByNameAndWarehouse[$key] ?? 0) : '');
                     $sheet->setCellValue("H{$row}", $item->unit_cost);
                     $sheet->setCellValue("I{$row}", $item->engas_unit_cost ?? '');
                     $sheet->setCellValue("J{$row}", $value);
-                    $sheet->getStyle("F{$row}:J{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+                    $sheet->getStyle("F{$row}:G{$row}")->getNumberFormat()->setFormatCode('#,##0');
+                    $sheet->getStyle("H{$row}:J{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
                     $row++;
                 }
             }

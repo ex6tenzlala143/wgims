@@ -145,11 +145,11 @@
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center">
             <div style="background:#f0f9ff;border-radius:8px;padding:12px">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Qty Requested</div>
-                <div style="font-size:22px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested, 2) }}</div>
+                <div style="font-size:22px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested) }}</div>
             </div>
             <div style="background:#f0fff4;border-radius:8px;padding:12px">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Qty Delivered</div>
-                <div style="font-size:22px;font-weight:800;color:var(--success)">{{ number_format($totalDelivered, 2) }}</div>
+                <div style="font-size:22px;font-weight:800;color:var(--success)">{{ number_format($totalDelivered) }}</div>
             </div>
             <div style="background:{{ $isComplete ? '#f0fff4' : '#fffff0' }};border-radius:8px;padding:12px;border:{{ $isComplete ? 'none' : '1px solid #faf089' }}">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">
@@ -160,7 +160,7 @@
                         <i class="fas fa-check-circle"></i> Complete
                     </div>
                 @else
-                    <div style="font-size:22px;font-weight:800;color:var(--warning)">{{ number_format($totalRemaining, 2) }}</div>
+                    <div style="font-size:22px;font-weight:800;color:var(--warning)">{{ number_format($totalRemaining) }}</div>
                     <div style="font-size:11px;color:var(--warning);margin-top:2px">more needed to complete</div>
                 @endif
             </div>
@@ -169,7 +169,7 @@
         @if(!$isComplete && $totalDelivered > 0)
         <div style="margin-top:12px;padding:10px 14px;background:#fffff0;border:1px solid #faf089;border-radius:8px;font-size:13px;color:#744210">
             <i class="fas fa-exclamation-triangle"></i>
-            <strong>Partial delivery</strong> — {{ number_format($totalRemaining, 2) }} units still outstanding.
+            <strong>Partial delivery</strong> — {{ number_format($totalRemaining) }} units still outstanding.
             @if($deliverySubsidy->status !== 'cancelled')
             <a href="{{ route('delivery_subsidies.delivery', $deliverySubsidy->id) }}" style="color:var(--primary);font-weight:600;margin-left:6px">
                 Record next shipment →
@@ -238,11 +238,11 @@
                             <span style="color:var(--text-muted);font-size:12px">—</span>
                         @endif
                     </td>
-                    <td style="text-align:right">{{ number_format($poi->quantity, 2) }}</td>
-                    <td style="text-align:right">{{ number_format($poi->qty_delivered, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($poi->quantity) }}</td>
+                    <td style="text-align:right">{{ number_format($poi->qty_delivered) }}</td>
                     <td style="text-align:right">
                         <span class="{{ ($poi->quantity - $poi->qty_delivered) > 0 ? 'badge badge-warning' : 'badge badge-success' }}">
-                            {{ number_format($poi->quantity - $poi->qty_delivered, 2) }}
+                            {{ number_format($poi->quantity - $poi->qty_delivered) }}
                         </span>
                     </td>
                     <td style="text-align:right">
@@ -383,17 +383,17 @@
             <div style="display:flex;gap:16px;font-size:13px;text-align:right">
                 <div>
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Ordered</div>
-                    <strong>{{ number_format($orderedQty, 2) }}</strong>
+                    <strong>{{ number_format($orderedQty) }}</strong>
                 </div>
                 <div>
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Delivered</div>
-                    <strong style="color:var(--success)">{{ number_format($poi->qty_delivered, 2) }}</strong>
+                    <strong style="color:var(--success)">{{ number_format($poi->qty_delivered) }}</strong>
                 </div>
                 <div>
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Remaining</div>
                     @php $lineRem = max(0, $orderedQty - $poi->qty_delivered); @endphp
                     <strong style="color:{{ $lineRem > 0 ? 'var(--warning)' : 'var(--success)' }}">
-                        {{ $lineRem > 0 ? number_format($lineRem, 2) : '✓ Complete' }}
+                        {{ $lineRem > 0 ? number_format($lineRem) : '✓ Complete' }}
                     </strong>
                 </div>
             </div>
@@ -484,11 +484,11 @@
                             @endif
                         </td>
                         <td style="padding:10px 14px;text-align:right;font-weight:700;color:var(--primary)">
-                            +{{ number_format($row['di']->quantity_delivered, 2) }}
+                            +{{ number_format($row['di']->quantity_delivered) }}
                         </td>
                         <td style="padding:10px 14px;text-align:right">
-                            <span style="font-weight:600">{{ number_format($cumulativeQty, 2) }}</span>
-                            <span style="font-size:10px;color:var(--text-muted);margin-left:4px">/ {{ number_format($orderedQty, 2) }} ({{ $cumulativePct }}%)</span>
+                            <span style="font-weight:600">{{ number_format($cumulativeQty) }}</span>
+                            <span style="font-size:10px;color:var(--text-muted);margin-left:4px">/ {{ number_format($orderedQty) }} ({{ $cumulativePct }}%)</span>
                         </td>
                         <td style="padding:10px 14px;text-align:right">₱{{ number_format($row['di']->unit_cost, 2) }}</td>
                         <td style="padding:10px 14px;text-align:right">₱{{ number_format($row['di']->quantity_delivered * $row['di']->unit_cost, 2) }}</td>
@@ -520,11 +520,11 @@
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
                         <td colspan="6" style="padding:10px 20px;font-size:13px">Total Delivered</td>
                         <td style="padding:10px 14px;text-align:right;color:var(--success)">
-                            {{ number_format($poi->qty_delivered, 2) }}
+                            {{ number_format($poi->qty_delivered) }}
                         </td>
                         <td style="padding:10px 14px;text-align:right">
                             <span style="color:{{ $lineRem > 0 ? 'var(--warning)' : 'var(--success)' }}">
-                                {{ $lineRem > 0 ? number_format($lineRem, 2).' remaining' : '✓ Fully delivered' }}
+                                {{ $lineRem > 0 ? number_format($lineRem).' remaining' : '✓ Fully delivered' }}
                             </span>
                         </td>
                         <td></td>
@@ -573,7 +573,7 @@
                         @if($delivery->batch_number)
                         &nbsp;·&nbsp; Batch: <strong>{{ $delivery->batch_number }}</strong>
                         @endif
-                        &nbsp;·&nbsp; Qty Delivered: <strong>{{ number_format($delivery->quantity_delivered, 2) }}</strong>
+                        &nbsp;·&nbsp; Qty Delivered: <strong>{{ number_format($delivery->quantity_delivered) }}</strong>
                     </div>
                 </div>
             </div>
@@ -657,7 +657,7 @@
                                 <span style="color:var(--text-muted);font-size:12px">{{ $delivery->dr_number ?? '-' }}</span>
                             @endif
                         </td>
-                        <td style="text-align:right">{{ number_format($di->quantity_delivered, 2) }}</td>
+                        <td style="text-align:right">{{ number_format($di->quantity_delivered) }}</td>
                         <td style="text-align:right">₱{{ number_format($di->unit_cost, 2) }}</td>
                         <td style="text-align:right">₱{{ number_format($di->quantity_delivered * $di->unit_cost, 2) }}</td>
                         @if(auth()->user()->hasAdminAccess())

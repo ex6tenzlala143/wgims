@@ -65,7 +65,7 @@
         <div class="card-body">
             <div style="text-align:center;padding:20px">
                 <div style="font-size:48px;font-weight:800;color:{{ $item->quantity <= $item->reorder_point && $item->reorder_point > 0 ? 'var(--danger)' : 'var(--success)' }}">
-                    {{ number_format($item->quantity, 2) }}
+                    {{ number_format($item->quantity) }}
                 </div>
                 <div style="font-size:16px;color:var(--text-muted);margin-top:4px">{{ App\Models\Item::UNITS[$item->unit] ?? $item->unit }}</div>
                 @if($item->quantity <= $item->reorder_point && $item->reorder_point > 0)
@@ -73,7 +73,7 @@
                 @endif
             </div>
             <table style="width:100%;font-size:14px;margin-top:16px">
-                <tr><td style="padding:8px 0;color:var(--text-muted)">Current Quantity</td><td style="text-align:right"><strong>{{ number_format($item->quantity, 2) }}</strong></td></tr>
+                <tr><td style="padding:8px 0;color:var(--text-muted)">Current Quantity</td><td style="text-align:right"><strong>{{ number_format($item->quantity) }}</strong></td></tr>
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Unit Cost</td><td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td></tr>
                 @if(auth()->user()->hasAdminAccess() && $item->engas_unit_cost !== null)
                 <tr>
@@ -90,7 +90,7 @@
                 </tr>
                 @endif
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Total Value</td><td style="text-align:right"><strong>₱{{ number_format($item->quantity * $item->unit_cost, 2) }}</strong></td></tr>
-                <tr><td style="padding:8px 0;color:var(--text-muted)">Reorder Point</td><td style="text-align:right">{{ number_format($item->reorder_point, 2) }}</td></tr>
+                <tr><td style="padding:8px 0;color:var(--text-muted)">Reorder Point</td><td style="text-align:right">{{ number_format($item->reorder_point) }}</td></tr>
             </table>
         </div>
     </div>
@@ -122,9 +122,9 @@
                         <span class="badge badge-secondary">Adjustment</span>
                         @endif
                     </td>
-                    <td style="text-align:right">{{ $entry->receipt_qty > 0 ? number_format($entry->receipt_qty, 2) : '—' }}</td>
-                    <td style="text-align:right">{{ $entry->issue_qty > 0 ? number_format($entry->issue_qty, 2) : '—' }}</td>
-                    <td style="text-align:right"><strong>{{ number_format($entry->balance_qty, 2) }}</strong></td>
+                    <td style="text-align:right">{{ $entry->receipt_qty > 0 ? number_format($entry->receipt_qty) : '—' }}</td>
+                    <td style="text-align:right">{{ $entry->issue_qty > 0 ? number_format($entry->issue_qty) : '—' }}</td>
+                    <td style="text-align:right"><strong>{{ number_format($entry->balance_qty) }}</strong></td>
                 </tr>
                 @endforeach
             </tbody>

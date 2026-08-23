@@ -530,7 +530,7 @@
             '</td>' +
             '<td data-label="Unit"><select name="items[' + idx + '][unit]" id="edit-unit-' + idx + '" class="form-control" required style="color:#000;background:#fff">' + unitOptions + '</select></td>' +
             '<td data-label="Category"><select name="items[' + idx + '][category]" id="edit-category-' + idx + '" class="form-control" required style="color:#000;background:#fff">' + catOptions + '</select></td>' +
-            '<td data-label="Quantity Requested"><input type="number" name="items[' + idx + '][quantity]" class="form-control edit-qty-input" min="0.01" step="0.01" oninput="editCalcTotal()" required style="color:#000;background:#fff"></td>' +
+            '<td data-label="Quantity Requested"><input type="number" name="items[' + idx + '][quantity]" class="form-control edit-qty-input" min="1" step="1" oninput="editCalcTotal()" required style="color:#000;background:#fff"></td>' +
             '<td data-label="Expiry Date"><input type="date" name="items[' + idx + '][expiration_date]" id="edit-expiry-' + idx + '" class="form-control" style="font-size:12px;color:#000;background:#fff"></td>' +
             '<td><button type="button" class="remove-row" id="edit-remove-' + idx + '" onclick="editRemoveRow(\'edit-row-' + idx + '\', ' + idx + ')"><i class="fas fa-times"></i></button></td>';
 
@@ -596,7 +596,7 @@
                 qty.min = item.qty_delivered;
                 var note = document.createElement('div');
                 note.className = 'edit-delivered-note';
-                note.textContent = 'Delivered: ' + Number(item.qty_delivered || 0).toLocaleString('en-PH', { maximumFractionDigits: 2 }) + ' — cannot go below this.';
+                note.textContent = 'Delivered: ' + Number(item.qty_delivered || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' — cannot go below this.';
                 qty.parentElement.appendChild(note);
             }
         }
@@ -641,9 +641,9 @@
             total += parseFloat(el.value) || 0;
         });
         var grand = document.getElementById('edit-grand-total');
-        if (grand) grand.textContent = total.toLocaleString('en-PH', { maximumFractionDigits: 2 });
+        if (grand) grand.textContent = total.toLocaleString('en-PH', { maximumFractionDigits: 0 });
         var hidden = document.getElementById('edit-quantity-requested');
-        if (hidden) hidden.value = total.toFixed(2);
+        if (hidden) hidden.value = total;
     }
 
     function editUpdateCount() {

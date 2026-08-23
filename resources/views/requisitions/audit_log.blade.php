@@ -95,8 +95,8 @@
                                             <strong>{{ Str::endsWith($field, '.item') ? 'Item' : 'Requested Qty' }}</strong>
                                             @if(Str::endsWith($field, '.quantity_requested'))
                                                 for <em>{{ $change['old'] }}</em>:
-                                                <span style="color:var(--danger)">{{ number_format((float) $change['old'], 2) }}</span>
-                                                → <span style="color:var(--success)">{{ number_format((float) $change['new'], 2) }}</span>
+                                                <span style="color:var(--danger)">{{ number_format((float) $change['old']) }}</span>
+                                                → <span style="color:var(--success)">{{ number_format((float) $change['new']) }}</span>
                                             @else
                                                 for line:
                                                 <span style="color:var(--danger)">{{ $change['old'] ?: '—' }}</span>

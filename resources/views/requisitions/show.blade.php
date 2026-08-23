@@ -279,7 +279,7 @@
                     </td>
                     @endif
 
-                    <td style="text-align:right">{{ number_format($ri->quantity_requested, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($ri->quantity_requested) }}</td>
 
                     {{-- Total Cost --}}
                     <td style="text-align:right;white-space:nowrap;font-weight:600">
@@ -297,7 +297,7 @@
                         <span class="badge badge-danger"><i class="fas fa-times"></i> No</span>
                         @endif
                     </td>
-                    <td style="text-align:right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued, 2) : '—' }}</td>
+                    <td style="text-align:right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '—' }}</td>
                     <td style="text-align:right">
                         @php $outstanding = max(0, $ri->quantity_requested - $ri->quantity_issued); @endphp
                         @if($outstanding > 0)
@@ -388,11 +388,11 @@
             <div style="display:flex;gap:16px;font-size:12px;text-align:right">
                 <div>
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Requested</div>
-                    <strong>{{ number_format($ri->quantity_requested, 2) }}</strong>
+                    <strong>{{ number_format($ri->quantity_requested) }}</strong>
                 </div>
                 <div>
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Issued</div>
-                    <strong style="color:var(--success)">{{ number_format($ri->quantity_issued, 2) }}</strong>
+                    <strong style="color:var(--success)">{{ number_format($ri->quantity_issued) }}</strong>
                 </div>
                 <div>
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Outstanding</div>
@@ -463,7 +463,7 @@
                         </td>
                         <td style="padding:10px 14px">{{ $di->item?->warehouse?->name ?? '—' }}</td>
                         <td style="padding:10px 14px;text-align:right;font-weight:700;color:var(--primary)">
-                            +{{ number_format($di->quantity_issued, 2) }}
+                            +{{ number_format($di->quantity_issued) }}
                         </td>
                         <td style="padding:10px 14px">
                             <code style="font-size:12px">{{ $di->dr_number ?? '—' }}</code>
@@ -477,7 +477,7 @@
                         <td style="padding:10px 14px;text-align:right">
                             <span style="font-weight:600">{{ number_format($runningTotal, 2) }}</span>
                             <span style="font-size:10px;color:var(--text-muted);margin-left:4px">
-                                / {{ number_format($ri->quantity_requested, 2) }} ({{ $cumulativePct }}%)
+                                / {{ number_format($ri->quantity_requested) }} ({{ $cumulativePct }}%)
                             </span>
                         </td>
                         @if(auth()->user()->canWrite())
@@ -496,7 +496,7 @@
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
                         <td colspan="3" style="padding:10px 20px;font-size:13px">Total Issued</td>
                         <td style="padding:10px 14px;text-align:right;color:var(--success)">
-                            {{ number_format($ri->quantity_issued, 2) }}
+                            {{ number_format($ri->quantity_issued) }}
                         </td>
                         <td></td>
                         <td></td>

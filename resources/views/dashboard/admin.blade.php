@@ -71,7 +71,7 @@
                             <td></td>
                             <td><span class="badge badge-primary">{{ $ab['account_code'] }}</span></td>
                             <td>{{ $ab['label'] }}</td>
-                            <td style="text-align:right">{{ number_format($ab['total_qty'], 2) }}</td>
+                            <td style="text-align:right">{{ number_format($ab['total_qty']) }}</td>
                             <td style="text-align:right">₱{{ number_format($ab['total_value'], 2) }}</td>
                         </tr>
                         @endforeach

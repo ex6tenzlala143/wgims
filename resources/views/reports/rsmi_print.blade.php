@@ -281,7 +281,7 @@
                 <td>{{ $ri->item?->stock_number ?? '' }}</td>
                 <td class="left">{{ $ri->description ?? $ri->item?->description ?? '' }}</td>
                 <td>{{ $ri->unit ?? $ri->item?->unit ?? '' }}</td>
-                <td class="right col-divider">{{ number_format($ri->quantity_issued, 2) }}</td>
+                <td class="right col-divider">{{ number_format($ri->quantity_issued) }}</td>
                 <td class="right">{{ number_format($ri->unit_cost ?? $ri->item?->unit_cost ?? 0, 2) }}</td>
                 <td class="right">{{ number_format($ri->quantity_issued * ($ri->unit_cost ?? $ri->item?->unit_cost ?? 0), 2) }}</td>
             </tr>
@@ -320,7 +320,7 @@
             @foreach($recap as $r)
             <tr class="data-row">
                 <td colspan="2">{{ $r['stock_no'] }}</td>
-                <td class="right">{{ number_format($r['qty'], 2) }}</td>
+                <td class="right">{{ number_format($r['qty']) }}</td>
                 <td></td><td></td>
                 <td class="col-divider"></td>
                 <td class="right">{{ number_format($r['unit_cost'], 2) }}</td>

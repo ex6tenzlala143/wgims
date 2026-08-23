@@ -31,11 +31,11 @@
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
             <strong>Fulfilment Progress</strong>
             <span>
-                <strong style="color:var(--success)">{{ number_format($totalDelivered, 2) }}</strong>
-                of <strong>{{ number_format($totalRequested, 2) }}</strong> requested
+                <strong style="color:var(--success)">{{ number_format($totalDelivered) }}</strong>
+                of <strong>{{ number_format($totalRequested) }}</strong> requested
                 &nbsp;—&nbsp;
                 <strong style="color:{{ $totalRemaining > 0 ? 'var(--warning)' : 'var(--success)' }}">
-                    {{ $totalRemaining > 0 ? number_format($totalRemaining, 2).' still needed' : '✓ Fully delivered' }}
+                    {{ $totalRemaining > 0 ? number_format($totalRemaining).' still needed' : '✓ Fully delivered' }}
                 </strong>
             </span>
         </div>
@@ -129,16 +129,16 @@
                     <div style="margin-left:auto;display:flex;gap:16px;font-size:12px;text-align:right">
                         <div>
                             <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Requested</div>
-                            <strong>{{ number_format($poi->quantity, 2) }}</strong>
+                            <strong>{{ number_format($poi->quantity) }}</strong>
                         </div>
                         <div>
                             <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Dispatched</div>
-                            <strong style="color:var(--success)">{{ number_format($poi->qty_delivered, 2) }}</strong>
+                            <strong style="color:var(--success)">{{ number_format($poi->qty_delivered) }}</strong>
                         </div>
                         <div>
                             <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase">Remaining</div>
                             <strong style="color:{{ $lineRemaining > 0 ? 'var(--warning)' : 'var(--success)' }}">
-                                {{ $lineRemaining > 0 ? number_format($lineRemaining, 2) : '—' }}
+                                {{ $lineRemaining > 0 ? number_format($lineRemaining) : '—' }}
                             </strong>
                         </div>
                     </div>
@@ -193,7 +193,7 @@
                             <label class="form-label">
                                 Quantity <span style="color:red">*</span>
                                 @if(!$isDone)
-                                    <span class="hint">max {{ number_format($lineRemaining, 2) }}</span>
+                                    <span class="hint">max {{ number_format($lineRemaining) }}</span>
                                 @else
                                     <span class="hint" style="color:var(--success)">no more dispatchable</span>
                                 @endif
@@ -201,7 +201,7 @@
                             <input type="number"
                                    name="items[{{ $poiIdx }}_0][quantity_delivered]"
                                    class="form-control item-qty"
-                                   min="0" step="0.01"
+                                   min="0" step="1"
                                    max="{{ $lineRemaining }}"
                                    data-max="{{ $lineRemaining }}"
                                    value="{{ old("items.{$poiIdx}_0.quantity_delivered", 0) }}"
@@ -276,7 +276,7 @@
             <div class="batch-overflow" data-poi="{{ $poiIdx }}" style="display:none;padding:10px 20px;background:#fff5f5;color:var(--danger);font-size:12px;border-top:1px solid var(--border)">
                 <i class="fas fa-exclamation-circle"></i>
                 The combined quantity across all batches for this item exceeds its remaining quantity of
-                <strong>{{ number_format($lineRemaining, 2) }}</strong>.
+                <strong>{{ number_format($lineRemaining) }}</strong>.
             </div>
         </div>
         @endforeach
@@ -311,11 +311,11 @@
                     <div style="color:var(--text-muted);font-size:11px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">After this shipment</div>
                     <div style="display:flex;justify-content:space-between;margin-bottom:4px">
                         <span>Total delivered</span>
-                        <strong id="sidebar-cumul">{{ number_format($totalDelivered, 2) }}</strong>
+                        <strong id="sidebar-cumul">{{ number_format($totalDelivered) }}</strong>
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-bottom:10px">
                         <span>Still remaining</span>
-                        <strong id="sidebar-remain" style="color:var(--warning)">{{ number_format($totalRemaining, 2) }}</strong>
+                        <strong id="sidebar-remain" style="color:var(--warning)">{{ number_format($totalRemaining) }}</strong>
                     </div>
                     <div id="sidebar-status" style="text-align:center;font-weight:600;padding:8px;border-radius:6px;font-size:12px"></div>
                 </div>
@@ -360,8 +360,8 @@ function recalcTotal() {
         sum += parseFloat(el.value) || 0;
     });
 
-    document.getElementById('qty-delivered-hidden').value = sum.toFixed(4);
-    document.getElementById('sidebar-qty').textContent    = sum.toFixed(2);
+    document.getElementById('qty-delivered-hidden').value = sum;
+    document.getElementById('sidebar-qty').textContent    = sum.toLocaleString('en-PH', { maximumFractionDigits: 0 });
 
     const cumul     = _alreadyDelivered + sum;
     const remaining = Math.max(0, _totalRequested - cumul);
@@ -393,8 +393,8 @@ function recalcTotal() {
         msg.style.display   = (itemSum > remainingLine + epsilon) ? 'block' : 'none';
     });
 
-    document.getElementById('sidebar-cumul').textContent  = cumul.toFixed(2);
-    document.getElementById('sidebar-remain').textContent = remaining.toFixed(2);
+    document.getElementById('sidebar-cumul').textContent  = cumul.toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    document.getElementById('sidebar-remain').textContent = remaining.toLocaleString('en-PH', { maximumFractionDigits: 0 });
     document.getElementById('sidebar-remain').style.color = remaining > 0 ? 'var(--warning)' : 'var(--success)';
 
     // Refresh per-row ENGAS totals (qty x ENGAS unit cost)
@@ -422,7 +422,7 @@ function recalcTotal() {
         statusEl.style.background = '#f0fff4';
     } else {
         statusEl.innerHTML        = '<i class="fas fa-exclamation-triangle"></i> Will remain Partial — '
-                                    + remaining.toFixed(2) + ' still needed';
+                                    + remaining.toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' still needed';
         statusEl.style.color      = '#744210';
         statusEl.style.background = '#fffff0';
     }
@@ -499,12 +499,12 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
             <div class="form-group">
                 <label class="form-label">
                     Quantity <span style="color:red">*</span>
-                    <span class="hint">max ${maxQty.toFixed(2)}</span>
+                    <span class="hint">max ${maxQty.toLocaleString('en-PH', { maximumFractionDigits: 0 })}</span>
                 </label>
                 <input type="number"
                        name="items[${key}][quantity_delivered]"
                        class="form-control item-qty"
-                       min="0" step="0.01"
+                       min="0" step="1"
                        max="${maxQty}"
                        data-max="${maxQty}"
                        value="0"

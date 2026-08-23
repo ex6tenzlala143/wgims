@@ -80,7 +80,7 @@
                             <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— total target for this request</span>
                         </label>
                         <input type="number" name="quantity_requested" class="form-control"
-                               min="0.01" step="0.01"
+                               min="1" step="1"
                                value="{{ old('quantity_requested', $deliverySubsidy->quantity_requested) }}" required>
                         @error('quantity_requested')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
                     </div>
@@ -116,7 +116,7 @@
                                     </select>
                                 </td>
                                 <td><input type="text" id="unit-{{ $idx }}" class="form-control" readonly value="{{ $poi->item->unit ?? $poi->unit ?? '' }}" style="background:#f7fafc"></td>
-                                <td><input type="number" name="items[{{ $idx }}][quantity]" class="qty-input" min="0.01" step="0.01" value="{{ $poi->quantity }}" onchange="calcRow({{ $idx }})" required></td>
+                                <td><input type="number" name="items[{{ $idx }}][quantity]" class="qty-input" min="1" step="1" value="{{ $poi->quantity }}" onchange="calcRow({{ $idx }})" required></td>
                                 <td><input type="number" name="items[{{ $idx }}][unit_cost]" class="cost-input" min="0" step="0.01" value="{{ $poi->unit_cost ?? '' }}" onchange="calcRow({{ $idx }})" placeholder="set at dispatch"></td>
                                 <td><input type="text" id="amount-{{ $idx }}" class="form-control" readonly value="{{ $poi->amount !== null ? number_format($poi->amount, 2) : '' }}" style="background:#f7fafc;text-align:right"></td>
                                 <td>
@@ -185,7 +185,7 @@ function addRow() {
             ${allItems.map(i => `<option value="${i.id}" data-unit="${i.unit}" data-warehouse="${i.warehouse_id}">${i.description}</option>`).join('')}
         </select></td>
         <td><input type="text" id="unit-${idx}" class="form-control" readonly style="background:#f7fafc"></td>
-        <td><input type="number" name="items[${idx}][quantity]" class="qty-input" min="0.01" step="0.01" onchange="calcRow(${idx})" required></td>
+        <td><input type="number" name="items[${idx}][quantity]" class="qty-input" min="1" step="1" onchange="calcRow(${idx})" required></td>
         <td><input type="number" name="items[${idx}][unit_cost]" class="cost-input" min="0" step="0.01" onchange="calcRow(${idx})" placeholder="set at dispatch"></td>
         <td><input type="text" id="amount-${idx}" class="form-control" readonly style="background:#f7fafc;text-align:right"></td>
         <td><select name="items[${idx}][warehouse_id]" class="form-control">${warehouseOptions}</select></td>

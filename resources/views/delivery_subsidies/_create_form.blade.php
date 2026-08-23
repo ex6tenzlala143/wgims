@@ -141,7 +141,7 @@
                                                         @endforeach
                                                     </select>
                                                 </td>
-                                                <td data-label="Quantity Requested"><input type="number" name="items[0][quantity]" class="qty-input form-control" min="0.01" step="0.01" oninput="calcTotal()" required style="color:#000;background:#fff"></td>
+                                                <td data-label="Quantity Requested"><input type="number" name="items[0][quantity]" class="qty-input form-control" min="1" step="1" oninput="calcTotal()" required style="color:#000;background:#fff"></td>
                                                 <td><button type="button" class="remove-row" onclick="removeRow('row-0')"><i class="fas fa-times"></i></button></td>
                                             </tr>
                                         </tbody>
@@ -763,7 +763,7 @@ function addRow() {
         '</td>' +
         '<td data-label="Unit"><select name="items[' + idx + '][unit]" id="unit-' + idx + '" class="form-control" required style="color:#000;background:#fff">' + unitOptions + '</select></td>' +
         '<td data-label="Category"><select name="items[' + idx + '][category]" id="category-' + idx + '" class="form-control" required style="color:#000;background:#fff">' + catOptions + '</select></td>' +
-        '<td data-label="Quantity Requested"><input type="number" name="items[' + idx + '][quantity]" class="qty-input form-control" min="0.01" step="0.01" oninput="calcTotal()" required style="color:#000;background:#fff"></td>' +
+        '<td data-label="Quantity Requested"><input type="number" name="items[' + idx + '][quantity]" class="qty-input form-control" min="1" step="1" oninput="calcTotal()" required style="color:#000;background:#fff"></td>' +
         '<td><button type="button" class="remove-row" onclick="removeRow(\'row-' + idx + '\')"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);
     updateItemCount();
@@ -777,7 +777,7 @@ function addRow() {
 function calcTotal() {
     var total = 0;
     document.querySelectorAll('.qty-input').forEach(function(el) { total += parseFloat(el.value) || 0; });
-    document.getElementById('grand-total').textContent = total.toLocaleString('en-PH', {maximumFractionDigits: 2});
+    document.getElementById('grand-total').textContent = total.toLocaleString('en-PH', {maximumFractionDigits: 0});
 }
 
 function removeRow(id) {

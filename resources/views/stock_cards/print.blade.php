@@ -149,7 +149,7 @@
         </div>
         <div class="right">
             <div class="info-line">Stock No.:&nbsp; <span>{{ $item->stock_number }}</span></div>
-            <div class="info-line">Re-order Point:&nbsp; <span>{{ number_format($item->reorder_point, 2) }}</span></div>
+            <div class="info-line">Re-order Point:&nbsp; <span>{{ number_format($item->reorder_point) }}</span></div>
         </div>
     </div>
 
@@ -177,11 +177,11 @@
             <tr class="data-row">
                 <td>{{ $entry->entry_date->format('m/d/Y') }}</td>
                 <td class="left-align">{{ $entry->reference }}</td>
-                <td class="right-align">{{ $entry->receipt_qty > 0 ? number_format($entry->receipt_qty, 2) : '' }}</td>
+                <td class="right-align">{{ $entry->receipt_qty > 0 ? number_format($entry->receipt_qty) : '' }}</td>
                 <td class="right-align">{{ $entry->receipt_unit_cost > 0 ? number_format($entry->receipt_unit_cost, 2) : '' }}</td>
                 <td class="right-align">{{ $entry->receipt_total_cost > 0 ? number_format($entry->receipt_total_cost, 2) : '' }}</td>
-                <td class="right-align">{{ $entry->issue_qty > 0 ? number_format($entry->issue_qty, 2) : '' }}</td>
-                <td class="right-align">{{ number_format($entry->balance_qty, 2) }}</td>
+                <td class="right-align">{{ $entry->issue_qty > 0 ? number_format($entry->issue_qty) : '' }}</td>
+                <td class="right-align">{{ number_format($entry->balance_qty) }}</td>
                 <td class="right-align">{{ number_format($entry->balance_unit_cost, 2) }}</td>
                 <td class="right-align">{{ number_format($entry->balance_total_cost, 2) }}</td>
                 <td>{{ $entry->no_of_days_to_consume ?? '' }}</td>

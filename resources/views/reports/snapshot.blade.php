@@ -47,7 +47,7 @@
                     <td>{{ $row['unit'] }}</td>
                     <td>{{ App\Models\Item::getCategories()[$row['category']]['label'] ?? $row['category'] }}</td>
                     <td>{{ $row['warehouse'] }}</td>
-                    <td style="text-align:right">{{ number_format($row['quantity'], 2) }}</td>
+                    <td style="text-align:right">{{ number_format($row['quantity']) }}</td>
                     <td style="text-align:right">₱{{ number_format($row['unit_cost'], 2) }}</td>
                     <td style="text-align:right">₱{{ number_format($row['total_value'], 2) }}</td>
                 </tr>
@@ -84,7 +84,7 @@
                     <td><code>{{ $row['stock_number'] }}</code></td>
                     <td>{{ $row['description'] }}</td>
                     <td>{{ $row['unit'] }}</td>
-                    <td style="text-align:right">{{ number_format($row['quantity_issued'], 2) }}</td>
+                    <td style="text-align:right">{{ number_format($row['quantity_issued']) }}</td>
                     <td style="text-align:right">₱{{ number_format($row['unit_cost'], 2) }}</td>
                     <td style="text-align:right">₱{{ number_format($row['amount'], 2) }}</td>
                 </tr>

@@ -14,8 +14,8 @@ class DeliverySubsidyItem extends Model
         'expiration_date',
     ];
     protected $casts = [
-        'quantity' => 'float', 'unit_cost' => 'float', 'amount' => 'float',
-        'qty_delivered' => 'float', 'expiration_date' => 'date',
+        'quantity' => 'integer', 'unit_cost' => 'float', 'amount' => 'float',
+        'qty_delivered' => 'integer', 'expiration_date' => 'date',
     ];
 
     public function deliverySubsidy()
@@ -100,7 +100,7 @@ class DeliverySubsidyItem extends Model
      *
      * Eager-load `deliveryItems.warehouse` to avoid per-row queries.
      *
-     * @return Collection<int, array{warehouse_id:int, warehouse_name:string, quantity:float, unit_cost:?float, engas_unit_cost:?float}>
+     * @return Collection<int, array{warehouse_id:int, warehouse_name:string, quantity:int, unit_cost:?float, engas_unit_cost:?float}>
      */
     public function getDispatchSummaryAttribute(): Collection
     {
@@ -117,7 +117,7 @@ class DeliverySubsidyItem extends Model
             ->map(fn ($group) => [
                 'warehouse_id'    => $group->first()['warehouse_id'],
                 'warehouse_name'  => $group->first()['warehouse_name'],
-                'quantity'        => round($group->sum('quantity'), 4),
+                'quantity'        => (int) $group->sum('quantity'),
                 'unit_cost'       => $group->first()['unit_cost'],
                 'engas_unit_cost' => $group->first()['engas_unit_cost'],
             ])

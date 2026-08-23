@@ -389,7 +389,7 @@ class DeliveryBreakdownExpirationTest extends TestCase
         $this->assertEquals(100, $batchA->quantity);
         $this->assertEquals(50, $batchB->quantity);
 
-        $this->assertSame(100.0, DeliveryItem::where('dr_number', 'DR-EXPQTY-1-A')->sole()->quantity_delivered);
-        $this->assertSame(50.0, DeliveryItem::where('dr_number', 'DR-EXPQTY-1-B')->sole()->quantity_delivered);
+        $this->assertSame(100, DeliveryItem::where('dr_number', 'DR-EXPQTY-1-A')->sole()->quantity_delivered);
+        $this->assertSame(50, DeliveryItem::where('dr_number', 'DR-EXPQTY-1-B')->sole()->quantity_delivered);
     }
 }

@@ -33,7 +33,7 @@ class DeliverySubsidy extends Model
         'date'               => 'date',
         'date_of_delivery'   => 'date',
         'total_amount'       => 'float',
-        'quantity_requested' => 'float',
+        'quantity_requested' => 'integer',
         'is_archived'        => 'boolean',
     ];
 

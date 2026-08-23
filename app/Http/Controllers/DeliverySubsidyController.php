@@ -150,7 +150,7 @@ class DeliverySubsidyController extends Controller
             'items.*.description'    => 'required|string|max:255',
             'items.*.unit'           => 'required|string',
             'items.*.category' => 'required|string|in:'.implode(',', array_keys(Item::getCategories())),
-            'items.*.quantity'       => 'required|numeric|min:0.01',
+            'items.*.quantity'       => 'required|integer|min:1',
             'items.*.expiration_date'=> 'nullable|date',
             'items.*.catalog_item_id'=> 'nullable|exists:item_catalog_items,id',
             'items.*.account_code'   => 'nullable|string|max:50',
@@ -163,7 +163,7 @@ class DeliverySubsidyController extends Controller
             // quantity_requested = sum of all line item quantities.
             // Unit Cost and Warehouse are deliberately NOT captured at creation —
             // they are decided by the dispatcher when the shipment is recorded.
-            $quantityRequested = collect($request->items)->sum(fn ($l) => (float) $l['quantity']);
+            $quantityRequested = collect($request->items)->sum(fn ($l) => (int) $l['quantity']);
 
             // Use ris_number as dr_number; append suffix only if duplicate
             $drNumber = $request->ris_number;
@@ -361,7 +361,7 @@ class DeliverySubsidyController extends Controller
             'items.*.description'     => 'required|string|max:255',
             'items.*.unit'            => 'required|string',
             'items.*.category'        => 'required|string|in:'.implode(',', array_keys(Item::getCategories())),
-            'items.*.quantity'        => 'required|numeric|min:0.01',
+            'items.*.quantity'        => 'required|integer|min:1',
             'items.*.expiration_date' => 'nullable|date',
         ];
 
@@ -445,8 +445,8 @@ class DeliverySubsidyController extends Controller
                     if ($newQty + 0.0001 < (float) $dsi->qty_delivered) {
                         throw ValidationException::withMessages([
                             "items.{$idx}.quantity" =>
-                                'Requested quantity ('.number_format($newQty, 2).') cannot be less than the '
-                                .number_format((float) $dsi->qty_delivered, 2).' already delivered. '
+                                'Requested quantity ('.number_format($newQty).') cannot be less than the '
+                                .number_format($dsi->qty_delivered).' already delivered. '
                                 .'Edit the shipment(s) first, then fix the request.',
                         ]);
                     }
@@ -495,7 +495,7 @@ class DeliverySubsidyController extends Controller
 
                 // Recompute the header requested total from the edited lines so
                 // the header and the lines can never drift apart.
-                $newRequested = round((float) $deliverySubsidy->items()->sum('quantity'), 4);
+                $newRequested = (int) round((float) $deliverySubsidy->items()->sum('quantity'), 4);
                 $headerData['quantity_requested'] = $newRequested;
 
                 $deliverySubsidy->update($headerData);
@@ -535,7 +535,7 @@ class DeliverySubsidyController extends Controller
                 }
 
                 // Recompute the requested total from the submitted lines.
-                $newRequested = round((float) collect($request->items)->sum('quantity'), 4);
+                $newRequested = (int) collect($request->items)->sum(fn ($l) => (int) $l['quantity']);
 
                 $deliverySubsidy->update($headerFields + ['quantity_requested' => $newRequested]);
 
@@ -557,7 +557,7 @@ class DeliverySubsidyController extends Controller
                         'description'     => $line['description'],
                         'unit'            => $line['unit'],
                         'category'        => $line['category'],
-                        'quantity'        => round((float) $line['quantity'], 4),
+                        'quantity'        => (int) $line['quantity'],
                         'expiration_date' => $line['expiration_date'] ?? null,
                     ];
 
@@ -1133,7 +1133,7 @@ class DeliverySubsidyController extends Controller
             'dr_number'          => 'nullable|string|max:100',
             'batch_number'       => 'nullable|string|max:100',
             'condition_status'   => 'required|string|in:good,damaged,partial',
-            'quantity_delivered' => 'required|numeric|min:0.01',
+            'quantity_delivered' => 'required|integer|min:1',
             'items'              => 'required|array',
         ];
 
@@ -1147,7 +1147,7 @@ class DeliverySubsidyController extends Controller
             $dispatching  = $remaining > 0 && $submittedQty > 0;
 
             $rules["items.{$key}.ds_item_id"]      = ['required', 'exists:delivery_subsidy_items,id'];
-            $rules["items.{$key}.quantity_delivered"] = ['numeric', 'min:0'];
+            $rules["items.{$key}.quantity_delivered"] = ['integer', 'min:0'];
             $rules["items.{$key}.unit_cost"]          = ['numeric', 'min:0.01'];
             $rules["items.{$key}.engas_unit_cost"]    = ['numeric', 'min:0'];
             $rules["items.{$key}.warehouse_id"]       = ['exists:warehouses,id'];
@@ -1240,7 +1240,7 @@ class DeliverySubsidyController extends Controller
             // Rows without a positive quantity (e.g. fully delivered items that
             // were ignored by validation) are skipped entirely.
             foreach ($request->items as $line) {
-                $qtyDelivered = (float) ($line['quantity_delivered'] ?? 0);
+                $qtyDelivered = (int) ($line['quantity_delivered'] ?? 0);
                 if ($qtyDelivered <= 0) {
                     continue;
                 }
@@ -1469,7 +1469,7 @@ class DeliverySubsidyController extends Controller
             'remarks'            => 'nullable|string|max:1000',
             'items'              => 'required|array|min:1',
             'items.*.di_id'              => 'required|exists:delivery_items,id',
-            'items.*.quantity_delivered' => 'required|numeric|min:0',
+            'items.*.quantity_delivered' => 'required|integer|min:0',
             'items.*.unit_cost'          => 'numeric|min:0.01',
             'items.*.engas_unit_cost'    => 'numeric|min:0',
             'items.*.warehouse_id'       => 'exists:warehouses,id',

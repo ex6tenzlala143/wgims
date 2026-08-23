@@ -173,7 +173,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Quantity Issued <span class="req">*</span></label>
-                        <input type="number" name="quantity_issued" id="dispatch-qty" class="form-control" min="0.0001" step="0.01" required>
+                        <input type="number" name="quantity_issued" id="dispatch-qty" class="form-control" min="1" step="1" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Unit Cost <span class="req">*</span></label>
@@ -281,7 +281,7 @@
             '>' + r.description +
             (r.stock_number ? ' [' + r.stock_number + ']' : '') +
             ' · ₱' + Number(r.unit_cost || 0).toFixed(2) +
-            ' · ' + Number(r.quantity).toFixed(2) + ' ' + (r.unit || '') + '</option>';
+            ' · ' + Number(r.quantity).toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' ' + (r.unit || '') + '</option>';
     }
 
     function populateItemSelect(records, selectItemId) {
@@ -353,7 +353,7 @@
 
         if (hint) {
             var stock = parseFloat(opt.dataset.stock || 0);
-            hint.textContent = 'Available on this record: ' + Number(stock).toLocaleString('en-PH', { maximumFractionDigits: 2 });
+            hint.textContent = 'Available on this record: ' + Number(stock).toLocaleString('en-PH', { maximumFractionDigits: 0 });
             hint.style.color = stock > 0 ? 'var(--success)' : 'var(--danger)';
         }
 
@@ -387,8 +387,8 @@
 
         var newQty = qty ? parseFloat(qty.value) || 0 : 0;
         if (Math.abs(newQty - STATE.quantity_issued) > 0.0001) {
-            lines.push('<strong>Quantity:</strong> ' + Number(STATE.quantity_issued).toLocaleString('en-PH', { maximumFractionDigits: 2 })
-                + ' → ' + Number(newQty).toLocaleString('en-PH', { maximumFractionDigits: 2 }));
+            lines.push('<strong>Quantity:</strong> ' + Number(STATE.quantity_issued).toLocaleString('en-PH', { maximumFractionDigits: 0 })
+                + ' → ' + Number(newQty).toLocaleString('en-PH', { maximumFractionDigits: 0 }));
         }
 
         if (unit && parseFloat(unit.value || 0) !== parseFloat(STATE.unit_cost || 0)) {

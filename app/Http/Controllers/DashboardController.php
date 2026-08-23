@@ -50,7 +50,7 @@ class DashboardController extends Controller
                     $accountBalances[] = [
                         'account_code' => $cat['account_code'],
                         'label'        => $cat['label'],
-                        'total_qty'    => (float) $row->total_qty,
+                        'total_qty'    => (int) $row->total_qty,
                         'total_value'  => (float) $row->total_value,
                     ];
                 }
@@ -116,7 +116,7 @@ class DashboardController extends Controller
             $accountBalances[] = [
                 'account_code' => $cat['account_code'],
                 'label'        => $cat['label'],
-                'total_qty'    => (float) $row->total_qty,
+                'total_qty'    => (int) $row->total_qty,
                 'total_value'  => (float) $row->total_value,
             ];
         }

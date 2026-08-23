@@ -125,16 +125,16 @@
                     <td>
                         @if($totalQty > 0)
                         <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;display:flex;justify-content:space-between">
-                            <span>{{ number_format($sentQty, 2) }} dispatched</span>
+                            <span>{{ number_format($sentQty) }} dispatched</span>
                             <span style="color:{{ $remQty > 0 ? 'var(--warning)' : 'var(--success)' }};font-weight:600">
-                                {{ $remQty > 0 ? number_format($remQty, 2).' left' : '✓ Complete' }}
+                                {{ $remQty > 0 ? number_format($remQty).' left' : '✓ Complete' }}
                             </span>
                         </div>
                         <div style="background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden">
                             <div style="background:{{ $barColor }};width:{{ $pct }}%;height:100%;border-radius:999px"></div>
                         </div>
                         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">
-                            {{ $pct }}% of {{ number_format($totalQty, 2) }}
+                            {{ $pct }}% of {{ number_format($totalQty) }}
                         </div>
                         @else
                         <span style="color:var(--text-muted);font-size:12px">—</span>

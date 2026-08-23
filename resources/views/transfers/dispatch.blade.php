@@ -28,11 +28,11 @@
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
             <strong>Dispatch Progress — {{ $transfer->transfer_number }}</strong>
             <span>
-                <strong style="color:var(--success)">{{ number_format($totalTransferred, 2) }}</strong>
-                of <strong>{{ number_format($totalRequested, 2) }}</strong> planned
+                <strong style="color:var(--success)">{{ number_format($totalTransferred) }}</strong>
+                of <strong>{{ number_format($totalRequested) }}</strong> planned
                 &nbsp;—&nbsp;
                 <strong style="color:{{ $totalRemaining > 0 ? 'var(--warning)' : 'var(--success)' }}">
-                    {{ $totalRemaining > 0 ? number_format($totalRemaining, 2).' still needed' : '✓ Fully dispatched' }}
+                    {{ $totalRemaining > 0 ? number_format($totalRemaining).' still needed' : '✓ Fully dispatched' }}
                 </strong>
             </span>
         </div>
@@ -106,25 +106,25 @@
                                 <input type="hidden" name="items[{{ $loop->index }}][sti_id]" value="{{ $sti->id }}">
                             </td>
                             <td>{{ $sti->sourceItem->unit ?? '—' }}</td>
-                            <td style="text-align:right;font-weight:600">{{ number_format($sti->quantity_requested, 2) }}</td>
-                            <td style="text-align:right;color:var(--success)">{{ number_format($sti->quantity, 2) }}</td>
+                            <td style="text-align:right;font-weight:600">{{ number_format($sti->quantity_requested) }}</td>
+                            <td style="text-align:right;color:var(--success)">{{ number_format($sti->quantity) }}</td>
                             <td style="text-align:right">
                                 @if($isDone)
                                     <span class="badge badge-success">—</span>
                                 @else
-                                    <span style="font-weight:700;color:var(--warning)">{{ number_format($remaining, 2) }}</span>
+                                    <span style="font-weight:700;color:var(--warning)">{{ number_format($remaining) }}</span>
                                 @endif
                             </td>
                             <td style="text-align:right">
                                 <span class="{{ $available >= $remaining ? 'badge badge-success' : 'badge badge-danger' }}">
-                                    {{ number_format($available, 2) }}
+                                    {{ number_format($available) }}
                                 </span>
                             </td>
                             <td>
                                 <input type="number"
                                        name="items[{{ $loop->index }}][quantity]"
                                        class="form-control item-qty"
-                                       min="0" step="0.0001"
+                                       min="0" step="1"
                                        value="{{ $isDone ? 0 : $canDispatch }}"
                                        placeholder="0"
                                        {{ $isDone ? 'disabled' : '' }}
@@ -132,7 +132,7 @@
                                        style="{{ $isDone ? '' : 'border:2px solid var(--primary);font-weight:700' }}">
                                 @if(!$isDone)
                                     <div style="font-size:10px;color:var(--text-muted);margin-top:2px">
-                                        max {{ number_format($canDispatch, 2) }}
+                                        max {{ number_format($canDispatch) }}
                                     </div>
                                 @endif
                             </td>
@@ -143,12 +143,12 @@
                         <tr style="background:#f0f9ff;font-weight:700">
                             <td style="padding:10px 14px">Totals</td>
                             <td></td>
-                            <td style="text-align:right;padding:10px 14px">{{ number_format($totalRequested, 2) }}</td>
-                            <td style="text-align:right;padding:10px 14px;color:var(--success)">{{ number_format($totalTransferred, 2) }}</td>
-                            <td style="text-align:right;padding:10px 14px;color:var(--warning)">{{ number_format($totalRemaining, 2) }}</td>
+                            <td style="text-align:right;padding:10px 14px">{{ number_format($totalRequested) }}</td>
+                            <td style="text-align:right;padding:10px 14px;color:var(--success)">{{ number_format($totalTransferred) }}</td>
+                            <td style="text-align:right;padding:10px 14px;color:var(--warning)">{{ number_format($totalRemaining) }}</td>
                             <td></td>
                             <td style="padding:10px 14px">
-                                <span id="dispatch-total" style="font-size:16px;font-weight:800;color:var(--primary)">0.00</span>
+                                <span id="dispatch-total" style="font-size:16px;font-weight:800;color:var(--primary)">0</span>
                                 <div style="font-size:10px;color:var(--text-muted)">this dispatch</div>
                             </td>
                         </tr>
@@ -181,11 +181,11 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;text-align:center">
                     <div style="background:#f0f9ff;border-radius:8px;padding:10px">
                         <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Planned</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested, 2) }}</div>
+                        <div style="font-size:20px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested) }}</div>
                     </div>
                     <div style="background:#f0fff4;border-radius:8px;padding:10px">
                         <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Sent So Far</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--success)">{{ number_format($totalTransferred, 2) }}</div>
+                        <div style="font-size:20px;font-weight:800;color:var(--success)">{{ number_format($totalTransferred) }}</div>
                     </div>
                 </div>
 
@@ -194,7 +194,7 @@
                     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
                         This Dispatch
                     </div>
-                    <div id="sidebar-qty" style="font-size:28px;font-weight:800;color:var(--primary)">0.00</div>
+                    <div id="sidebar-qty" style="font-size:28px;font-weight:800;color:var(--primary)">0</div>
                 </div>
 
                 {{-- After dispatch projection --}}
@@ -202,11 +202,11 @@
                     <div style="color:var(--text-muted);font-size:11px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">After this dispatch</div>
                     <div style="display:flex;justify-content:space-between;margin-bottom:4px">
                         <span>Total sent</span>
-                        <strong id="sidebar-cumul">{{ number_format($totalTransferred, 2) }}</strong>
+                        <strong id="sidebar-cumul">{{ number_format($totalTransferred) }}</strong>
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-bottom:10px">
                         <span>Still remaining</span>
-                        <strong id="sidebar-remain" style="color:var(--warning)">{{ number_format($totalRemaining, 2) }}</strong>
+                        <strong id="sidebar-remain" style="color:var(--warning)">{{ number_format($totalRemaining) }}</strong>
                     </div>
                     <div id="sidebar-status" style="text-align:center;font-weight:600;padding:8px;border-radius:6px;font-size:12px"></div>
                 </div>
@@ -236,15 +236,15 @@ function recalcTotal() {
         sum += parseFloat(el.value) || 0;
     });
 
-    document.getElementById('dispatch-total').textContent = sum.toFixed(2);
-    document.getElementById('sidebar-qty').textContent    = sum.toFixed(2);
+    document.getElementById('dispatch-total').textContent = sum.toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    document.getElementById('sidebar-qty').textContent    = sum.toLocaleString('en-PH', { maximumFractionDigits: 0 });
 
     const cumul     = _alreadySent + sum;
     const remaining = Math.max(0, _totalPlanned - cumul);
     const epsilon   = 0.0001;
 
-    document.getElementById('sidebar-cumul').textContent  = cumul.toFixed(2);
-    document.getElementById('sidebar-remain').textContent = remaining.toFixed(2);
+    document.getElementById('sidebar-cumul').textContent  = cumul.toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    document.getElementById('sidebar-remain').textContent = remaining.toLocaleString('en-PH', { maximumFractionDigits: 0 });
     document.getElementById('sidebar-remain').style.color = remaining > 0 ? 'var(--warning)' : 'var(--success)';
 
     const statusEl = document.getElementById('sidebar-status');
@@ -257,7 +257,7 @@ function recalcTotal() {
         statusEl.style.background = '#f0fff4';
     } else {
         statusEl.innerHTML        = '<i class="fas fa-exclamation-triangle"></i> Will remain Partial — '
-                                    + remaining.toFixed(2) + ' still needed';
+                                    + remaining.toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' still needed';
         statusEl.style.color      = '#744210';
         statusEl.style.background = '#fffff0';
     }

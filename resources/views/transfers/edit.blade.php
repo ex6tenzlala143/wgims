@@ -92,7 +92,7 @@
                                     <div style="font-size:11px"><code>{{ $line->sourceItem->stock_number }}</code></div>
                                     @endif
                                     <div style="font-size:11px;color:var(--text-muted)">
-                                        Current stock: <strong>{{ number_format($line->sourceItem->quantity, 2) }}</strong>
+                                        Current stock: <strong>{{ number_format($line->sourceItem->quantity) }}</strong>
                                         @ {{ $transfer->fromWarehouse->name }}
                                     </div>
                                 </td>
@@ -103,7 +103,7 @@
                                     <div style="font-size:11px"><code>{{ $line->destinationItem->stock_number }}</code></div>
                                     @endif
                                     <div style="font-size:11px;color:var(--text-muted)">
-                                        Current stock: <strong>{{ number_format($line->destinationItem->quantity, 2) }}</strong>
+                                        Current stock: <strong>{{ number_format($line->destinationItem->quantity) }}</strong>
                                         @ {{ $transfer->toWarehouse->name }}
                                     </div>
                                     @else
@@ -112,7 +112,7 @@
                                 </td>
                                 <td>{{ $line->sourceItem->unit }}</td>
                                 <td style="text-align:right">
-                                    <span class="badge badge-secondary">{{ number_format($line->quantity, 4) }}</span>
+                                    <span class="badge badge-secondary">{{ number_format($line->quantity) }}</span>
                                 </td>
                                 <td>
                                     <input type="number"
@@ -120,7 +120,7 @@
                                            id="qty-{{ $idx }}"
                                            class="form-control"
                                            value="{{ old("items.{$idx}.quantity", $line->quantity) }}"
-                                           min="0.0001" step="0.0001" required
+                                           min="1" step="1" required
                                            oninput="recalcRow({{ $idx }})">
                                     @error("items.{$idx}.quantity")
                                     <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
