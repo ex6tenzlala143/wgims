@@ -503,6 +503,11 @@ class RequisitionController extends Controller
                 ->where('reference_id', $requisition->id)
                 ->delete();
 
+            // Delete dispatch items first (FK: requisition_dispatch_items → requisition_items)
+            foreach ($requisition->items as $ri) {
+                $ri->dispatchItems()->delete();
+            }
+
             $requisition->items()->delete();
             $requisition->delete();
 

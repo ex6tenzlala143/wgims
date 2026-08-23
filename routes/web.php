@@ -113,8 +113,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/requisitions/{requisition}/audit-log',       [RequisitionController::class, 'auditLog'])->name('requisitions.audit_log');
     });
     
-    // Delete — admin only (stricter than edit/update which allow any write-capable role)
-    Route::middleware(['admin', 'admin.write'])->group(function () {
+    // Delete — admin only (admin.write already restricts to admin)
+    Route::middleware('admin.write')->group(function () {
         Route::delete('/requisitions/{requisition}',              [RequisitionController::class, 'destroy'])->name('requisitions.destroy');
     });
     // API: items available in a warehouse (used by the RIS dispatch/approve form)
@@ -184,7 +184,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/warehouses',        [WarehouseController::class, 'store'])->name('warehouses.store');
     });
     // Edit / Update — admin only
-    Route::middleware(['admin', 'admin.write'])->group(function () {
+    Route::middleware('admin.write')->group(function () {
         Route::get('/warehouses/{warehouse}/edit', [WarehouseController::class, 'edit'])->name('warehouses.edit');
         Route::put('/warehouses/{warehouse}',      [WarehouseController::class, 'update'])->name('warehouses.update');
     });
@@ -193,7 +193,7 @@ Route::middleware('auth')->group(function () {
 
     // ── Users ─────────────────────────────────────────────────────────────────
     // All user management is admin-only — warehouse managers cannot see or manage users
-    Route::middleware(['admin', 'admin.write'])->group(function () {
+    Route::middleware('admin.write')->group(function () {
         Route::get('/users/create',  [UserController::class, 'create'])->name('users.create');
         Route::post('/users',        [UserController::class, 'store'])->name('users.store');
         Route::put('/users/{user}',  [UserController::class, 'update'])->name('users.update');

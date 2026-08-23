@@ -30,29 +30,37 @@ class StockCardEntry extends Model
      * item, in chronological order. Receipts add stock and set the running unit
      * cost; issues subtract stock. Stored balances are refreshed so that editing
      * or deleting an older entry never leaves later entries stale.
+     *
+     * Wrapped in a DB transaction so an interruption mid-way never leaves
+     * partially-updated balances. Uses a bulk update per entry rather than
+     * individual ->update() calls to reduce query overhead on long histories.
      */
     public static function recalculateBalancesForItem(int $itemId): void
     {
-        $entries = static::where('item_id', $itemId)
-            ->orderBy('entry_date')
-            ->orderBy('id')
-            ->get();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($itemId) {
+            $entries = static::where('item_id', $itemId)
+                ->orderBy('entry_date')
+                ->orderBy('id')
+                ->get();
 
-        $runningQty      = 0.0;
-        $runningUnitCost = 0.0;
+            $runningQty      = 0.0;
+            $runningUnitCost = 0.0;
 
-        foreach ($entries as $entry) {
-            $runningQty += (float) $entry->receipt_qty - (float) $entry->issue_qty;
+            foreach ($entries as $entry) {
+                $runningQty += (float) $entry->receipt_qty - (float) $entry->issue_qty;
 
-            if ((float) $entry->receipt_qty > 0 && (float) $entry->receipt_unit_cost > 0) {
-                $runningUnitCost = (float) $entry->receipt_unit_cost;
+                if ((float) $entry->receipt_qty > 0 && (float) $entry->receipt_unit_cost > 0) {
+                    $runningUnitCost = (float) $entry->receipt_unit_cost;
+                }
+
+                // Use a direct query update to avoid the model's event overhead
+                // and ensure the balance is written atomically within the transaction.
+                static::whereKey($entry->id)->update([
+                    'balance_qty'        => round($runningQty, 4),
+                    'balance_unit_cost'  => $runningUnitCost,
+                    'balance_total_cost' => round($runningQty * $runningUnitCost, 2),
+                ]);
             }
-
-            $entry->update([
-                'balance_qty'        => round($runningQty, 4),
-                'balance_unit_cost'  => $runningUnitCost,
-                'balance_total_cost' => round($runningQty * $runningUnitCost, 2),
-            ]);
-        }
+        });
     }
 }

@@ -22,9 +22,6 @@ class StockTransferController extends Controller
 {
     use ScopesWarehouse;
 
-    /** Temporary property to pass the new transfer id out of the transaction closure. */
-    private int $createdTransferId;
-
     /**
      * Paginated list of transfers, scoped by user role.
      */
@@ -157,7 +154,9 @@ class StockTransferController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $fromWarehouse, $toWarehouse, $user) {
+            $createdTransferId = null;
+
+            DB::transaction(function () use ($request, $fromWarehouse, $toWarehouse, $user, &$createdTransferId) {
                 $transferNumber = StockTransfer::generateTransferNumber();
 
                 // Trace this transfer back to the subsidy that delivered the source
@@ -255,8 +254,9 @@ class StockTransferController extends Controller
                     ]);
                 }
 
-                $this->createdTransferId = $transfer->id;
+                $createdTransferId = $transfer->id;
             });
+
         } catch (\Throwable $e) {
             Log::error('Stock transfer creation failed', [
                 'error' => $e->getMessage(),
@@ -267,7 +267,7 @@ class StockTransferController extends Controller
         }
 
         return redirect()
-            ->route('transfers.show', $this->createdTransferId)
+            ->route('transfers.show', $createdTransferId)
             ->with('success', 'Transfer request created. Use "Dispatch Items" to send stock in one or more shipments.');
     }
 

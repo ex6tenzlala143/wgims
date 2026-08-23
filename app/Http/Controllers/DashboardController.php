@@ -122,9 +122,10 @@ class DashboardController extends Controller
         }
 
         $stats = [
-            'total_items' => Item::whereIn('warehouse_id', $warehouseIds)->count(),
-            'total_subsidies' => DeliverySubsidy::whereIn('warehouse_id', $warehouseIds)->count(),
-            'pending_ris' => Requisition::where('status', 'pending')
+            'total_items'     => Item::whereIn('warehouse_id', $warehouseIds)->count(),
+            // Count subsidies that have deliveries to the user's warehouses
+            'total_subsidies' => DeliverySubsidy::whereHas('deliveries.items', fn ($q) => $q->whereIn('warehouse_id', $warehouseIds))->count(),
+            'pending_ris'     => Requisition::where('status', 'pending')
                 ->where(function ($q) use ($warehouseIds) {
                     $q->whereHas('items', fn ($i) => $i->whereIn('warehouse_id', $warehouseIds))
                       ->orWhereIn('warehouse_id', $warehouseIds); // legacy

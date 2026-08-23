@@ -1534,7 +1534,7 @@ class DeliverySubsidyController extends Controller
         $cascadeSummary = [];
 
         try {
-            DB::transaction(function () use ($request, $deliverySubsidy, $delivery, $cascadeSvc, $cascadeSummary) {
+            DB::transaction(function () use ($request, $deliverySubsidy, $delivery, $cascadeSvc, &$cascadeSummary) {
             $affectedItemIds = [];
 
             // Snapshot header values before any edits so the audit trail shows

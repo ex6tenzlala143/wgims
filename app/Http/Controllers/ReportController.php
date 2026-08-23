@@ -105,7 +105,24 @@ class ReportController extends Controller
         $query = Requisition::with(['warehouse', 'items.item'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
-        $hasAccess = $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
+        // Since warehouse_id is now null on all requisitions (multi-warehouse dispatch
+        // refactor), we scope by the warehouses that dispatched items originate from.
+        $hasAccess = true;
+        $userWarehouseIds = $this->getUserWarehouseIds($user);
+        $filterWarehouseId = $request->warehouse_id ? (int) $request->warehouse_id : null;
+
+        if ($userWarehouseIds !== null) {
+            // Non-admin: show only requisitions where dispatched items came from their warehouses
+            if (empty($userWarehouseIds)) {
+                $hasAccess = false;
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereHas('items.dispatchItems.item', fn ($q) => $q->whereIn('warehouse_id', $userWarehouseIds));
+            }
+        } elseif ($filterWarehouseId) {
+            // Admin filtering by warehouse
+            $query->whereHas('items.dispatchItems.item', fn ($q) => $q->where('warehouse_id', $filterWarehouseId));
+        }
 
         if ($request->date_from) {
             $query->whereDate('date_approved', '>=', $request->date_from);
@@ -152,7 +169,18 @@ class ReportController extends Controller
         $query = Requisition::with(['warehouse', 'items.item'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
-        $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
+        // Use dispatch-based warehouse scoping (warehouse_id is null on requisitions)
+        $userWarehouseIds = $this->getUserWarehouseIds($user);
+        $filterWarehouseId = $request->warehouse_id ? (int) $request->warehouse_id : null;
+        if ($userWarehouseIds !== null) {
+            if (empty($userWarehouseIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereHas('items.dispatchItems.item', fn ($q) => $q->whereIn('warehouse_id', $userWarehouseIds));
+            }
+        } elseif ($filterWarehouseId) {
+            $query->whereHas('items.dispatchItems.item', fn ($q) => $q->where('warehouse_id', $filterWarehouseId));
+        }
 
         if ($request->date_from) {
             $query->whereDate('date_approved', '>=', $request->date_from);
@@ -208,7 +236,19 @@ class ReportController extends Controller
 
         $query = Requisition::with(['warehouse', 'items.item'])
             ->whereIn('status', ['approved', 'partially_approved']);
-        $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
+
+        // Use dispatch-based warehouse scoping (warehouse_id is null on requisitions)
+        $userWarehouseIds = $this->getUserWarehouseIds($user);
+        $filterWarehouseId = $request->warehouse_id ? (int) $request->warehouse_id : null;
+        if ($userWarehouseIds !== null) {
+            if (empty($userWarehouseIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereHas('items.dispatchItems.item', fn ($q) => $q->whereIn('warehouse_id', $userWarehouseIds));
+            }
+        } elseif ($filterWarehouseId) {
+            $query->whereHas('items.dispatchItems.item', fn ($q) => $q->where('warehouse_id', $filterWarehouseId));
+        }
         if ($request->date_from) {
             $query->whereDate('date_approved', '>=', $request->date_from);
         }
@@ -427,7 +467,19 @@ class ReportController extends Controller
         $user = Auth::user();
         $query = Requisition::with(['warehouse', 'items.item'])
             ->whereIn('status', ['approved', 'partially_approved']);
-        $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
+
+        // Use dispatch-based warehouse scoping (warehouse_id is null on requisitions)
+        $userWarehouseIds = $this->getUserWarehouseIds($user);
+        $filterWarehouseId = $request->warehouse_id ? (int) $request->warehouse_id : null;
+        if ($userWarehouseIds !== null) {
+            if (empty($userWarehouseIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereHas('items.dispatchItems.item', fn ($q) => $q->whereIn('warehouse_id', $userWarehouseIds));
+            }
+        } elseif ($filterWarehouseId) {
+            $query->whereHas('items.dispatchItems.item', fn ($q) => $q->where('warehouse_id', $filterWarehouseId));
+        }
         if ($request->date_from) {
             $query->whereDate('date_approved', '>=', $request->date_from);
         }

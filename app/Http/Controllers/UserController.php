@@ -160,6 +160,13 @@ class UserController extends Controller
 
     public function checkUsername(Request $request)
     {
+        // Throttle to prevent username enumeration (30 checks per minute per IP)
+        $key = 'check-username:' . $request->ip();
+        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($key, 30)) {
+            return response()->json(['available' => false], 429);
+        }
+        \Illuminate\Support\Facades\RateLimiter::hit($key, 60);
+
         $exists = User::where('username', $request->username)
             ->when($request->user_id, fn ($q) => $q->where('id', '!=', $request->user_id))
             ->exists();
