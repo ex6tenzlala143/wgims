@@ -371,23 +371,48 @@ class Item extends Model
         // Use a DB-level advisory lock to prevent two concurrent deliveries
         // from generating the same stock number for the same warehouse+category.
         return DB::transaction(function () use ($prefix) {
-            // Lock the prefix range so no other transaction can read/write it simultaneously
-            $last = static::withoutGlobalScopes()
-                ->where('stock_number', 'like', $prefix . '-%')
-                ->lockForUpdate()
-                ->count();
-
-            $candidate = $prefix . '-' . str_pad($last + 1, 4, '0', STR_PAD_LEFT);
-
-            // Increment until we find a genuinely unused number
-            $attempts = 0;
-            while (static::where('stock_number', $candidate)->exists() && $attempts < 50) {
-                $last++;
-                $attempts++;
-                $candidate = $prefix . '-' . str_pad($last + 1, 4, '0', STR_PAD_LEFT);
+            // Get an exclusive advisory lock for this prefix (timeout: 10 seconds)
+            // This ensures only ONE process can generate stock numbers for this
+            // prefix at a time, even when no rows exist yet.
+            $lockName = 'stock_number_' . $prefix;
+            $lockAcquired = DB::select("SELECT GET_LOCK(?, 10) as acquired", [$lockName])[0]->acquired ?? 0;
+            
+            if (!$lockAcquired) {
+                throw new \RuntimeException("Could not acquire lock for stock number generation: {$prefix}");
             }
-
-            return $candidate;
+            
+            try {
+                // Find the maximum numeric suffix currently in use
+                // Using a direct query for better performance
+                $maxNumber = DB::select(
+                    "SELECT MAX(CAST(SUBSTRING_INDEX(stock_number, '-', -1) AS UNSIGNED)) as max_num 
+                     FROM items 
+                     WHERE stock_number LIKE ? 
+                     AND stock_number REGEXP ?",
+                    [$prefix . '-%', '^' . preg_quote($prefix, '/') . '-[0-9]+$']
+                )[0]->max_num ?? 0;
+                
+                $nextNumber = (int) $maxNumber + 1;
+                $candidate = $prefix . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+                
+                // Double-check uniqueness (paranoid guard against regex edge cases)
+                $attempts = 0;
+                while (static::where('stock_number', $candidate)->exists() && $attempts < 50) {
+                    $nextNumber++;
+                    $attempts++;
+                    $candidate = $prefix . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+                }
+                
+                if ($attempts >= 50) {
+                    throw new \RuntimeException("Could not generate unique stock number after 50 attempts");
+                }
+                
+                return $candidate;
+                
+            } finally {
+                // Always release the lock, even if an exception occurred
+                DB::select("SELECT RELEASE_LOCK(?)", [$lockName]);
+            }
         });
     }
 }

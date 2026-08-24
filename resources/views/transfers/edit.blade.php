@@ -21,8 +21,9 @@
     <i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i>
     <div>
         <strong>Warning:</strong> This Stock Transfer has already been dispatched.
-        Editing it will affect inventory balances and stock card records.
-        Please verify the correction before continuing.
+        Changing quantities will affect inventory balances and stock card records.
+        Both <strong>requested quantity</strong> and <strong>dispatched quantity</strong> can now be edited.
+        Please verify all corrections before continuing.
         <div style="margin-top:6px;font-size:12px">
             Status: <span class="badge {{ $transfer->getStatusBadgeClass() }}">{{ $transfer->getStatusLabel() }}</span>
             · Corrections are applied atomically to both warehouses and recorded in the audit trail.
@@ -34,7 +35,9 @@
     <i class="fas fa-exclamation-triangle"></i>
     <div>
         <strong>Admin Edit Mode.</strong>
-        Changing quantities adjusts stock at both the source and destination warehouse.
+        You can edit both the <strong>requested quantity</strong> (original demand) and <strong>dispatched quantity</strong> (actual transferred).
+        Dispatched quantity cannot exceed requested quantity.
+        Changes adjust stock at both warehouses.
     </div>
 </div>
 @endif
@@ -84,7 +87,10 @@
             <div class="card">
                 <div class="card-header">
                     <h3><i class="fas fa-list"></i> Transferred Items</h3>
-                    <span style="font-size:12px;color:var(--text-muted)">Adjust quantities and unit costs. Stock at both warehouses updates automatically.</span>
+                    <span style="font-size:12px;color:var(--text-muted)">
+                        Edit both <strong>requested quantity</strong> (original demand) and <strong>dispatched quantity</strong> (actual transferred). 
+                        Dispatched cannot exceed requested. Stock at both warehouses updates automatically.
+                    </span>
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -93,8 +99,9 @@
                                 <th>Item (Source)</th>
                                 <th>Destination Item</th>
                                 <th>Unit</th>
-                                <th style="text-align:right">Original Qty</th>
-                                <th style="width:130px">New Qty <span style="color:red">*</span></th>
+                                <th style="width:130px">Requested Qty <span style="color:red">*</span></th>
+                                <th style="text-align:right">Currently Dispatched</th>
+                                <th style="width:130px">New Dispatched Qty <span style="color:red">*</span></th>
                                 <th style="width:130px">Unit Cost (₱) <span style="color:red">*</span></th>
                                 <th style="text-align:right">New Total</th>
                             </tr>
@@ -128,6 +135,20 @@
                                     @endif
                                 </td>
                                 <td>{{ $line->sourceItem->unit }}</td>
+                                <td>
+                                    <input type="number"
+                                           name="items[{{ $idx }}][quantity_requested]"
+                                           id="req-{{ $idx }}"
+                                           class="form-control"
+                                           value="{{ old("items.{$idx}.quantity_requested", $line->quantity_requested) }}"
+                                           min="1" step="1" required
+                                           oninput="validateDispatchedQty({{ $idx }}); recalcRow({{ $idx }})"
+                                           title="Edit the requested quantity (original demand)"
+                                           style="background:#fffbf0;border-color:#f59e0b">
+                                    @error("items.{$idx}.quantity_requested")
+                                    <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
+                                    @enderror
+                                </td>
                                 <td style="text-align:right">
                                     <span class="badge badge-secondary">{{ number_format($line->quantity) }}</span>
                                 </td>
@@ -137,11 +158,15 @@
                                            id="qty-{{ $idx }}"
                                            class="form-control"
                                            value="{{ old("items.{$idx}.quantity", $line->quantity) }}"
-                                           min="1" max="{{ $maxNewQty[$line->id] }}" step="1" required
-                                           oninput="recalcRow({{ $idx }})">
+                                           min="0" max="{{ $maxNewQty[$line->id] }}" step="1" required
+                                           oninput="validateDispatchedQty({{ $idx }}); recalcRow({{ $idx }})"
+                                           title="Edit the dispatched quantity (actual transferred)">
                                     @if($maxNewQty[$line->id] !== (int) $line->quantity)
                                     <div style="font-size:10px;color:var(--text-muted);margin-top:2px">max {{ number_format($maxNewQty[$line->id]) }}</div>
                                     @endif
+                                    <div id="qty-warning-{{ $idx }}" style="color:var(--danger);font-size:11px;margin-top:2px;display:none">
+                                        Cannot exceed requested
+                                    </div>
                                     @error("items.{$idx}.quantity")
                                     <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
                                     @enderror
@@ -168,7 +193,7 @@
                         </tbody>
                         <tfoot>
                             <tr style="background:#f7fafc;font-weight:700">
-                                <td colspan="6" style="text-align:right;padding:10px 14px">Grand Total:</td>
+                                <td colspan="7" style="text-align:right;padding:10px 14px">Grand Total:</td>
                                 <td style="text-align:right;padding:10px 14px" id="grand-total">
                                     ₱{{ number_format($transfer->items->sum(fn($l) => $l->quantity * $l->unit_cost), 2) }}
                                 </td>
@@ -203,8 +228,10 @@
                     <div style="background:#fff5f5;border:1px solid #feb2b2;border-radius:8px;padding:12px;font-size:12px;margin-bottom:16px">
                         <i class="fas fa-info-circle" style="color:var(--danger)"></i>
                         <strong>Stock Impact:</strong><br>
-                        Increasing qty → more leaves source, more arrives at dest.<br>
-                        Decreasing qty → stock is returned to source, removed from dest.
+                        • Requested qty: Original demand<br>
+                        • Dispatched qty: Actual transferred<br>
+                        • Dispatched cannot exceed requested<br>
+                        • Changes adjust both warehouses
                     </div>
                     <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
                         <i class="fas fa-save"></i> Save Changes
@@ -221,6 +248,23 @@
 
 @push('scripts')
 <script>
+function validateDispatchedQty(idx) {
+    const requested = parseFloat(document.getElementById('req-' + idx)?.value) || 0;
+    const dispatched = parseFloat(document.getElementById('qty-' + idx)?.value) || 0;
+    const warning = document.getElementById('qty-warning-' + idx);
+    const qtyInput = document.getElementById('qty-' + idx);
+    
+    if (warning && qtyInput) {
+        if (dispatched > requested) {
+            warning.style.display = 'block';
+            qtyInput.style.borderColor = 'var(--danger)';
+        } else {
+            warning.style.display = 'none';
+            qtyInput.style.borderColor = '';
+        }
+    }
+}
+
 function recalcRow(idx) {
     const qty  = parseFloat(document.getElementById('qty-'  + idx)?.value) || 0;
     const cost = parseFloat(document.getElementById('cost-' + idx)?.value) || 0;
@@ -253,8 +297,31 @@ guardFormSubmit(document.getElementById('edit-transfer-form'));
 // Require an explicit confirmation before correcting a dispatched transfer.
 document.getElementById('edit-transfer-form').addEventListener('submit', function (e) {
     if (!confirm('Warning: This Stock Transfer has already been dispatched. '
-        + 'Editing it will affect inventory balances and stock card records. '
-        + 'Please verify the correction before continuing.')) {
+        + 'Changing quantities will affect inventory balances and stock card records. '
+        + 'Both requested and dispatched quantities can be edited. '
+        + 'Please verify all corrections before continuing.')) {
+        e.preventDefault();
+    }
+});
+@else
+// Confirmation for editing even pending transfers
+document.getElementById('edit-transfer-form').addEventListener('submit', function (e) {
+    // Validate that dispatched doesn't exceed requested before submitting
+    let hasError = false;
+    document.querySelectorAll('[id^="qty-warning-"]').forEach(warning => {
+        if (warning.style.display !== 'none') {
+            hasError = true;
+        }
+    });
+    
+    if (hasError) {
+        alert('Error: Dispatched quantity cannot exceed requested quantity. Please correct the values.');
+        e.preventDefault();
+        return;
+    }
+    
+    if (!confirm('You are editing the requested quantities for this transfer. '
+        + 'This will update the original demand. Continue?')) {
         e.preventDefault();
     }
 });

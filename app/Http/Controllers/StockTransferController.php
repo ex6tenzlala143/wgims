@@ -557,7 +557,8 @@ class StockTransferController extends Controller
             'remarks'       => 'nullable|string|max:1000',
             'items'         => 'required|array|min:1',
             'items.*.sti_id'   => 'required|exists:stock_transfer_items,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.quantity_requested' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:0',
             'items.*.unit_cost' => 'required|numeric|min:0.01',
         ]);
 
@@ -580,11 +581,21 @@ class StockTransferController extends Controller
                         ->where('stock_transfer_id', $transfer->id)
                         ->firstOrFail();
 
+                    $oldQtyRequested = (int) $sti->quantity_requested;
+                    $newQtyRequested = (int) $line['quantity_requested'];
                     $oldQty  = (int) $sti->quantity;
                     $newQty  = (int) $line['quantity'];
                     $newCost = round((float) $line['unit_cost'], 2);
                     $oldCost = round((float) $sti->unit_cost, 2);
                     $delta   = $newQty - $oldQty;
+                    
+                    // Validate that dispatched quantity doesn't exceed requested
+                    if ($newQty > $newQtyRequested) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.quantity" =>
+                                "Dispatched quantity ({$newQty}) cannot exceed requested quantity ({$newQtyRequested}).",
+                        ]);
+                    }
 
                     // Lock the exact stock rows before the read-modify-write so
                     // two concurrent edits/dispatches can never lose an update.
@@ -640,15 +651,11 @@ class StockTransferController extends Controller
                     }
 
                     // ── Update the transfer line (ID/history preserved) ─────
-                    // Correct the planned quantity alongside the dispatched one,
-                    // preserving whatever was still outstanding on the line.
-                    $oldRequested = (int) $sti->quantity_requested;
-                    $newRequested = max($newQty, $oldRequested - $oldQty + $newQty);
-
+                    // Update both requested quantity and dispatched quantity
                     $sti->update([
-                        'quantity'           => $newQty,
-                        'quantity_requested' => $newRequested,
-                        'unit_cost'          => $newCost,
+                        'quantity_requested' => $newQtyRequested,
+                        'quantity'  => $newQty,
+                        'unit_cost' => $newCost,
                     ]);
 
                     // ── Reconcile the stock cards for THIS line ─────────────
@@ -717,10 +724,10 @@ class StockTransferController extends Controller
                         $affectedItemIds[$destItem->id]   = true;
                     }
 
-                    if ($delta !== 0 || abs($newCost - $oldCost) > 0.004 || $newRequested !== $oldRequested) {
+                    if ($delta !== 0 || abs($newCost - $oldCost) > 0.004 || $newQtyRequested !== $oldQtyRequested) {
                         $auditLines[] = [
                             'item'             => $sti->sourceItem?->description ?? "Item #{$sti->item_id}",
-                            'requested'        => ['old' => $oldRequested, 'new' => $newRequested],
+                            'requested'        => ['old' => $oldQtyRequested, 'new' => $newQtyRequested],
                             'dispatched'       => ['old' => $oldQty, 'new' => $newQty],
                             'unit_cost'        => ['old' => $oldCost, 'new' => $newCost],
                             'inventory_effect' => [

@@ -180,13 +180,66 @@
             <tbody>
                 @foreach($requisition->items as $ri)
                 @php
-                    // Resolve expiration date: prefer snapshot on the line item, fall back to live item
-                    $expiryDate = $ri->expiration_date ?? $ri->item?->expiration_date;
+                    // Group dispatch items by their unique cost combination (stock_number + unit_cost + engas_unit_cost)
+                    // If there are multiple dispatches with different costs, we'll show them as separate rows
+                    $dispatchGroups = $ri->dispatchItems->groupBy(function($di) {
+                        return ($di->item?->stock_number ?? 'no-stock') . '|' . 
+                               ($di->unit_cost ?? 0) . '|' . 
+                               ($di->engas_unit_cost ?? 0) . '|' .
+                               ($di->item?->warehouse_id ?? 0) . '|' .
+                               ($di->expiration_date?->format('Y-m-d') ?? 'no-expiry');
+                    });
+                    
+                    // If no dispatches yet, show the requisition item as-is
+                    if ($dispatchGroups->isEmpty()) {
+                        $dispatchGroups = collect([
+                            'original' => collect() // Empty collection for the original request
+                        ]);
+                    }
+                @endphp
+                
+                @foreach($dispatchGroups as $groupKey => $groupDispatches)
+                @php
+                    // For this group, get the representative dispatch item (first one) or fall back to RI
+                    $representativeDispatch = $groupDispatches->first();
+                    $isOriginal = $groupKey === 'original';
+                    
+                    // Resolve values: use dispatch data if available, otherwise fall back to RI or item
+                    if ($representativeDispatch && !$isOriginal) {
+                        $stockNumber = $representativeDispatch->item?->stock_number ?? '-';
+                        $unit = $representativeDispatch->item?->unit ?? $ri->unit ?? '-';
+                        $description = $representativeDispatch->item?->description ?? $ri->description ?? '-';
+                        $warehouse = $representativeDispatch->item?->warehouse?->name ?? '-';
+                        $expiryDate = $representativeDispatch->expiration_date ?? $representativeDispatch->item?->expiration_date;
+                        $unitCost = $representativeDispatch->unit_cost;
+                        $engasCost = $representativeDispatch->engas_unit_cost ?? $representativeDispatch->item?->engas_unit_cost;
+                        $riSub = ($representativeDispatch->item && in_array($representativeDispatch->item->source_subsidy_status, ['deleted', 'archived'], true)) 
+                            ? $representativeDispatch->item 
+                            : null;
+                        // For dispatched groups, show the quantity from this group's dispatches
+                        $groupQtyIssued = $groupDispatches->sum('quantity_issued');
+                        $showAsSubRow = $dispatchGroups->count() > 1; // Multiple cost groups
+                    } else {
+                        // Original requisition item (no dispatches or showing the undispatched portion)
+                        $stockNumber = $ri->item?->stock_number ?? '-';
+                        $unit = $ri->unit ?? $ri->item?->unit ?? '-';
+                        $description = $ri->description ?? $ri->item?->description ?? '-';
+                        $warehouse = $ri->warehouse?->name ?? $ri->item?->warehouse?->name ?? '-';
+                        $expiryDate = $ri->expiration_date ?? $ri->item?->expiration_date;
+                        $unitCost = ($ri->unit_cost !== null && $ri->unit_cost > 0) ? $ri->unit_cost : ($ri->item?->unit_cost ?? null);
+                        $engasCost = $ri->engas_unit_cost ?? $ri->item?->engas_unit_cost;
+                        $riSub = null;
+                        if ($ri->item && in_array($ri->item->source_subsidy_status, ['deleted', 'archived'], true)) {
+                            $riSub = $ri->item;
+                        }
+                        $groupQtyIssued = 0;
+                        $showAsSubRow = false;
+                    }
 
                     // Expiry display style
                     if ($expiryDate) {
                         $today    = \Carbon\Carbon::today();
-                        $diffDays = $today->diffInDays($expiryDate, false); // negative = past
+                        $diffDays = $today->diffInDays($expiryDate, false);
                         if ($diffDays < 0) {
                             $expiryStyle = 'color:var(--danger);font-weight:700;text-decoration:line-through';
                             $expiryLabel = ' <span style="font-size:10px;background:var(--danger);color:#fff;border-radius:4px;padding:1px 5px;vertical-align:middle">Expired</span>';
@@ -202,26 +255,15 @@
                         $expiryLabel = '';
                     }
 
-                    // Unit cost: prefer snapshot, fall back to live item
-                    $unitCost = ($ri->unit_cost !== null && $ri->unit_cost > 0)
-                        ? $ri->unit_cost
-                        : ($ri->item?->unit_cost ?? null);
-
                     $totalCost = ($unitCost !== null) ? $unitCost * $ri->quantity_requested : null;
+                    $outstanding = max(0, $ri->quantity_requested - $ri->quantity_issued);
                 @endphp
-                @php
-                    // Resolve the flagged source-subsidy item for this requested line:
-                    // the live requested item wins, otherwise any of its dispatch items.
-                    $riSub = null;
-                    if ($ri->item && in_array($ri->item->source_subsidy_status, ['deleted', 'archived'], true)) {
-                        $riSub = $ri->item;
-                    } elseif ($flaggedDi = $ri->dispatchItems->pluck('item')->filter()->first(fn ($i) => in_array($i->source_subsidy_status, ['deleted', 'archived'], true))) {
-                        $riSub = $flaggedDi;
-                    }
-                @endphp
-                <tr>
+                <tr style="{{ $showAsSubRow ? 'background:#f9fafb;border-left:3px solid var(--primary)' : '' }}">
                     <td>
-                        <code>{{ $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode(', ') ?: ($ri->item?->stock_number ?? '-') }}</code>
+                        @if($showAsSubRow)
+                            <span style="color:var(--text-muted);margin-right:6px">└─</span>
+                        @endif
+                        <code>{{ $stockNumber }}</code>
                         @if($riSub)
                         <div style="margin-top:5px">
                             @include('partials.subsidy-source-badge', [
@@ -234,10 +276,16 @@
                         </div>
                         @endif
                     </td>
-                    <td>{{ $ri->unit ?? ($ri->item?->unit ?? '-') }}</td>
-                    <td>{{ $ri->description ?? ($ri->item?->description ?? '-') }}</td>
+                    <td>{{ $unit }}</td>
                     <td>
-                        <span style="font-size:12px">{{ $ri->dispatchItems->pluck('item.warehouse.name')->filter()->unique()->implode(', ') ?: ($ri->warehouse?->name ?? ($ri->item?->warehouse?->name ?? '-')) }}</span>
+                        @if($showAsSubRow)
+                            <span style="color:var(--text-muted);font-size:12px">{{ $description }}</span>
+                        @else
+                            {{ $description }}
+                        @endif
+                    </td>
+                    <td>
+                        <span style="font-size:12px">{{ $warehouse }}</span>
                     </td>
 
                     {{-- Expiration Date --}}
@@ -254,7 +302,9 @@
                     {{-- Unit Cost --}}
                     <td style="text-align:right;white-space:nowrap">
                         @if($unitCost !== null)
-                            ₱&nbsp;{{ number_format($unitCost, 2) }}
+                            <span style="{{ $showAsSubRow ? 'font-weight:600;color:var(--primary)' : '' }}">
+                                ₱&nbsp;{{ number_format($unitCost, 2) }}
+                            </span>
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
@@ -263,66 +313,118 @@
                     {{-- Engas Unit Cost + Total --}}
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right;white-space:nowrap">
-                        @php $engasCost = $ri->engas_unit_cost ?? $ri->item?->engas_unit_cost; @endphp
                         @if($engasCost !== null)
-                            <span style="color:var(--primary);font-weight:600">₱&nbsp;{{ number_format($engasCost, 2) }}</span>
+                            <span style="{{ $showAsSubRow ? 'font-weight:600;' : '' }}color:#059669">
+                                ₱&nbsp;{{ number_format($engasCost, 2) }}
+                            </span>
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td style="text-align:right;white-space:nowrap">
-                        @if($engasCost !== null)
-                            <span style="color:var(--primary);font-weight:600">₱&nbsp;{{ number_format($ri->quantity_requested * $engasCost, 2) }}</span>
+                        @if($engasCost !== null && !$showAsSubRow)
+                            <span style="color:#059669;font-weight:600">₱&nbsp;{{ number_format($ri->quantity_requested * $engasCost, 2) }}</span>
+                        @elseif($engasCost !== null && $showAsSubRow)
+                            <span style="color:#059669">₱&nbsp;{{ number_format($groupQtyIssued * $engasCost, 2) }}</span>
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     @endif
 
-                    <td style="text-align:right">{{ number_format($ri->quantity_requested) }}</td>
+                    {{-- Qty Requested - only show on first row of group --}}
+                    <td style="text-align:right">
+                        @if(!$showAsSubRow)
+                            {{ number_format($ri->quantity_requested) }}
+                        @else
+                            <span style="color:var(--text-muted);font-size:12px">—</span>
+                        @endif
+                    </td>
 
                     {{-- Total Cost --}}
                     <td style="text-align:right;white-space:nowrap;font-weight:600">
-                        @if($totalCost !== null)
+                        @if($totalCost !== null && !$showAsSubRow)
                             ₱&nbsp;{{ number_format($totalCost, 2) }}
+                        @elseif($unitCost !== null && $showAsSubRow)
+                            <span style="color:var(--text-muted);font-size:12px">
+                                ₱&nbsp;{{ number_format($groupQtyIssued * $unitCost, 2) }}
+                            </span>
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
 
                     <td>
-                        @if($ri->stock_available)
-                        <span class="badge badge-success"><i class="fas fa-check"></i> Yes</span>
+                        @if(!$showAsSubRow)
+                            @if($ri->stock_available)
+                            <span class="badge badge-success"><i class="fas fa-check"></i> Yes</span>
+                            @else
+                            <span class="badge badge-danger"><i class="fas fa-times"></i> No</span>
+                            @endif
                         @else
-                        <span class="badge badge-danger"><i class="fas fa-times"></i> No</span>
+                            <span style="color:var(--text-muted);font-size:12px">—</span>
                         @endif
                     </td>
-                    <td style="text-align:right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '—' }}</td>
+                    
+                    {{-- Qty Issued --}}
                     <td style="text-align:right">
-                        @php $outstanding = max(0, $ri->quantity_requested - $ri->quantity_issued); @endphp
-                        @if($outstanding > 0)
-                            <span style="color:var(--warning);font-weight:600">{{ number_format($outstanding, 2) }}</span>
+                        @if(!$showAsSubRow)
+                            {{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '—' }}
                         @else
-                            <span class="badge badge-success"><i class="fas fa-check"></i> Fulfilled</span>
+                            <span style="color:var(--success);font-weight:600">{{ number_format($groupQtyIssued) }}</span>
                         @endif
                     </td>
+                    
+                    {{-- Outstanding --}}
+                    <td style="text-align:right">
+                        @if(!$showAsSubRow)
+                            @if($outstanding > 0)
+                                <span style="color:var(--warning);font-weight:600">{{ number_format($outstanding, 2) }}</span>
+                            @else
+                                <span class="badge badge-success"><i class="fas fa-check"></i> Fulfilled</span>
+                            @endif
+                        @else
+                            <span style="color:var(--text-muted);font-size:12px">—</span>
+                        @endif
+                    </td>
+                    
+                    {{-- DR No. --}}
                     <td>
-                        @php
-                            // All DR numbers from the actual dispatch records for this line
-                            $drList = $ri->dispatchItems->pluck('dr_number')->filter()->unique()->values();
-                        @endphp
-                        @if($drList->isNotEmpty())
-                            @foreach($drList as $dr)
-                            <code style="font-size:12px;margin-right:4px">{{ $dr }}</code>
-                            @endforeach
-                        @elseif($ri->dr_number)
-                            <code style="font-size:12px">{{ $ri->dr_number }}</code>
-                        @else
-                            <span style="color:var(--text-muted)">—</span>
+                        @if($showAsSubRow && $groupDispatches->isNotEmpty())
+                            @php $drList = $groupDispatches->pluck('dr_number')->filter()->unique()->values(); @endphp
+                            @if($drList->isNotEmpty())
+                                @foreach($drList as $dr)
+                                <code style="font-size:11px;margin-right:4px">{{ $dr }}</code>
+                                @endforeach
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        @elseif(!$showAsSubRow)
+                            @php $drList = $ri->dispatchItems->pluck('dr_number')->filter()->unique()->values(); @endphp
+                            @if($drList->isNotEmpty())
+                                @foreach($drList as $dr)
+                                <code style="font-size:12px;margin-right:4px">{{ $dr }}</code>
+                                @endforeach
+                            @elseif($ri->dr_number)
+                                <code style="font-size:12px">{{ $ri->dr_number }}</code>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
                         @endif
                     </td>
-                    <td>{{ $ri->remarks ?? '—' }}</td>
+                    
+                    {{-- Remarks --}}
+                    <td>
+                        @if(!$showAsSubRow)
+                            {{ $ri->remarks ?? '' }}
+                        @else
+                            <span style="color:var(--text-muted);font-size:11px">
+                                {{ $groupDispatches->count() }} dispatch(es)
+                            </span>
+                        @endif
+                    </td>
                 </tr>
+                @endforeach
                 @endforeach
             </tbody>
             @php
@@ -423,11 +525,14 @@
                     <tr style="background:#f0f9ff">
                         <th style="padding:8px 20px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">#</th>
                         <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Date</th>
+                        <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Stock No.</th>
                         <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Warehouse</th>
                         <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Qty</th>
                         <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">DR No.</th>
                         <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Unit Cost</th>
                         <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Value</th>
+                        <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">ENGAS Unit Cost</th>
+                        <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">ENGAS Total</th>
                         <th style="padding:8px 14px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Cumulative</th>
                         @if(auth()->user()->canApprove())
                         <th style="padding:8px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Actions</th>
@@ -441,6 +546,7 @@
                         $cumulativePct = $ri->quantity_requested > 0
                             ? min(100, round($runningTotal / $ri->quantity_requested * 100))
                             : 0;
+                        $engasTotal = $di->engas_unit_cost ? ($di->quantity_issued * $di->engas_unit_cost) : null;
                     @endphp
                     <tr style="border-top:1px solid var(--border)">
                         <td style="padding:10px 20px;color:var(--text-muted);font-size:12px">{{ $diNum + 1 }}</td>
@@ -461,6 +567,15 @@
                             </div>
                             @endif
                         </td>
+                        <td style="padding:10px 14px">
+                            @if($di->item && $di->item->stock_number)
+                                <code style="font-size:11px;background:#f0fdf4;padding:2px 6px;border-radius:4px;color:var(--success)">
+                                    {{ $di->item->stock_number }}
+                                </code>
+                            @else
+                                <span style="color:var(--text-muted);font-size:11px">—</span>
+                            @endif
+                        </td>
                         <td style="padding:10px 14px">{{ $di->item?->warehouse?->name ?? '—' }}</td>
                         <td style="padding:10px 14px;text-align:right;font-weight:700;color:var(--primary)">
                             +{{ number_format($di->quantity_issued) }}
@@ -473,6 +588,20 @@
                         </td>
                         <td style="padding:10px 14px;text-align:right">
                             ₱{{ number_format($di->quantity_issued * $di->unit_cost, 2) }}
+                        </td>
+                        <td style="padding:10px 14px;text-align:right">
+                            @if($di->engas_unit_cost)
+                                <span style="color:#059669">₱{{ number_format($di->engas_unit_cost, 2) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        <td style="padding:10px 14px;text-align:right">
+                            @if($engasTotal)
+                                <span style="color:#059669;font-weight:600">₱{{ number_format($engasTotal, 2) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
                         </td>
                         <td style="padding:10px 14px;text-align:right">
                             <span style="font-weight:600">{{ number_format($runningTotal, 2) }}</span>
@@ -494,7 +623,7 @@
                 </tbody>
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
-                        <td colspan="3" style="padding:10px 20px;font-size:13px">Total Issued</td>
+                        <td colspan="4" style="padding:10px 20px;font-size:13px">Total Issued</td>
                         <td style="padding:10px 14px;text-align:right;color:var(--success)">
                             {{ number_format($ri->quantity_issued) }}
                         </td>
@@ -502,6 +631,15 @@
                         <td></td>
                         <td style="padding:10px 14px;text-align:right">
                             ₱{{ number_format($dispatches->sum(fn($d) => $d->quantity_issued * $d->unit_cost), 2) }}
+                        </td>
+                        <td></td>
+                        <td style="padding:10px 14px;text-align:right">
+                            @php $totalEngas = $dispatches->sum(fn($d) => $d->engas_unit_cost ? ($d->quantity_issued * $d->engas_unit_cost) : 0); @endphp
+                            @if($totalEngas > 0)
+                                <span style="color:#059669;font-weight:600">₱{{ number_format($totalEngas, 2) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
                         </td>
                         <td style="padding:10px 14px;text-align:right">
                             <span style="color:{{ $outstanding > 0 ? 'var(--warning)' : 'var(--success)' }}">

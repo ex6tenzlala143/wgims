@@ -211,17 +211,26 @@ class Requisition extends Model
      */
     public function updateFulfilmentStatus(): void
     {
-        $this->loadMissing('items');
+        // Load items with their dispatch items to ensure we have fresh data
+        $this->loadMissing('items.dispatchItems');
 
         $allFulfilled = true;
         $anyIssued    = false;
 
         foreach ($this->items as $ri) {
-            if ($ri->quantity_issued > 0) {
+            // Calculate actual issued quantity from dispatch items (source of truth)
+            $actualIssued = (float) $ri->dispatchItems->sum('quantity_issued');
+            
+            if ($actualIssued > 0) {
                 $anyIssued = true;
             }
-            if ($ri->quantity_issued < $ri->quantity_requested - 0.0001) {
+            if ($actualIssued < $ri->quantity_requested - 0.0001) {
                 $allFulfilled = false;
+            }
+            
+            // Sync the quantity_issued column if it's out of sync
+            if (abs($ri->quantity_issued - $actualIssued) > 0.0001) {
+                $ri->update(['quantity_issued' => $actualIssued]);
             }
         }
 
