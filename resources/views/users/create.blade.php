@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Add User')
 @section('page-title', 'Add User')
 
@@ -17,14 +17,14 @@
             @csrf
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Username <span style="color:red">*</span></label>
+                    <label class="form-label">Username <span class="req">*</span></label>
                     <input type="text" name="username" id="username" class="form-control {{ $errors->has('username') ? 'is-invalid' : '' }}"
                         value="{{ old('username') }}" required autocomplete="off">
                     <div id="username-check" style="font-size:12px;margin-top:4px"></div>
                     @error('username')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Full Name <span style="color:red">*</span></label>
+                    <label class="form-label">Full Name <span class="req">*</span></label>
                     <input type="text" name="name" class="form-control {{ $errors->has('name') ? 'is-invalid' : '' }}" value="{{ old('name') }}" required>
                     @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
@@ -35,7 +35,7 @@
                     <input type="email" name="email" class="form-control" value="{{ old('email') }}">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Role <span style="color:red">*</span></label>
+                    <label class="form-label">Role <span class="req">*</span></label>
                     <select name="role" id="role" class="form-control" required onchange="toggleCenter()">
                         <option value="">— Select Role —</option>
                         <option value="admin" {{ old('role')=='admin'?'selected':'' }}>Administrator</option>
@@ -55,7 +55,7 @@
 
             <div class="form-group" id="warehouse-group" style="{{ in_array(old('role'), ['admin', 'warehouse_manager']) ? 'display:none' : '' }}">
                 <label class="form-label">
-                    Warehouse Assignment <span style="color:red">*</span>
+                    Warehouse Assignment <span class="req">*</span>
                     <small style="color:var(--text-muted);font-weight:400"> — select one or more; the first selected becomes the primary</small>
                 </label>
                 @php
@@ -91,7 +91,7 @@
 
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Password <span style="color:red">*</span></label>
+                    <label class="form-label">Password <span class="req">*</span></label>
                     <div style="position:relative">
                         <input type="password" name="password" id="password" class="form-control" required minlength="8" oninput="checkStrength()">
                         <button type="button" onclick="togglePwd('password','pwd-eye')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#a0aec0">
@@ -101,7 +101,7 @@
                     <div id="pwd-strength" style="margin-top:4px;font-size:12px"></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Confirm Password <span style="color:red">*</span></label>
+                    <label class="form-label">Confirm Password <span class="req">*</span></label>
                     <input type="password" name="password_confirmation" class="form-control" required>
                 </div>
             </div>

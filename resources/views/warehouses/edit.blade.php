@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit Warehouse')
 @section('page-title', 'Edit Warehouse')
 
@@ -16,11 +16,11 @@
         <form action="{{ route('warehouses.update', $warehouse->id) }}" method="POST">
             @csrf @method('PUT')
             <div class="form-group">
-                <label class="form-label">Warehouse Name <span style="color:red">*</span></label>
+                <label class="form-label">Warehouse Name <span class="req">*</span></label>
                 <input type="text" name="name" class="form-control" value="{{ old('name', $warehouse->name) }}" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Warehouse Code <span style="color:red">*</span></label>
+                <label class="form-label">Warehouse Code <span class="req">*</span></label>
                 <input type="text" name="code" class="form-control" value="{{ old('code', $warehouse->code) }}" required style="text-transform:uppercase">
             </div>
             <div class="form-group">

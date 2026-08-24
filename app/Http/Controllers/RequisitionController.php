@@ -73,7 +73,6 @@ class RequisitionController extends Controller
                 $q->where('ris_number', 'like', "%{$search}%")
                   ->orWhere('ris_code', 'like', "%{$search}%")
                   ->orWhere('dr_number', 'like', "%{$search}%")
-                  ->orWhereHas('items', fn ($i) => $i->where('dr_number', 'like', "%{$search}%"))
                   ->orWhereHas('items.dispatchItems', fn ($d) => $d->where('dr_number', 'like', "%{$search}%"))
                   ->orWhere('office', 'like', "%{$search}%")
                   ->orWhere('purpose', 'like', "%{$search}%");
@@ -152,26 +151,54 @@ class RequisitionController extends Controller
         // Same-description items (e.g. one at ₱700 and one at ₱800) are distinct
         // stock records. Sort deterministically by description, then unit cost,
         // so each record always appears in the same stable position in the form.
-        $items = Item::where('warehouse_id', $request->warehouse_id)
+        $query = Item::where('warehouse_id', $request->warehouse_id)
             ->where('is_active', true)
             ->where('quantity', '>', 0)
             ->whereNotNull('stock_number')
             ->orderBy('description')
-            ->orderBy('unit_cost')
-            ->get(['id', 'description', 'unit', 'quantity', 'stock_number',
+            ->orderBy('unit_cost');
+
+        // If the caller passes a description (from the RIS line item), restrict
+        // results to that item only so the dispatcher only sees relevant stock.
+        if ($request->filled('description')) {
+            $query->whereRaw('LOWER(TRIM(description)) = ?', [mb_strtolower(trim($request->description))]);
+        }
+
+        $items = $query->get(['id', 'description', 'unit', 'quantity', 'stock_number',
                    'expiration_date', 'category', 'unit_cost', 'engas_unit_cost']);
 
-        return response()->json($items->map(fn ($i) => [
-            'id'             => $i->id,
-            'description'    => $i->description,
-            'unit'           => $i->unit,
-            'quantity'       => $i->quantity,
-            'stock_number'   => $i->stock_number,
-            'expiry_date'    => $i->expiration_date?->format('Y-m-d'),
-            'category'       => $i->category,
-            'unit_cost'      => $i->unit_cost,
-            'engas_unit_cost' => $i->engas_unit_cost,
-        ]));
+        return response()->json($items->map(function ($i) {
+            $expiryFormatted = $i->expiration_date ? $i->expiration_date->format('M d, Y') : '—';
+            $engasDisplay = $i->engas_unit_cost !== null 
+                ? '₱' . number_format($i->engas_unit_cost, 2) 
+                : '—';
+            
+            // Build enhanced display text for dropdown option
+            $displayText = sprintf(
+                "%s\nQty: %s · ₱%s · ENGAS ₱%s · Exp: %s",
+                $i->description,
+                number_format($i->quantity, 0),
+                number_format($i->unit_cost, 2),
+                $engasDisplay,
+                $expiryFormatted
+            );
+            
+            return [
+                'id'             => $i->id,
+                'description'    => $i->description,
+                'display_text'   => $displayText,  // Enhanced display for dropdown
+                'unit'           => $i->unit,
+                'quantity'       => $i->quantity,
+                'stock_number'   => $i->stock_number,
+                'expiry_date'    => $i->expiration_date?->format('Y-m-d'),
+                'expiry_formatted' => $expiryFormatted,
+                'category'       => $i->category,
+                'unit_cost'      => $i->unit_cost,
+                'unit_cost_formatted' => '₱' . number_format($i->unit_cost, 2),
+                'engas_unit_cost' => $i->engas_unit_cost,
+                'engas_formatted' => $engasDisplay,
+            ];
+        }));
     }
 
     public function store(Request $request)
@@ -217,15 +244,17 @@ class RequisitionController extends Controller
                 ->get()
                 ->keyBy('id');
 
-            // Representative stock record per catalog item — used only for
-            // display (unit, cost); it never pins the warehouse or record.
+            // The unit of issue is a request-descriptive attribute and the
+            // catalog has no unit column, so it is read from any active stock
+            // record of the same description. NO stock record is linked, costed
+            // or reserved at creation — allocation happens at issuance.
             $representatives = [];
             foreach ($catalogItems as $catalog) {
                 $representatives[$catalog->id] = Item::where('is_active', true)
                     ->whereRaw('LOWER(TRIM(description)) = ?', [mb_strtolower(trim($catalog->name))])
                     ->orderByDesc('quantity')
                     ->orderBy('id')
-                    ->first();
+                    ->first(['id', 'unit']);
             }
 
             $risNumber = $request->filled('ris_number') ? $request->ris_number : Requisition::generateRisNumber();
@@ -259,14 +288,14 @@ class RequisitionController extends Controller
                 RequisitionItem::create([
                     'requisition_id'     => $ris->id,
                     'catalog_item_id'    => $catalog->id,
-                    'item_id'            => $rep?->id,
                     'description'        => $catalog->name,
                     'unit'               => $rep?->unit,
                     'account_code'       => $catalog->account_code ?: $catalog->category?->account_code,
                     'warehouse_id'       => null,
                     'quantity_requested' => $line['quantity_requested'],
-                    'stock_available'    => $rep ? $rep->quantity > 0 : false,
-                    'unit_cost'          => $rep?->unit_cost ?? 0,
+                    // Issuance-specific values (stock record, warehouse, costs,
+                    // ENGAS, expiry, DR, availability) are intentionally NOT set
+                    // here — they are populated only when a dispatch is recorded.
                 ]);
             }
 
@@ -412,14 +441,15 @@ class RequisitionController extends Controller
                 ->get()
                 ->keyBy('id');
 
-            // Representative stock record per catalog item — display only.
+            // The unit of issue is read for display only — no stock record is
+            // linked or reserved at edit time. Allocation happens at issuance.
             $representatives = [];
             foreach ($catalogItems as $catalog) {
                 $representatives[$catalog->id] = Item::where('is_active', true)
                     ->whereRaw('LOWER(TRIM(description)) = ?', [mb_strtolower(trim($catalog->name))])
                     ->orderByDesc('quantity')
                     ->orderBy('id')
-                    ->first();
+                    ->first(['id', 'unit']);
             }
 
             foreach ($request->items as $line) {
@@ -434,27 +464,30 @@ class RequisitionController extends Controller
 
                     $ri->update([
                         // Issued lines keep their catalog item and snapshots.
+                        // Undispatched lines keep NO stock linkage: the exact
+                        // record is chosen only when issuance happens.
                         'catalog_item_id'    => $locked ? $ri->catalog_item_id : $catalog->id,
-                        'item_id'            => $locked ? $ri->item_id : $rep?->id,
+                        'item_id'            => $locked ? $ri->item_id : null,
                         'description'        => $locked ? $ri->description : $catalog->name,
                         'unit'               => $locked ? $ri->unit : $rep?->unit,
                         'account_code'       => $locked ? $ri->account_code : ($catalog->account_code ?: $catalog->category?->account_code),
                         'quantity_requested' => $locked
                             ? max((float) $line['quantity_requested'], $ri->quantity_issued)
                             : $line['quantity_requested'],
-                    ]);
+                    ] + ($locked ? [] : [
+                        // Normalize stale pre-dispatch caches left by older versions.
+                        'warehouse_id'       => null,
+                        'stock_available'    => false,
+                    ]));
                 } else {
                     RequisitionItem::create([
                         'requisition_id'     => $requisition->id,
                         'catalog_item_id'    => $catalog->id,
-                        'item_id'            => $rep?->id,
                         'description'        => $catalog->name,
                         'unit'               => $rep?->unit,
                         'account_code'       => $catalog->account_code ?: $catalog->category?->account_code,
                         'warehouse_id'       => null,
                         'quantity_requested' => $line['quantity_requested'],
-                        'stock_available'    => $rep ? $rep->quantity > 0 : false,
-                        'unit_cost'          => $rep?->unit_cost ?? 0,
                     ]);
                 }
             }
@@ -673,7 +706,7 @@ class RequisitionController extends Controller
                     ->whereRaw('LOWER(TRIM(description)) = ?', [mb_strtolower(trim($catalog->name))])
                     ->orderByDesc('quantity')
                     ->orderBy('id')
-                    ->first();
+                    ->first(['id', 'unit']);
             }
 
             foreach ($request->items as $idx => $line) {
@@ -710,10 +743,15 @@ class RequisitionController extends Controller
                         $rep = $representatives[$catalog->id] ?? null;
                         $data += [
                             'catalog_item_id' => $catalog->id,
-                            'item_id'         => $rep?->id,
+                            // No stock linkage at request stage: allocation
+                            // happens only when a dispatch is recorded.
+                            'item_id'         => null,
                             'description'     => $catalog->name,
                             'unit'            => $rep?->unit,
                             'account_code'    => $catalog->account_code ?: $catalog->category?->account_code,
+                            // Clear any stale issuance caches from older versions
+                            'warehouse_id'    => null,
+                            'stock_available' => false,
                         ];
                     }
                 }
@@ -974,15 +1012,13 @@ class RequisitionController extends Controller
                     'from_to'            => $requisition->office ?? $item->warehouse->name ?? '',
                 ]);
 
-                // Accumulate the cached quantity_issued and keep the DR# synced to
-                // the most recent dispatch.
+                // Accumulate the cached quantity_issued and link to the exact
+                // stock record. Cost data (unit_cost, engas, expiry, DR) lives
+                // exclusively on the dispatch row — never on the RI.
                 $riItem->update([
                     'quantity_issued' => $riItem->quantity_issued + $wanted,
+                    'item_id'         => $item->id,
                     'stock_available' => $item->quantity >= $riItem->quantity_requested,
-                    'dr_number'       => $data['dr_number'] ?? $riItem->dr_number,
-                    'engas_unit_cost' => $data['engas_unit_cost'] ?? $riItem->engas_unit_cost,
-                    'expiration_date' => $data['expiration_date'] ?? $riItem->expiration_date,
-                    'unit_cost'       => $data['unit_cost'] ?? $riItem->unit_cost,
                 ]);
             }
 
@@ -1277,13 +1313,11 @@ class RequisitionController extends Controller
             }
 
             // ── Refresh the line cache (keeps totals + breakdowns consistent) ─
+            // Cost data stays exclusively on the dispatch row.
             $ri->update([
                 'quantity_issued' => (int) round($lineTotalAfter),
+                'item_id'         => $newItemId,
                 'stock_available' => (float) $newItem->quantity >= $ri->quantity_requested,
-                'dr_number'       => $request->dr_number ?: $ri->dr_number,
-                'engas_unit_cost' => $newEngas ?? $ri->engas_unit_cost,
-                'expiration_date' => $request->expiration_date ?: $ri->expiration_date,
-                'unit_cost'       => $newUnitCost,
             ]);
 
             $requisition->load('items');
@@ -1304,6 +1338,102 @@ class RequisitionController extends Controller
         }
 
         return response()->json(['redirect' => route('requisitions.show', $requisitionId)]);
+    }
+
+    /**
+     * Admin-only: delete a single dispatched RIS item and reverse exactly the
+     * inventory movement that dispatch caused. The quantity returns to the
+     * EXACT stock record that was deducted (never a same-name substitute),
+     * the linked issuance stock-card entries are removed and running balances
+     * are replayed, and the RIS line cache + fulfilment status are recomputed
+     * from the remaining dispatches. Requested quantities are never touched.
+     */
+    public function destroyDispatch(RequisitionDispatchItem $dispatch)
+    {
+        abort_unless(Auth::user()->canWrite(), 403, 'Only administrators can delete dispatched items.');
+
+        $dispatch->load(['requisitionItem.requisition', 'item']);
+
+        $requisitionItem = $dispatch->requisitionItem;
+        abort_unless($requisitionItem && $requisitionItem->requisition, 404, 'The dispatch is not linked to a valid requisition.');
+
+        $requisition = $requisitionItem->requisition;
+        $itemId      = $dispatch->item_id;
+        $qty         = (float) $dispatch->quantity_issued;
+
+        // Snapshot for the audit trail BEFORE anything is deleted.
+        $audit = [
+            'dispatch_id'     => $dispatch->id,
+            'requisition_item_id' => $requisitionItem->id,
+            'item_id'         => $itemId,
+            'description'     => $dispatch->item->description ?? ($requisitionItem->description ?? '—'),
+            'stock_number'    => $dispatch->item->stock_number ?? null,
+            'warehouse'       => $dispatch->item?->warehouse?->name,
+            'quantity_issued' => $qty,
+            'unit_cost'       => round((float) $dispatch->unit_cost, 2),
+            'engas_unit_cost' => $dispatch->engas_unit_cost !== null ? round((float) $dispatch->engas_unit_cost, 2) : null,
+            'expiration_date' => $dispatch->expiration_date?->toDateString(),
+            'dr_number'       => $dispatch->dr_number,
+            'restored_to_stock_record' => true,
+        ];
+
+        try {
+            DB::transaction(function () use ($dispatch, $requisition, $itemId, $qty, $audit) {
+
+                // 1) Restore the quantity to the EXACT stock record that was
+                //    deducted. Explicit update() — not increment() — so the
+                //    Item saving hook can re-activate a zeroed-out record.
+                if ($itemId && ($item = Item::whereKey($itemId)->lockForUpdate()->first())) {
+                    $item->update(['quantity' => (int) round((float) $item->quantity + $qty)]);
+                }
+
+                // 2) Remove THIS dispatch's issuance entries from the stock card
+                //    BEFORE deleting the dispatch row (the FK keeps orphans
+                //    otherwise), then replay the running balances of the
+                //    affected record so later rows stay consistent. Includes a
+                //    legacy fallback for entries created before dispatch linking.
+                $deleted = StockCardEntry::where('dispatch_item_id', $dispatch->id)->delete();
+                if ($deleted === 0 && $itemId) {
+                    StockCardEntry::where('reference_type', 'issuance')
+                        ->where('reference_id', $requisition->id)
+                        ->where('item_id', $itemId)
+                        ->whereNull('dispatch_item_id')
+                        ->delete();
+                }
+                if ($itemId) {
+                    StockCardEntry::recalculateBalancesForItem((int) $itemId);
+                }
+
+                // 3) Audit trail written before the row disappears.
+                RequisitionAuditLog::create([
+                    'requisition_id' => $requisition->id,
+                    'user_id'        => Auth::user()->id,
+                    'action'         => 'dispatch_deleted',
+                    'changed_fields' => $audit,
+                ]);
+
+                // 4) Delete the dispatched item itself.
+                $dispatch->delete();
+
+                // 5) Recompute the line caches + fulfilment status from the
+                //    REMAINING dispatch sums only. Requested quantities and
+                //    every other stock record stay untouched.
+                $requisition->load('items');
+                $requisition->updateFulfilmentStatus();
+            });
+        } catch (\Throwable $e) {
+            Log::error('Dispatch deletion failed', [
+                'dispatch_id' => $dispatch->id,
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'errors' => ['general' => ['The transaction could not be completed. No changes were made. Please try again.']],
+            ], 500);
+        }
+
+        return response()->json(['redirect' => route('requisitions.show', $requisition->id)]);
     }
 
     public function signatories(Requisition $requisition)

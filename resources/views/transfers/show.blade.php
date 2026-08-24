@@ -8,7 +8,7 @@
     <div>
         <h1>{{ $transfer->transfer_number }}</h1>
         <div class="breadcrumb">
-            <a href="{{ route('transfers.index') }}">Stock Transfers</a> › {{ $transfer->transfer_number }}
+            <a href="{{ route('dashboard') }}">Dashboard</a> / <a href="{{ route('transfers.index') }}">Stock Transfers</a> / {{ $transfer->transfer_number }}
         </div>
     </div>
     <div style="display:flex;gap:8px">

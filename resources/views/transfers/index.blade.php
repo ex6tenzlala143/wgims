@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('title', 'Stock Transfers')
 @section('page-title', 'Stock Transfers')
@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1>Stock Transfers</h1>
-        <div class="breadcrumb">Inventory › Stock Transfers</div>
+        <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / <a href="{{ route('transfers.index') }}">Stock Transfers</a></div>
     </div>
     @if(auth()->user()->canCreate())
     <button type="button" class="btn btn-primary" onclick="openTransferModal()">
@@ -145,11 +145,11 @@
                     </td>
                     <td>{{ $transfer->transferredBy->name }}</td>
                     <td>
-                        <a href="{{ route('transfers.show', $transfer) }}" class="btn btn-sm btn-outline">
-                            <i class="fas fa-eye"></i> View
+                        <a href="{{ route('transfers.show', $transfer) }}" class="btn btn-sm btn-outline btn-icon" title="View">
+                            <i class="fas fa-eye"></i>
                         </a>
-                        <a href="{{ route('transfers.print', $transfer) }}" class="btn btn-sm btn-secondary" target="_blank">
-                            <i class="fas fa-print"></i> Print
+                        <a href="{{ route('transfers.print', $transfer) }}" class="btn btn-sm btn-secondary btn-icon" target="_blank" title="Print">
+                            <i class="fas fa-print"></i>
                         </a>
                         @if(auth()->user()->canWrite())
                         <form action="{{ route('transfers.destroy', $transfer) }}" method="POST" style="display:inline"
@@ -158,8 +158,8 @@
                                 : "'Delete transfer {$transfer->transfer_number}?\\n\\nThis will permanently delete the transfer and reverse all dispatched stock quantities — stock returns to the source warehouse.'"
                             }})">
                             @csrf @method('DELETE')
-                            <button type="submit" class="btn btn-sm btn-danger" title="{{ $transfer->isRelatedToDeletedSubsidy() ? 'Review & Delete Transfer' : 'Delete Transfer' }}">
-                                <i class="fas fa-trash"></i> {{ $transfer->isRelatedToDeletedSubsidy() ? 'Review & Delete' : 'Delete' }}
+                            <button type="submit" class="btn btn-sm btn-danger btn-icon" title="{{ $transfer->isRelatedToDeletedSubsidy() ? 'Review & Delete Transfer' : 'Delete Transfer' }}">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </form>
                         @endif
@@ -167,7 +167,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted)">
+                    <td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">
                         <i class="fas fa-exchange-alt" style="font-size:32px;margin-bottom:8px;display:block;opacity:0.3"></i>
                         No transfers found.
                     </td>

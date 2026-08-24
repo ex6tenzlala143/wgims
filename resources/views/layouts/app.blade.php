@@ -395,6 +395,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-width: 300px; /* Ensure reasonable minimum width */
         }
         .ss-panel .ss-search-wrap { padding: 6px; border-bottom: 1px solid var(--border); background: #f8fafc; flex-shrink: 0; }
         .ss-panel .ss-search {
@@ -409,6 +410,34 @@
             padding: 8px 10px; border-radius: 6px; font-size: 13px; color: var(--text);
             cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .ss-panel .ss-item.ss-multiline {
+            white-space: normal;
+            padding: 10px 12px;
+            line-height: 1.4;
+            min-height: 52px;
+        }
+        .ss-panel .ss-item-primary {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: inherit;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ss-panel .ss-item-secondary {
+            font-size: 11px;
+            opacity: 0.85;
+            color: inherit;
+            font-weight: 400;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ss-panel .ss-item:hover .ss-item-primary,
+        .ss-panel .ss-item.active .ss-item-primary { color: #fff; }
+        .ss-panel .ss-item:hover .ss-item-secondary,
+        .ss-panel .ss-item.active .ss-item-secondary { color: #fff; opacity: 0.95; }
         .ss-panel .ss-item:hover, .ss-panel .ss-item.active { background: var(--primary); color: #fff; }
         .ss-panel .ss-item.disabled { color: var(--text-muted); cursor: not-allowed; background: transparent; }
         .ss-panel .ss-empty { padding: 14px 12px; font-size: 12px; color: var(--text-muted); text-align: center; }
@@ -695,6 +724,173 @@
             .topbar { padding: 0 14px; }
         }
     </style>
+
+    {{-- ── Shared large-modal CSS ─────────────────────────────────────────── --}}
+    {{-- Used by: delivery_subsidies/_create_form, /_edit_form,               --}}
+    {{--           transfers/_create_modal, requisitions/_create_form          --}}
+    <style>
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+        .modal-overlay.open { opacity: 1; visibility: visible; }
+        .modal-shell {
+            width: 95%;
+            max-width: 1560px;
+            height: calc(100vh - 40px);
+            max-height: calc(100vh - 40px);
+            background: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 24px 70px rgba(2, 6, 23, 0.35);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: translateY(28px) scale(0.985);
+            opacity: 0;
+            transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.2s ease;
+        }
+        .modal-overlay.open .modal-shell { transform: none; opacity: 1; }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, #ffffff, #f9fbfd);
+            flex-shrink: 0;
+        }
+        .modal-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+        }
+        .modal-header h2 i { color: var(--primary); }
+        .modal-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
+        .modal-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 18px;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+        .modal-close:hover { background: #fee2e2; color: var(--danger); }
+        .modal-shell > form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+        .modal-body {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 20px 24px;
+            background: #f8fafc;
+            -webkit-overflow-scrolling: touch;
+        }
+        .modal-footer {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 24px;
+            border-top: 1px solid var(--border);
+            background: #ffffff;
+        }
+        body.modal-open { overflow: hidden; }
+
+        /* Subsidy / RIS form layout inside modal */
+        .subsidy-form-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+        .subsidy-form .form-section { margin-bottom: 20px; }
+        .subsidy-form .form-section:last-child { margin-bottom: 0; }
+
+        /* Line-items table inside a modal body */
+        .modal-body .line-items-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .modal-body .line-items-table thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-soft); box-shadow: 0 1px 0 var(--border); }
+        .modal-body .line-items-table th,
+        .modal-body .line-items-table td { padding: 18px 16px; }
+        .modal-body .line-items-table td { border-bottom: 1px solid var(--border); }
+        .modal-body .line-items-table tbody tr:last-child td { border-bottom: none; }
+        .modal-body .line-items-table input,
+        .modal-body .line-items-table select { width: 100%; padding: 13px 14px; font-size: 14px; border-radius: 7px; border-color: #cbd5e0; box-sizing: border-box; }
+        .modal-body .line-items-table .remove-row {
+            width: 40px; height: 40px; border-radius: 7px;
+            border: 1px solid #feb2b2; background: #fff5f5; color: var(--danger);
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 15px; cursor: pointer; transition: all 0.15s;
+        }
+        .modal-body .line-items-table .remove-row:hover { background: #fed7d7; }
+
+        /* Autocomplete inside modal */
+        .autocomplete-wrapper { position: relative; width: 100%; }
+        .autocomplete-dropdown {
+            position: fixed; max-height: 320px; min-width: 300px;
+            overflow-y: auto; background: #ffffff;
+            border: 1px solid #cbd5e0; border-radius: 7px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            z-index: 9999; display: none;
+        }
+        .autocomplete-dropdown.open { display: block; }
+        .autocomplete-item {
+            padding: 12px 14px; cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.1s ease; font-size: 14px; color: #2d3748;
+        }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover, .autocomplete-item.selected { background-color: #ebf8ff; color: var(--primary); }
+        .autocomplete-item .item-meta { font-size: 11px; color: #718096; margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+        .autocomplete-no-results { padding: 16px 14px; text-align: center; color: #718096; font-size: 13px; }
+        .desc-input:focus, .ris-desc-input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(66,153,225,0.1); }
+
+        /* Edit-related warning banner inside modals */
+        .edit-related-warning {
+            display: flex; gap: 12px; align-items: flex-start;
+            background: #fffbeb; border: 1px solid #fde68a;
+            border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;
+            font-size: 13px; color: #92400e;
+        }
+
+        @media (max-width: 820px) {
+            .modal-body .line-items-table,
+            .modal-body .line-items-table tbody,
+            .modal-body .line-items-table tr,
+            .modal-body .line-items-table td { display: block; width: 100%; box-sizing: border-box; }
+            .modal-body .line-items-table thead { display: none; }
+            .modal-body .line-items-table tr { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 14px; background: #ffffff; }
+            .modal-body .line-items-table td { padding: 8px 4px; border: none; }
+            .modal-body .line-items-table td::before { content: attr(data-label); display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 6px; }
+            .modal-body .line-items-table td[data-label=""]::before,
+            .modal-body .line-items-table td:not([data-label])::before { display: none; }
+        }
+        @media (max-width: 640px) {
+            .modal-overlay { padding: 10px; }
+            .modal-shell { width: 100%; height: calc(100vh - 20px); max-height: calc(100vh - 20px); }
+            .modal-header { padding: 12px 16px; }
+            .modal-body { padding: 14px; }
+            .modal-footer { padding: 12px 16px; }
+        }
+    </style>
+
     @stack('styles')
     <script>
     // ── Back/Forward bfcache handling — prevents skeleton flash on Back ──────
@@ -1147,7 +1343,7 @@
             var self = this;
             this.observer = new MutationObserver(function () {
                 self.sync();
-                if (self.open) self.renderOptions();
+                if (self.open) { self.renderOptions(); self.position(); }
             });
             this.observer.observe(this.select, {
                 childList: true,
@@ -1217,10 +1413,23 @@
             var r = this.btn.getBoundingClientRect();
             var vw = window.innerWidth, vh = window.innerHeight;
             if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) { this.close(); return; }
-            var w = Math.max(r.width, 240);
-            var left = Math.min(Math.max(r.left, 8), vw - w - 8);
+            
+            // Panel width always matches the closed dropdown's own width
+            var w = r.width;
+
+            // Center or align based on available space
+            var idealLeft = r.left;
+            var idealRight = idealLeft + w;
+            if (idealRight > vw - 8) {
+                idealLeft = vw - w - 8;
+            }
+            if (idealLeft < 8) {
+                idealLeft = 8;
+                w = Math.min(w, vw - 16);
+            }
+            
             this.panel.style.width = w + 'px';
-            this.panel.style.left = left + 'px';
+            this.panel.style.left = idealLeft + 'px';
             var below = vh - r.bottom;
             var above = r.top;
             if (below < 220 && above > below) {
@@ -1248,7 +1457,16 @@
             for (var j = 0; j < this.matches.length && shown < MAX_RENDER; j++) {
                 var o = opts[this.matches[j]];
                 shown++;
-                html += '<li class="ss-item' + (o.disabled ? ' disabled' : '') + '" data-idx="' + this.matches[j] + '" role="option">' + escapeHtml(o.text) + '</li>';
+                // Support multiline display: if option text contains \n, render as separate lines
+                var displayHtml = escapeHtml(o.text);
+                if (o.text.indexOf('\n') !== -1) {
+                    var lines = o.text.split('\n');
+                    displayHtml = '<div class="ss-item-primary">' + escapeHtml(lines[0]) + '</div>';
+                    if (lines.length > 1) {
+                        displayHtml += '<div class="ss-item-secondary">' + escapeHtml(lines.slice(1).join(' ')) + '</div>';
+                    }
+                }
+                html += '<li class="ss-item' + (o.disabled ? ' disabled' : '') + (o.text.indexOf('\n') !== -1 ? ' ss-multiline' : '') + '" data-idx="' + this.matches[j] + '" role="option">' + displayHtml + '</li>';
             }
             if (shown === 0) {
                 this.list.innerHTML = '<div class="ss-empty">No matching options</div>';

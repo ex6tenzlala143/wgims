@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Record Shipment')
 @section('page-title', 'Record Shipment')
 
@@ -166,7 +166,7 @@
                     {{-- Row 1: Warehouse · Expiration · Quantity --}}
                     <div class="shipment-item-grid">
                         <div class="form-group">
-                            <label class="form-label">Warehouse <span style="color:red">*</span></label>
+                            <label class="form-label">Warehouse <span class="req">*</span></label>
                             <select name="items[{{ $poiIdx }}_0][warehouse_id]"
                                     class="form-control batch-wh"
                                     {{ $isDone ? 'disabled' : 'required' }}>
@@ -191,7 +191,7 @@
 
                         <div class="form-group">
                             <label class="form-label">
-                                Quantity <span style="color:red">*</span>
+                                Quantity <span class="req">*</span>
                                 @if(!$isDone)
                                     <span class="hint">max {{ number_format($lineRemaining) }}</span>
                                 @else
@@ -218,7 +218,7 @@
                     {{-- Row 2: Unit Cost · ENGAS Unit Cost · DR No. --}}
                     <div class="shipment-item-grid">
                         <div class="form-group">
-                            <label class="form-label">Unit Cost (₱) <span style="color:red">*</span></label>
+                            <label class="form-label">Unit Cost (₱) <span class="req">*</span></label>
                             <input type="number"
                                    name="items[{{ $poiIdx }}_0][unit_cost]"
                                    class="form-control"
@@ -229,7 +229,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">ENGAS Unit Cost (₱) <span style="color:red">*</span></label>
+                            <label class="form-label">ENGAS Unit Cost (₱) <span class="req">*</span></label>
                             <input type="number"
                                    name="items[{{ $poiIdx }}_0][engas_unit_cost]"
                                    class="form-control batch-engas"
@@ -247,7 +247,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">DR No. <span style="color:red">*</span></label>
+                            <label class="form-label">DR No. <span class="req">*</span></label>
                             <input type="text"
                                    name="items[{{ $poiIdx }}_0][dr_number]"
                                    class="form-control batch-dr"
@@ -478,7 +478,7 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
 
         <div class="shipment-item-grid">
             <div class="form-group">
-                <label class="form-label">Warehouse <span style="color:red">*</span></label>
+                <label class="form-label">Warehouse <span class="req">*</span></label>
                 <select name="items[${key}][warehouse_id]"
                         class="form-control batch-wh"
                         required
@@ -498,7 +498,7 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
 
             <div class="form-group">
                 <label class="form-label">
-                    Quantity <span style="color:red">*</span>
+                    Quantity <span class="req">*</span>
                     <span class="hint">max ${maxQty.toLocaleString('en-PH', { maximumFractionDigits: 0 })}</span>
                 </label>
                 <input type="number"
@@ -516,7 +516,7 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
 
         <div class="shipment-item-grid">
             <div class="form-group">
-                <label class="form-label">Unit Cost (₱) <span style="color:red">*</span></label>
+                <label class="form-label">Unit Cost (₱) <span class="req">*</span></label>
                 <input type="number"
                        name="items[${key}][unit_cost]"
                        class="form-control"
@@ -528,7 +528,7 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
             </div>
 
             <div class="form-group">
-                <label class="form-label">ENGAS Unit Cost (₱) <span style="color:red">*</span></label>
+                <label class="form-label">ENGAS Unit Cost (₱) <span class="req">*</span></label>
                 <input type="number"
                        name="items[${key}][engas_unit_cost]"
                        class="form-control batch-engas"
@@ -544,7 +544,7 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
             </div>
 
             <div class="form-group">
-                <label class="form-label">DR No. <span style="color:red">*</span></label>
+                <label class="form-label">DR No. <span class="req">*</span></label>
                 <input type="text"
                        name="items[${key}][dr_number]"
                        class="form-control batch-dr"

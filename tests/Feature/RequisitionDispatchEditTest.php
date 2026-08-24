@@ -460,7 +460,8 @@ class RequisitionDispatchEditTest extends TestCase
 
         $this->assertEquals(85, (float) $item->fresh()->quantity);
         $this->assertEquals(15, (float) $line->fresh()->quantity_issued);
-        $this->assertEquals(700, (float) $line->fresh()->unit_cost);
+        // Cost data lives on the dispatch, not the RI
+        $this->assertEquals(0, (float) $line->fresh()->unit_cost);
         $this->assertSame('partially_approved', $ris->fresh()->status);
         $this->assertEquals(15, (float) $line->fresh()->quantity_issued);
     }

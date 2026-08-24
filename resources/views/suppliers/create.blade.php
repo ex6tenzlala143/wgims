@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Add Supplier')
 @section('page-title', 'Add Supplier')
 
@@ -17,7 +17,7 @@
             @csrf
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Supplier Name <span style="color:red">*</span></label>
+                    <label class="form-label">Supplier Name <span class="req">*</span></label>
                     <input type="text" name="name" class="form-control {{ $errors->has('name') ? 'is-invalid' : '' }}" value="{{ old('name') }}" required>
                     @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>

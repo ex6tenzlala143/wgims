@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Delivery/Subsidy Details')
 @section('page-title', 'Delivery/Subsidy Details')
 
@@ -29,25 +29,8 @@
         @endif
         @if(auth()->user()->isAdmin())
         <a href="{{ route('delivery_subsidies.audit_log', $deliverySubsidy->id) }}" class="btn btn-outline">
-            <i class="fas fa-history"></i> Audit Log
+            <i class="fas fa-history"></i> Correction History
         </a>
-        @endif
-        @if(auth()->user()->canWrite() && ! $deliverySubsidy->isArchived())
-        <form action="{{ route('delivery_subsidies.archive', $deliverySubsidy->id) }}" method="POST"
-            onsubmit="return confirm('Archive RIS #{{ $deliverySubsidy->ris_number }}? Related stock transfers will be flagged for review — nothing is deleted.')">
-            @csrf @method('PATCH')
-            <button type="submit" class="btn btn-secondary">
-                <i class="fas fa-archive"></i> Archive
-            </button>
-        </form>
-        @elseif(auth()->user()->canWrite() && $deliverySubsidy->isArchived())
-        <form action="{{ route('delivery_subsidies.restore', $deliverySubsidy->id) }}" method="POST"
-            onsubmit="return confirm('Restore RIS #{{ $deliverySubsidy->ris_number }}? Related stock transfer flags will be cleared.')">
-            @csrf @method('PATCH')
-            <button type="submit" class="btn btn-outline">
-                <i class="fas fa-undo"></i> Restore
-            </button>
-        </form>
         @endif
         @if(auth()->user()->canWrite())
         <form action="{{ route('delivery_subsidies.destroy', $deliverySubsidy->id) }}" method="POST"
@@ -133,7 +116,7 @@
         </div>
 
         {{-- Progress bar --}}
-        <div style="background:#e2e8f0;border-radius:999px;height:14px;overflow:hidden;margin-bottom:10px">
+        <div style="background:var(--border);border-radius:999px;height:14px;overflow:hidden;margin-bottom:10px">
             <div style="background:{{ $isComplete ? 'var(--success)' : 'var(--primary)' }};width:{{ $pct }}%;height:100%;border-radius:999px;transition:width .4s;position:relative">
                 @if($pct >= 15)
                 <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:white">{{ $pct }}%</span>
@@ -143,7 +126,7 @@
 
         {{-- Stats row --}}
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center">
-            <div style="background:#f0f9ff;border-radius:8px;padding:12px">
+            <div style="background:var(--info-bg);border-radius:8px;padding:12px">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Qty Requested</div>
                 <div style="font-size:22px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested) }}</div>
             </div>
@@ -409,22 +392,22 @@
                 $itemPct = $orderedQty > 0 ? min(100, round($poi->qty_delivered / $orderedQty * 100)) : 0;
             @endphp
             <div style="padding:8px 20px">
-                <div style="background:#e2e8f0;border-radius:999px;height:8px;overflow:hidden">
+                <div style="background:var(--border);border-radius:999px;height:8px;overflow:hidden">
                     <div style="background:{{ $itemPct >= 100 ? 'var(--success)' : 'var(--primary)' }};width:{{ $itemPct }}%;height:100%;border-radius:999px"></div>
                 </div>
                 <div style="font-size:10px;color:var(--text-muted);margin-top:3px">{{ $itemPct }}% fulfilled</div>
             </div>
 
             {{-- Shipment-by-shipment breakdown --}}
+            <div class="table-wrapper">
             <table style="width:100%;border-collapse:collapse;font-size:13px">
                 <thead>
-                    <tr style="background:#f0f9ff">
+                    <tr style="background:var(--surface-soft)">
                         <th style="padding:8px 20px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">#</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Shipment DR No.</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Date</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Warehouse</th>
                         <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Expiration</th>
-                        <th style="padding:8px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Stock Card</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Qty This Shipment</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Cumulative</th>
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Unit Cost</th>
@@ -434,6 +417,7 @@
                         <th style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--primary)">ENGAS Total</th>
                         @endif
                         <th style="padding:8px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Condition</th>
+                        <th style="padding:8px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -473,16 +457,6 @@
                                 <span style="color:var(--text-muted);font-size:12px">—</span>
                             @endif
                         </td>
-                        <td style="padding:10px 14px">
-                            @if($row['di']->item && $row['di']->item->stock_number)
-                                <a href="{{ route('stock_cards.item_history', $row['di']->item->id) }}"
-                                   style="font-family:monospace;font-size:12px;color:var(--primary);text-decoration:none;font-weight:600;white-space:nowrap">
-                                    {{ $row['di']->item->stock_number }}
-                                </a>
-                            @else
-                                <span style="color:var(--text-muted);font-size:12px">—</span>
-                            @endif
-                        </td>
                         <td style="padding:10px 14px;text-align:right;font-weight:700;color:var(--primary)">
                             +{{ number_format($row['di']->quantity_delivered) }}
                         </td>
@@ -513,12 +487,40 @@
                                 {{ ucfirst($row['di']->condition) }}
                             </span>
                         </td>
+                        <td style="padding:10px 14px;white-space:nowrap">
+                            {{-- Stock Card link --}}
+                            @if($row['di']->item)
+                                <a href="{{ route('stock_cards.item_history', $row['di']->item->id) }}"
+                                   class="btn btn-sm btn-outline btn-icon"
+                                   title="View Stock Card{{ $row['di']->item->stock_number ? ': ' . $row['di']->item->stock_number : '' }}">
+                                    <i class="fas fa-book"></i>
+                                </a>
+                            @endif
+                            {{-- Edit shipment --}}
+                            @if(auth()->user()->canWrite())
+                                <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $row['delivery']->id]) }}"
+                                   class="btn btn-sm btn-outline btn-icon" title="Edit Shipment">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {{-- Delete shipment --}}
+                                <form method="POST"
+                                      action="{{ route('delivery_subsidies.destroy_delivery', [$deliverySubsidy->id, $row['delivery']->id]) }}"
+                                      style="display:inline"
+                                      onsubmit="return confirm('Delete this shipment and reverse its stock movement? This cannot be undone.')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete Shipment">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            @endif
+                        </td>
                     </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
-                        <td colspan="6" style="padding:10px 20px;font-size:13px">Total Delivered</td>
+                        <td colspan="5" style="padding:10px 20px;font-size:13px">Total Delivered</td>
                         <td style="padding:10px 14px;text-align:right;color:var(--success)">
                             {{ number_format($poi->qty_delivered) }}
                         </td>
@@ -540,9 +542,11 @@
                         </td>
                         @endif
                         <td></td>
+                        <td></td>
                     </tr>
                 </tfoot>
             </table>
+            </div>
         @endif
     </div>
     @endforeach
@@ -581,12 +585,6 @@
                 <span class="badge {{ $delivery->condition_status == 'good' ? 'badge-success' : 'badge-warning' }}">
                     {{ ucfirst($delivery->condition_status) }}
                 </span>
-                @if(auth()->user()->canWrite())
-                <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $delivery->id]) }}"
-                   class="btn btn-sm btn-outline btn-icon" title="Edit Delivery">
-                    <i class="fas fa-edit"></i>
-                </a>
-                @endif
             </div>
         </div>
 
@@ -609,7 +607,6 @@
                         <th style="text-align:right">ENGAS Total</th>
                         @endif
                         <th>Condition</th>
-                        <th>Stock Card</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -680,14 +677,6 @@
                             <span class="badge {{ $di->condition == 'good' ? 'badge-success' : 'badge-warning' }}">
                                 {{ ucfirst($di->condition) }}
                             </span>
-                        </td>
-                        <td>
-                            @if($di->item && $di->item->stock_number)
-                            <a href="{{ route('stock_cards.item_history', $di->item->id) }}"
-                               class="btn btn-sm btn-outline btn-icon" title="View Stock Card">
-                                <i class="fas fa-book"></i>
-                            </a>
-                            @endif
                         </td>
                     </tr>
                     @endforeach

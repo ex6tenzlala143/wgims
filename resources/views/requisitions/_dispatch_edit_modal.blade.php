@@ -18,7 +18,7 @@
     .de-modal-overlay.open { opacity: 1; visibility: visible; }
     .de-modal-shell {
         width: 100%;
-        max-width: 680px;
+        max-width: 780px;  /* Increased from 680px to accommodate wider dropdown */
         background: #ffffff;
         border-radius: 14px;
         box-shadow: 0 24px 70px rgba(2, 6, 23, 0.35);
@@ -278,10 +278,7 @@
             ' data-stock="' + r.quantity + '"' +
             ' data-sn="' + (r.stock_number || '') + '"' +
             ' data-unit="' + (r.unit || '') + '"' +
-            '>' + r.description +
-            (r.stock_number ? ' [' + r.stock_number + ']' : '') +
-            ' · ₱' + Number(r.unit_cost || 0).toFixed(2) +
-            ' · ' + Number(r.quantity).toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' ' + (r.unit || '') + '</option>';
+            '>' + (r.display_text || r.description) + '</option>';
     }
 
     function populateItemSelect(records, selectItemId) {
@@ -290,10 +287,19 @@
             records.map(stockOptionHtml).join('');
         sel.innerHTML = opts;
         sel.disabled = false;
+        
+        // Sync with SearchableSelect component
+        if (window.SS && typeof window.SS.sync === 'function') {
+            window.SS.sync(sel);
+        }
+        
         if (selectItemId) {
             var found = Array.prototype.find.call(sel.options, function (o) { return o.value === String(selectItemId); });
             if (found) {
                 sel.value = String(selectItemId);
+                if (window.SS && typeof window.SS.sync === 'function') {
+                    window.SS.sync(sel);
+                }
                 fillItem();
             }
         }

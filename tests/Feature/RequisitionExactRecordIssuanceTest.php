@@ -98,9 +98,20 @@ class RequisitionExactRecordIssuanceTest extends TestCase
             $line = RequisitionItem::findOrFail($riItemId);
             $payload['items'][$riItemId]['quantity_issued'] = $issueQty;
             $payload['items'][$riItemId]['dr_number']       = 'DR-ISSUE-' . $riItemId;
-            // Resolve the warehouse + exact stock record from the line's reference item
-            $payload['items'][$riItemId]['item_id']         = $line->item_id;
-            $payload['items'][$riItemId]['warehouse_id']    = $line->item?->warehouse_id;
+            if ($line->item_id) {
+                // Line already linked to an exact record (post-issuance)
+                $payload['items'][$riItemId]['item_id']      = $line->item_id;
+                $payload['items'][$riItemId]['warehouse_id'] = $line->item?->warehouse_id;
+            } else {
+                // Request-stage lines are intentionally unlinked — resolve the
+                // exact stock record explicitly at issuance, just as the UI does.
+                $catalog = $line->catalog_item_id ? ItemCatalogItem::find($line->catalog_item_id) : null;
+                $rep = $catalog ? Item::where('is_active', true)
+                    ->whereRaw('LOWER(TRIM(description)) = ?', [mb_strtolower(trim($catalog->name))])
+                    ->first() : null;
+                $payload['items'][$riItemId]['item_id']      = $rep?->id;
+                $payload['items'][$riItemId]['warehouse_id'] = $rep?->warehouse_id;
+            }
         }
 
         return $this->actingAs($this->admin())
@@ -448,7 +459,8 @@ class RequisitionExactRecordIssuanceTest extends TestCase
 
         $dispatch = $line->dispatchItems()->firstOrFail();
         $this->assertSame('DR-DISPATCH-001', $dispatch->dr_number);
-        $this->assertSame('DR-DISPATCH-001', $line->fresh()->dr_number);
+        // DR number lives on the dispatch, not on the RI
+        $this->assertNull($line->fresh()->dr_number);
         $this->assertEquals(40, (float) $item->fresh()->quantity);
         $this->assertEquals('approved', $ris->fresh()->status);
     }

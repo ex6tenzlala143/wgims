@@ -1,4 +1,4 @@
-@php
+﻿@php
     // Same autocomplete sources the create form uses: configured item names
     // (per category) take priority, inventory items are the fallback.
     $catalogItems = $catalogItems ?? collect();
@@ -80,11 +80,11 @@
                             <div class="card-body">
                                 <div class="form-row cols-2">
                                     <div class="form-group">
-                                        <label class="form-label">Date <span style="color:red">*</span></label>
+                                        <label class="form-label">Date <span class="req">*</span></label>
                                         <input type="date" name="date" id="edit-date" class="form-control" required>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Supplier/Subsidy <span style="color:red">*</span> <i class="fas fa-lock" id="edit-supplier-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
+                                        <label class="form-label">Supplier/Subsidy <span class="req">*</span> <i class="fas fa-lock" id="edit-supplier-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
                                         <select name="supplier_id" id="edit-supplier" class="form-control" required>
                                             <option value="">— Select Supplier/Subsidy —</option>
                                             @foreach($suppliers as $s)
@@ -98,7 +98,7 @@
                                 </div>
                                 <div class="form-row cols-2">
                                     <div class="form-group">
-                                        <label class="form-label">RIS No. <span style="color:red">*</span> <i class="fas fa-lock" id="edit-ris-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
+                                        <label class="form-label">RIS No. <span class="req">*</span> <i class="fas fa-lock" id="edit-ris-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
                                         <input type="text" name="ris_number" id="edit-ris-number" class="form-control" placeholder="e.g. RIS-2026-001" required>
                                         <div id="edit-ris-note" style="display:none;font-size:11px;color:var(--text-muted);margin-top:4px">
                                             <i class="fas fa-info-circle"></i> Locked because deliveries have been recorded.
@@ -111,7 +111,7 @@
                                 </div>
                                 <div class="form-row cols-2">
                                     <div class="form-group" id="edit-status-group">
-                                        <label class="form-label">Status <span style="color:red">*</span></label>
+                                        <label class="form-label">Status <span class="req">*</span></label>
                                         <select name="status" id="edit-status" class="form-control" required>
                                             <option value="pending">Pending</option>
                                             <option value="cancelled">Cancelled</option>
@@ -140,9 +140,9 @@
                                     <table class="line-items-table" id="edit-items-table">
                                         <thead>
                                             <tr>
-                                                <th style="width:40%">Description <span style="color:red">*</span></th>
-                                                <th style="width:11%">Unit <span style="color:red">*</span></th>
-                                                <th style="width:17%">Category <span style="color:red">*</span></th>
+                                                <th style="width:40%">Description <span class="req">*</span></th>
+                                                <th style="width:11%">Unit <span class="req">*</span></th>
+                                                <th style="width:17%">Category <span class="req">*</span></th>
                                                 <th style="width:16%">Quantity Requested</th>
                                                 <th style="width:13%">Expiry Date</th>
                                                 <th style="width:3%"></th>
@@ -187,275 +187,6 @@
     </div>
 </div>
 
-@push('styles')
-<style>
-    .modal-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 1200;
-        background: rgba(15, 23, 42, 0.55);
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding: 20px;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.25s ease, visibility 0.25s ease;
-    }
-    .modal-overlay.open {
-        opacity: 1;
-        visibility: visible;
-    }
-    .modal-shell {
-        width: 95%;
-        max-width: 1560px;
-        height: calc(100vh - 40px);
-        max-height: calc(100vh - 40px);
-        background: #ffffff;
-        border-radius: 14px;
-        box-shadow: 0 24px 70px rgba(2, 6, 23, 0.35);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        transform: translateY(28px) scale(0.985);
-        opacity: 0;
-        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.2s ease;
-    }
-    .modal-overlay.open .modal-shell {
-        transform: none;
-        opacity: 1;
-    }
-    .modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 16px 24px;
-        border-bottom: 1px solid var(--border);
-        background: linear-gradient(180deg, #ffffff, #f9fbfd);
-        flex-shrink: 0;
-    }
-    .modal-header h2 {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--text);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0;
-    }
-    .modal-header h2 i { color: var(--primary); }
-    .modal-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
-    .modal-close {
-        background: none;
-        border: none;
-        cursor: pointer;
-        color: var(--text-muted);
-        font-size: 18px;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        transition: all 0.15s;
-    }
-    .modal-close:hover { background: #fee2e2; color: var(--danger); }
-    .modal-shell > form {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-height: 0;
-    }
-    .modal-body {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        padding: 20px 24px;
-        background: #f8fafc;
-        -webkit-overflow-scrolling: touch;
-    }
-    .modal-footer {
-        flex-shrink: 0;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 12px;
-        padding: 14px 24px;
-        border-top: 1px solid var(--border);
-        background: #ffffff;
-    }
-    .edit-related-warning {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-        font-size: 13px;
-        line-height: 1.5;
-        color: #7f1d1d;
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        border-radius: 10px;
-        padding: 12px 14px;
-        margin-bottom: 16px;
-    }
-    .edit-related-warning i { color: var(--danger); }
-    .edit-locked-field {
-        background: #f1f5f9 !important;
-        color: #64748b !important;
-        cursor: not-allowed !important;
-    }
-    .edit-delivered-note {
-        font-size: 11px;
-        color: var(--text-muted);
-        margin-top: 4px;
-        line-height: 1.4;
-    }
-    body.modal-open { overflow: hidden; }
-
-    .subsidy-form-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 18px;
-        align-items: start;
-    }
-    .subsidy-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 20px;
-        flex-wrap: wrap;
-        padding: 14px 20px;
-        background: var(--card-bg, var(--surface));
-        border: 1px solid var(--border);
-        border-radius: 10px;
-    }
-    .summary-left { flex-shrink: 0; }
-    .summary-note { font-size: 12.5px; color: var(--text-muted); line-height: 1.6; max-width: 640px; }
-    .subsidy-form .form-section { margin-bottom: 20px; }
-    .subsidy-form .form-section:last-child { margin-bottom: 0; }
-
-    /* Line Items = a dedicated workspace, not a cramped table */
-    .modal-body .line-items-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-    .modal-body .line-items-table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: var(--surface-soft);
-        box-shadow: 0 1px 0 var(--border);
-    }
-    .modal-body .table-wrapper {
-        min-height: 340px;
-        max-height: calc(100vh - 520px);
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    .modal-body .line-items-table th,
-    .modal-body .line-items-table td { padding: 18px 16px; }
-    .modal-body .line-items-table td { border-bottom: 1px solid var(--border); }
-    .modal-body .line-items-table tbody tr:last-child td { border-bottom: none; }
-    .modal-body .line-items-table input,
-    .modal-body .line-items-table select {
-        width: 100%;
-        padding: 13px 14px;
-        font-size: 14px;
-        border-radius: 7px;
-        border-color: #cbd5e0;
-        box-sizing: border-box;
-    }
-    .modal-body .line-items-table .remove-row {
-        width: 40px;
-        height: 40px;
-        border-radius: 7px;
-        border: 1px solid #feb2b2;
-        background: #fff5f5;
-        color: var(--danger);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 15px;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-    .modal-body .line-items-table .remove-row:hover { background: #fed7d7; }
-    .modal-body .line-items-table .remove-row:disabled {
-        border-color: #e2e8f0;
-        background: #f1f5f9;
-        color: #94a3b8;
-        cursor: not-allowed;
-    }
-
-    /* Inline validation feedback */
-    .edit-field-error {
-        color: var(--danger);
-        font-size: 11.5px;
-        margin-top: 4px;
-        line-height: 1.4;
-    }
-    .edit-form-error {
-        color: var(--danger);
-        font-size: 13px;
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 16px;
-    }
-    .is-invalid {
-        border-color: var(--danger) !important;
-        background: #fff5f5 !important;
-    }
-
-    @media (max-width: 1150px) {
-        .subsidy-summary { align-items: flex-start; }
-    }
-    /* On small screens stack the item fields instead of cramming them */
-    @media (max-width: 820px) {
-        .modal-body .line-items-table,
-        .modal-body .line-items-table tbody,
-        .modal-body .line-items-table tr,
-        .modal-body .line-items-table td {
-            display: block;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        .modal-body .line-items-table thead { display: none; }
-        .modal-body .line-items-table tr {
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 14px;
-            background: #ffffff;
-        }
-        .modal-body .line-items-table td { padding: 8px 4px; border: none; }
-        .modal-body .line-items-table td::before {
-            content: attr(data-label);
-            display: block;
-            font-size: 11.5px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-        .modal-body .line-items-table td[data-label=""]::before,
-        .modal-body .line-items-table td:not([data-label])::before { display: none; }
-    }
-    @media (max-width: 640px) {
-        .modal-overlay { padding: 10px; }
-        .modal-shell { width: 100%; height: calc(100vh - 20px); max-height: calc(100vh - 20px); }
-        .modal-header { padding: 12px 16px; }
-        .modal-body { padding: 14px; }
-        .modal-footer { padding: 12px 16px; }
-    }
-</style>
-@endpush
 
 @push('scripts')
 <script>

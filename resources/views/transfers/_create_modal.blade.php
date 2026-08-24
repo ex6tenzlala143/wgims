@@ -1,4 +1,4 @@
-@php
+﻿@php
     $createModalOpen = $createModalOpen ?? false;
 @endphp
 
@@ -23,7 +23,7 @@
                     <div class="card-body">
                         <div class="form-row cols-2">
                             <div class="form-group">
-                                <label class="form-label">Source Warehouse <span style="color:red">*</span></label>
+                                <label class="form-label">Source Warehouse <span class="req">*</span></label>
                                 @if($sourceWarehouse)
                                     {{-- Non-admin: fixed to their warehouse --}}
                                     <input type="text" class="form-control" value="{{ $sourceWarehouse->name }}" readonly>
@@ -39,7 +39,7 @@
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">Destination Warehouse <span style="color:red">*</span></label>
+                                <label class="form-label">Destination Warehouse <span class="req">*</span></label>
                                 <select name="to_warehouse_id" id="to_warehouse_id" class="form-control" required onchange="syncWarehouseOptions()">
                                     <option value="">— Select Destination —</option>
                                     @foreach($warehouses as $wh)
@@ -54,7 +54,7 @@
 
                         <div class="form-row cols-2">
                             <div class="form-group">
-                                <label class="form-label">Transfer Date <span style="color:red">*</span></label>
+                                <label class="form-label">Transfer Date <span class="req">*</span></label>
                                 <input type="date" name="transfer_date" class="form-control" value="{{ old('transfer_date', date('Y-m-d')) }}" required>
                             </div>
                             <div class="form-group" style="margin-bottom:0">
@@ -76,13 +76,10 @@
                             <table class="line-items-table" id="transfer-items-table">
                                 <thead>
                                     <tr>
-                                        <th style="width:28%">Item</th>
-                                        <th style="width:10%">Unit</th>
-                                        <th style="width:10%">Available</th>
-                                        <th style="width:12%">ENGAS Cost</th>
-                                        <th style="width:12%">Qty to Transfer</th>
-                                        <th style="width:12%">Unit Cost</th>
-                                        <th style="width:12%">Total</th>
+                                        <th style="width:45%">Item <span class="hint">(with stock details)</span></th>
+                                        <th style="width:18%">Qty to Transfer</th>
+                                        <th style="width:18%">Unit Cost</th>
+                                        <th style="width:15%">Total</th>
                                         <th style="width:4%"></th>
                                     </tr>
                                 </thead>
@@ -91,7 +88,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr>
-                                        <td colspan="6" style="text-align:right;font-weight:600;padding:12px 16px;background:#f8fafc">Grand Total:</td>
+                                        <td colspan="3" style="text-align:right;font-weight:600;padding:12px 16px;background:#f8fafc">Grand Total:</td>
                                         <td style="font-weight:700;padding:12px 16px;background:#f8fafc" id="transfer-grand-total">₱0.00</td>
                                         <td style="background:#f8fafc"></td>
                                     </tr>
@@ -118,331 +115,6 @@
     </div>
 </div>
 
-@push('styles')
-<style>
-    /* Modal base styles - same as delivery subsidy modal */
-    .modal-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 1200;
-        background: rgba(15, 23, 42, 0.55);
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding: 20px;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.25s ease, visibility 0.25s ease;
-    }
-    .modal-overlay.open {
-        opacity: 1;
-        visibility: visible;
-    }
-    .modal-shell {
-        width: 95%;
-        max-width: 1400px;
-        height: calc(100vh - 40px);
-        max-height: calc(100vh - 40px);
-        background: #ffffff;
-        border-radius: 14px;
-        box-shadow: 0 24px 70px rgba(2, 6, 23, 0.35);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        transform: translateY(28px) scale(0.985);
-        opacity: 0;
-        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.2s ease;
-    }
-    .modal-overlay.open .modal-shell {
-        transform: none;
-        opacity: 1;
-    }
-    .modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 16px 24px;
-        border-bottom: 1px solid var(--border);
-        background: linear-gradient(180deg, #ffffff, #f9fbfd);
-        flex-shrink: 0;
-    }
-    .modal-header h2 {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--text);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0;
-    }
-    .modal-header h2 i { color: var(--primary); }
-    .modal-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
-    .modal-close {
-        background: none;
-        border: none;
-        cursor: pointer;
-        color: var(--text-muted);
-        font-size: 18px;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        transition: all 0.15s;
-    }
-    .modal-close:hover { background: #fee2e2; color: var(--danger); }
-    .modal-shell > form {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-height: 0;
-    }
-    .modal-body {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        padding: 20px 24px;
-        background: #f8fafc;
-        -webkit-overflow-scrolling: touch;
-    }
-    .modal-footer {
-        flex-shrink: 0;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 12px;
-        padding: 14px 24px;
-        border-top: 1px solid var(--border);
-        background: #ffffff;
-        flex-wrap: wrap;
-    }
-    body.modal-open { overflow: hidden; }
-
-    /* Transfer modal specific styles */
-    .transfer-modal .form-section { margin-bottom: 20px; }
-    .transfer-modal .form-section:last-child { margin-bottom: 0; }
-    .transfer-modal .table-wrapper {
-        overflow-x: auto;
-        overflow-y: visible;
-        -webkit-overflow-scrolling: touch;
-    }
-    .transfer-modal .line-items-table {
-        width: 100%;
-        min-width: 900px;
-        border-collapse: separate;
-        border-spacing: 0;
-        table-layout: fixed;
-    }
-    .transfer-modal .line-items-table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: var(--surface-soft, #f7fafc);
-        box-shadow: 0 1px 0 var(--border);
-        padding: 12px 14px;
-        white-space: nowrap;
-    }
-    .transfer-modal .line-items-table th,
-    .transfer-modal .line-items-table td {
-        padding: 12px 14px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 280px;
-    }
-    .transfer-modal .line-items-table td {
-        border-bottom: 1px solid var(--border);
-    }
-    .transfer-modal .line-items-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-    .transfer-modal .line-items-table input[type="text"],
-    .transfer-modal .line-items-table input[type="number"],
-    .transfer-modal .line-items-table select {
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-        padding: 10px 12px;
-        font-size: 13px;
-        border-radius: 6px;
-        border: 1px solid #cbd5e0;
-        box-sizing: border-box;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    /* Searchable combobox inside transfer line-items — constrain width so long option text
-       does not force the table cell to expand and trigger horizontal overflow */
-    .transfer-modal .line-items-table .ss {
-        width: 100% !important;
-        max-width: 100% !important;
-        min-width: 0 !important;
-        display: flex !important;
-        overflow: hidden;
-    }
-    .transfer-modal .line-items-table .ss .ss-btn {
-        width: 100%;
-        max-width: 100%;
-        min-width: 0;
-        overflow: hidden;
-        padding: 10px 12px;
-        font-size: 13px;
-    }
-    .transfer-modal .line-items-table .ss .ss-value {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .transfer-modal .line-items-table input[readonly] {
-        background: #f7fafc;
-        color: var(--text-muted);
-    }
-    .transfer-modal .line-items-table .remove-row {
-        width: 40px;
-        height: 40px;
-        border-radius: 7px;
-        border: 1px solid #feb2b2;
-        background: #fff5f5;
-        color: var(--danger);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 15px;
-        cursor: pointer;
-        transition: all 0.15s;
-        flex-shrink: 0;
-    }
-    .transfer-modal .line-items-table .remove-row:hover { background: #fed7d7; }
-    
-    /* Tablet responsive */
-    @media (max-width: 1024px) {
-        .transfer-modal .line-items-table {
-            min-width: 800px;
-        }
-    }
-    
-    /* Mobile responsive */
-    @media (max-width: 820px) {
-        /* Stack the card header content */
-        .transfer-modal .card-header {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 12px;
-        }
-        
-        .transfer-modal .card-header h3 {
-            margin: 0;
-        }
-        
-        .transfer-modal .card-header .btn {
-            width: 100%;
-            justify-content: center;
-        }
-        
-        /* Make table scrollable but keep structure */
-        .transfer-modal .table-wrapper {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            margin: 0 -16px;
-            padding: 0 16px;
-        }
-        
-        .transfer-modal .line-items-table {
-            min-width: 700px;
-            font-size: 12px;
-        }
-        
-        .transfer-modal .line-items-table th,
-        .transfer-modal .line-items-table td {
-            padding: 10px 8px;
-        }
-        
-        .transfer-modal .line-items-table input[type="text"],
-        .transfer-modal .line-items-table input[type="number"],
-        .transfer-modal .line-items-table select {
-            min-width: 100px;
-            padding: 8px 10px;
-            font-size: 12px;
-        }
-        
-        /* Stack form rows */
-        .transfer-modal .form-row.cols-2 {
-            display: block;
-        }
-        
-        .transfer-modal .form-row.cols-2 .form-group {
-            margin-bottom: 16px;
-        }
-        
-        .transfer-modal .form-row.cols-2 .form-group:last-child {
-            margin-bottom: 0;
-        }
-    }
-    
-    /* Small mobile phones */
-    @media (max-width: 640px) {
-        .modal-overlay { 
-            padding: 10px;
-            align-items: stretch;
-        }
-        .modal-shell { 
-            width: 100%; 
-            height: 100vh;
-            max-height: 100vh;
-            border-radius: 0;
-        }
-        .modal-header { 
-            padding: 12px 16px;
-        }
-        .modal-header h2 {
-            font-size: 16px;
-        }
-        .modal-subtitle {
-            font-size: 11px;
-        }
-        .modal-body { 
-            padding: 12px;
-        }
-        .modal-footer { 
-            padding: 12px 16px;
-        }
-        .modal-footer .btn {
-            flex: 1;
-            justify-content: center;
-        }
-        
-        /* Improve touch targets */
-        .transfer-modal .line-items-table input[type="text"],
-        .transfer-modal .line-items-table input[type="number"],
-        .transfer-modal .line-items-table select {
-            min-height: 44px;
-        }
-        
-        .transfer-modal .line-items-table .remove-row {
-            min-width: 44px;
-            min-height: 44px;
-        }
-    }
-    
-    /* Very small screens */
-    @media (max-width: 375px) {
-        .transfer-modal .line-items-table {
-            min-width: 650px;
-            font-size: 11px;
-        }
-        
-        .transfer-modal .line-items-table th,
-        .transfer-modal .line-items-table td {
-            padding: 8px 6px;
-        }
-    }
-</style>
-@endpush
 
 
 
@@ -549,12 +221,10 @@ function loadSourceItems() {
             if (idx !== null) {
                 const u = document.getElementById('transfer-unit-' + idx);
                 const a = document.getElementById('transfer-avail-' + idx);
-                const e = document.getElementById('transfer-engas-' + idx);
                 const c = document.getElementById('transfer-cost-' + idx);
                 const t = document.getElementById('transfer-total-' + idx);
                 if (u) u.value = '';
                 if (a) a.value = '';
-                if (e) { e.value = ''; e.style.color = ''; }
                 if (c) c.value = '';
                 if (t) t.value = '';
             }
@@ -610,12 +280,10 @@ function loadSourceItems() {
                     if (idx2 !== undefined) {
                         const u2 = document.getElementById('transfer-unit-' + idx2);
                         const a2 = document.getElementById('transfer-avail-' + idx2);
-                        const e2 = document.getElementById('transfer-engas-' + idx2);
                         const c2 = document.getElementById('transfer-cost-' + idx2);
                         const t2 = document.getElementById('transfer-total-' + idx2);
                         if (u2) u2.value = '';
                         if (a2) a2.value = '';
-                        if (e2) { e2.value = ''; e2.style.color = ''; }
                         if (c2) c2.value = '';
                         if (t2) t2.value = '';
                     }
@@ -672,10 +340,7 @@ function populateTransferItemSelect(selectEl) {
     if (!selectEl) return;
     const currentVal = selectEl.value;
     const isDisabled = selectEl.disabled;
-    // Clear and rebuild with proper <option> elements — each option is a distinct DOM node
-    // so the searchable combobox (layouts/app.blade.php) renders them as separate <li> rows
-    // instead of a single concatenated text string. We preserve the disabled state
-    // across the rebuild so the wrapper's `ss-disabled` class stays accurate.
+    // Clear and rebuild with proper <option> elements
     selectEl.innerHTML = '';
     const ph = document.createElement('option');
     ph.value = '';
@@ -684,34 +349,29 @@ function populateTransferItemSelect(selectEl) {
     (transferSourceItems || []).forEach(item => {
         const opt = document.createElement('option');
         opt.value = item.id;
-        opt.textContent = `${item.description} — ${item.stock_number || 'No SN'}`;
+        // Use enhanced display text from API
+        opt.textContent = item.display_text || item.description;
         opt.dataset.unit = item.unit;
         opt.dataset.unitCost = item.unit_cost;
         opt.dataset.engasUnitCost = item.engas_unit_cost || 'null';
         opt.dataset.available = item.quantity;
         selectEl.appendChild(opt);
     });
-    // Restore value only if it still exists in the new list; otherwise keep placeholder
+    // Restore value only if it still exists in the new list
     if (currentVal) {
         const exists = Array.from(selectEl.options).some(function (o) { return o.value === String(currentVal); });
         if (exists) selectEl.value = String(currentVal);
         else selectEl.value = '';
     }
-    // Ensure the searchable wrapper exists — if the component was destroyed
-    // (e.g., by a Livewire/Alpine re-render) or never initialized, re-enhance.
+    // Ensure the searchable wrapper exists and sync
     if (!selectEl.ss && window.SS && typeof window.SS.refresh === 'function') {
         window.SS.refresh(selectEl.parentNode);
     }
-    // Sync the visible button text and disabled state. The global `SS` handles
-    // both the `ss-disabled` class and the `ss-value` text.
     if (window.SS && typeof window.SS.sync === 'function') window.SS.sync(selectEl);
-    // Also sync via the instance directly in case the global helper is stale
     if (selectEl.ss && typeof selectEl.ss.sync === 'function') selectEl.ss.sync();
-    // If the dropdown panel is currently open, re-render its filtered list
     if (selectEl.ss && typeof selectEl.ss.renderOptions === 'function' && selectEl.ss.open) {
         selectEl.ss.renderOptions();
     }
-    // Preserve disabled state explicitly (some browsers clear it on innerHTML)
     selectEl.disabled = isDisabled;
     if (window.SS && typeof window.SS.sync === 'function') window.SS.sync(selectEl);
 }
@@ -727,9 +387,6 @@ function addTransferRow() {
                 <option value="">— Select Item —</option>
             </select>
         </td>
-        <td data-label="Unit"><input type="text" id="transfer-unit-${idx}" readonly placeholder="—"></td>
-        <td data-label="Available"><input type="text" id="transfer-avail-${idx}" readonly placeholder="—"></td>
-        <td data-label="ENGAS Cost"><input type="text" id="transfer-engas-${idx}" readonly placeholder="—"></td>
         <td data-label="Qty to Transfer">
             <input type="number" name="items[${idx}][quantity]" id="transfer-qty-${idx}"
                    step="1" min="1" placeholder="0" required oninput="recalcTransferRow(${idx})">
@@ -745,6 +402,17 @@ function addTransferRow() {
             </button>
         </td>
     `;
+    // Hidden fields to store unit and available quantity for validation
+    const hiddenUnit = document.createElement('input');
+    hiddenUnit.type = 'hidden';
+    hiddenUnit.id = `transfer-unit-${idx}`;
+    tr.appendChild(hiddenUnit);
+    
+    const hiddenAvail = document.createElement('input');
+    hiddenAvail.type = 'hidden';
+    hiddenAvail.id = `transfer-avail-${idx}`;
+    tr.appendChild(hiddenAvail);
+    
     tbody.appendChild(tr);
     const newSel = tr.querySelector('.transfer-item-select');
     // Ensure the global searchable select is initialized for this dynamic row
@@ -767,20 +435,10 @@ function addTransferRow() {
 
 function onTransferItemChange(sel, idx) {
     const opt = sel.options[sel.selectedIndex];
+    // Store in hidden fields for validation
     document.getElementById(`transfer-unit-${idx}`).value  = opt.dataset.unit || '';
     document.getElementById(`transfer-avail-${idx}`).value = opt.dataset.available || '';
-
-    const engasEl = document.getElementById(`transfer-engas-${idx}`);
-    const engasRaw = opt.dataset.engasUnitCost;
-    const engas = (engasRaw && engasRaw !== 'null') ? parseFloat(engasRaw) : NaN;
-    if (Number.isNaN(engas)) {
-        engasEl.value = 'Not set';
-        engasEl.style.color = 'var(--warning)';
-    } else {
-        engasEl.value = '₱' + engas.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        engasEl.style.color = '';
-    }
-
+    // Auto-fill unit cost
     document.getElementById(`transfer-cost-${idx}`).value = opt.dataset.unitCost || '';
     recalcTransferRow(idx);
 }

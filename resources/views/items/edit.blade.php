@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit Item')
 @section('page-title', 'Edit Item')
 
@@ -20,7 +20,7 @@
             @csrf @method('PUT')
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Description <span style="color:red">*</span></label>
+                    <label class="form-label">Description <span class="req">*</span></label>
                     <input type="text" name="description" class="form-control {{ $errors->has('description') ? 'is-invalid' : '' }}"
                         value="{{ old('description', $item->description) }}" required>
                     @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -33,7 +33,7 @@
             </div>
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Unit <span style="color:red">*</span></label>
+                    <label class="form-label">Unit <span class="req">*</span></label>
                     <select name="unit" class="form-control" required>
                         @foreach(App\Models\Item::UNITS as $key => $label)
                         <option value="{{ $key }}" {{ old('unit', $item->unit) == $key ? 'selected' : '' }}>{{ $label }}</option>
@@ -41,7 +41,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Category <span style="color:red">*</span></label>
+                    <label class="form-label">Category <span class="req">*</span></label>
                     <select name="category" id="category" class="form-control" required onchange="fillAccountCode()">
                         @foreach(App\Models\Item::getCategories() as $key => $cat)
                         <option value="{{ $key }}" {{ old('category', $item->category) == $key ? 'selected' : '' }}>{{ $cat['label'] }}</option>
@@ -55,7 +55,7 @@
                     <input type="text" id="account_code" class="form-control" readonly value="{{ $item->account_code }}" style="background:#f7fafc">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Warehouse Assignment <span style="color:red">*</span></label>
+                    <label class="form-label">Warehouse Assignment <span class="req">*</span></label>
                     <select name="warehouse_id" class="form-control" required>
                         <option value="">— Select Warehouse —</option>
                         @foreach($warehouses as $c)

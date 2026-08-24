@@ -214,13 +214,23 @@
         </thead>
         <tbody>
             @foreach($items as $ri)
+            @php
+                // Issuance details (stock no., warehouse, availability) exist only
+                // once the line has actually been dispatched/issued.
+                $issued = $ri->dispatchItems->isNotEmpty() || $ri->quantity_issued > 0;
+            @endphp
             <tr class="item-row">
-                <td>{{ $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode(', ') ?: ($ri->item?->stock_number ?? '') }}</td>
-                <td>{{ $ri->unit ?? ($ri->item?->unit ?? '') }}</td>
+                <td>{{ $issued ? $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode(', ') : '' }}</td>
+                <td>{{ $ri->unit ?? '' }}</td>
                 <td class="left">
                     {{ $ri->description ?? ($ri->item?->description ?? '') }}
-                    @if($ri->dr_number)
-                        <div style="font-size:6.5pt;color:#333;margin-top:1px"><strong>DR:</strong> {{ $ri->dr_number }}</div>
+                    @php
+                        $drNumbers = $ri->dispatchItems->pluck('dr_number')->filter()->unique();
+                    @endphp
+                    @if($drNumbers->isNotEmpty())
+                        @foreach($drNumbers as $dr)
+                        <div style="font-size:6.5pt;color:#333;margin-top:1px"><strong>DR:</strong> {{ $dr }}</div>
+                        @endforeach
                     @endif
                     @php
                         $whName = $ri->dispatchItems->pluck('item.warehouse.name')->filter()->unique()->implode(', ');
@@ -233,8 +243,13 @@
                     @endif
                 </td>
                 <td class="right">{{ number_format($ri->quantity_requested) }}</td>
+                @if($issued)
                 <td>{{ $ri->stock_available ? '✓' : '' }}</td>
                 <td>{{ !$ri->stock_available ? '✓' : '' }}</td>
+                @else
+                <td></td>
+                <td></td>
+                @endif
                 <td class="right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '' }}</td>
                 <td class="left">{{ $ri->remarks ?? '' }}</td>
             </tr>

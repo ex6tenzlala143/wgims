@@ -1832,7 +1832,74 @@ class DeliverySubsidyController extends Controller
     }
 
     /**
-     * A delivery/subsidy may span multiple warehouses (one per line item).
+     * Admin: delete a single delivery (shipment) record and reverse its stock
+     * and stock-card movements. The parent DeliverySubsidy and its other
+     * shipments are preserved. The per-item qty_delivered counters on the
+     * DeliverySubsidyItem rows are decremented accordingly.
+     *
+     * DELETE /delivery-subsidies/{ds}/deliveries/{delivery}
+     */
+    public function destroyDelivery(DeliverySubsidy $deliverySubsidy, Delivery $delivery)
+    {
+        abort_unless(Auth::user()->isAdmin(), 403);
+        abort_unless($delivery->delivery_subsidy_id === $deliverySubsidy->id, 404);
+
+        $delivery->load(['items.item', 'items.deliverySubsidyItem']);
+
+        try {
+            DB::transaction(function () use ($deliverySubsidy, $delivery) {
+                $affectedItemIds = [];
+
+                foreach ($delivery->items as $di) {
+                    // Reverse the quantity this shipment added to inventory
+                    if ($di->item) {
+                        $newQty = max(0, $di->item->quantity - $di->quantity_delivered);
+                        $di->item->update(['quantity' => $newQty]);
+                        $affectedItemIds[$di->item_id] = true;
+                    }
+
+                    // Decrement the subsidy line's running delivered total
+                    if ($di->deliverySubsidyItem) {
+                        $newDelivered = max(0, $di->deliverySubsidyItem->qty_delivered - $di->quantity_delivered);
+                        $di->deliverySubsidyItem->update(['qty_delivered' => $newDelivered]);
+                    }
+
+                    // Remove the stock-card receipt entry for this shipment line
+                    StockCardEntry::where('reference_type', 'delivery')
+                        ->where('reference_id', $delivery->id)
+                        ->where('item_id', $di->item_id)
+                        ->delete();
+                }
+
+                $delivery->items()->delete();
+                $delivery->delete();
+
+                // Rebuild running balances for every affected item so later
+                // stock-card entries stay consistent.
+                foreach (array_keys($affectedItemIds) as $itemId) {
+                    StockCardEntry::recalculateBalancesForItem($itemId);
+                }
+
+                // Re-sync the parent subsidy status (e.g. fully_delivered → partial)
+                $deliverySubsidy->updateDeliveryStatus();
+            });
+        } catch (\Throwable $e) {
+            Log::error('Delivery deletion failed', [
+                'delivery_subsidy_id' => $deliverySubsidy->id,
+                'delivery_id'         => $delivery->id,
+                'error'               => $e->getMessage(),
+                'trace'               => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'The shipment could not be deleted. No changes were made. Please try again.');
+        }
+
+        return redirect()
+            ->route('delivery_subsidies.show', $deliverySubsidy)
+            ->with('success', 'Shipment deleted and stock reversed.');
+    }
+
+    /**
      * A non-admin user can access it when the header warehouse OR any of its
      * line-item warehouses OR any dispatch (delivery_items) warehouse belongs
      * to them.

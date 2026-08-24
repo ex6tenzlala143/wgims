@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Approve RIS')
 @section('page-title', 'Approve RIS')
 
@@ -83,47 +83,49 @@
 
                     @if(!$isDone)
                     <div class="form-section-label"><i class="fas fa-truck-fast"></i> Dispatch from (this issuance)</div>
-                    <div class="form-row cols-2">
-                        <div class="form-group">
-                            <label class="form-label">Warehouse <span class="req">*</span></label>
-                            <select name="items[{{ $ri->id }}][warehouse_id]"
-                                    id="wh-select-{{ $ri->id }}"
-                                    class="form-control ris-wh-select {{ $errors->has('items.' . $ri->id . '.warehouse_id') ? 'is-invalid' : '' }}"
-                                    onchange="onWhChange('{{ $ri->id }}')">
-                                <option value="">— Select Warehouse —</option>
-                                @foreach($warehouses as $w)
-                                    <option value="{{ $w->id }}" {{ old('items.' . $ri->id . '.warehouse_id') == $w->id ? 'selected' : '' }}>
-                                        {{ $w->name }}{{ $w->code ? ' (' . $w->code . ')' : '' }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error("items.{$ri->id}.warehouse_id")
-                            <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
-                                <i class="fas fa-exclamation-triangle"></i> {{ $message }}
-                            </small>
-                            @enderror
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Stock Record <span class="req">*</span></label>
-                            <select name="items[{{ $ri->id }}][item_id]"
-                                    id="item-select-{{ $ri->id }}"
-                                    class="form-control {{ $errors->has('items.' . $ri->id . '.item_id') ? 'is-invalid' : '' }}"
-                                    data-restore-id="{{ old('items.' . $ri->id . '.item_id') }}"
-                                    onchange="fillDispatchItem(this, '{{ $ri->id }}')">
-                                <option value="">— Select Warehouse first —</option>
-                            </select>
-                            @error("items.{$ri->id}.item_id")
-                            <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
-                                <i class="fas fa-exclamation-triangle"></i> {{ $message }}
-                            </small>
-                            @enderror
-                            <small id="stock-{{ $ri->id }}" style="color:var(--text-muted);font-size:11px"></small>
-                        </div>
+                    
+                    <!-- Warehouse dropdown - full width row -->
+                    <div class="form-group">
+                        <label class="form-label">Warehouse <span class="req">*</span></label>
+                        <select name="items[{{ $ri->id }}][warehouse_id]"
+                                id="wh-select-{{ $ri->id }}"
+                                class="form-control ris-wh-select {{ $errors->has('items.' . $ri->id . '.warehouse_id') ? 'is-invalid' : '' }}"
+                                data-description="{{ $ri->description ?? ($ri->item?->description ?? '') }}"
+                                onchange="onWhChange('{{ $ri->id }}')">
+                            <option value="">— Select Warehouse —</option>
+                            @foreach($warehouses as $w)
+                                <option value="{{ $w->id }}" {{ old('items.' . $ri->id . '.warehouse_id') == $w->id ? 'selected' : '' }}>
+                                    {{ $w->name }}{{ $w->code ? ' (' . $w->code . ')' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error("items.{$ri->id}.warehouse_id")
+                        <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
+                            <i class="fas fa-exclamation-triangle"></i> {{ $message }}
+                        </small>
+                        @enderror
+                    </div>
+                    
+                    <!-- Stock Record dropdown - full width row below warehouse -->
+                    <div class="form-group">
+                        <label class="form-label">Stock Record <span class="req">*</span></label>
+                        <select name="items[{{ $ri->id }}][item_id]"
+                                id="item-select-{{ $ri->id }}"
+                                class="form-control {{ $errors->has('items.' . $ri->id . '.item_id') ? 'is-invalid' : '' }}"
+                                data-restore-id="{{ old('items.' . $ri->id . '.item_id') }}"
+                                onchange="fillDispatchItem(this, '{{ $ri->id }}')">
+                            <option value="">— Select Warehouse first —</option>
+                        </select>
+                        @error("items.{$ri->id}.item_id")
+                        <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
+                            <i class="fas fa-exclamation-triangle"></i> {{ $message }}
+                        </small>
+                        @enderror
                     </div>
 
-                    <div class="form-row cols-3">
+                    <div class="form-row cols-2">
                         <div class="form-group">
-                            <label class="form-label">Quantity to Issue Now</label>
+                            <label class="form-label">Quantity to Issue Now <span class="req">*</span></label>
                             <input type="number"
                                    name="items[{{ $ri->id }}][quantity_issued]"
                                    id="qty-{{ $ri->id }}"
@@ -138,26 +140,7 @@
                             @enderror
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Unit Cost</label>
-                            <input type="number" name="items[{{ $ri->id }}][unit_cost]"
-                                   id="unit-cost-{{ $ri->id }}" class="form-control" readonly tabindex="-1"
-                                   step="0.01" min="0" placeholder="—">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">ENGAS Unit Cost</label>
-                            <input type="number" name="items[{{ $ri->id }}][engas_unit_cost]"
-                                   id="engas-cost-{{ $ri->id }}" class="form-control"
-                                   min="0" step="0.01" placeholder="—">
-                        </div>
-                    </div>
-                    <div class="form-row cols-2">
-                        <div class="form-group">
-                            <label class="form-label">Expiration Date</label>
-                            <input type="date" name="items[{{ $ri->id }}][expiration_date]"
-                                   id="expiry-date-{{ $ri->id }}" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">DR Number <span class="req">*</span> <span class="hint">(Delivery Receipt — per dispatch)</span></label>
+                            <label class="form-label">DR Number <span class="req">*</span> <span class="hint">(Delivery Receipt)</span></label>
                             <input type="text" name="items[{{ $ri->id }}][dr_number]"
                                    id="dr-number-{{ $ri->id }}"
                                    class="form-control {{ $errors->has('items.' . $ri->id . '.dr_number') ? 'is-invalid' : '' }}"
@@ -170,6 +153,11 @@
                             @enderror
                         </div>
                     </div>
+
+                    <!-- Hidden fields for unit cost, ENGAS cost, and expiration (auto-populated from selected item) -->
+                    <input type="hidden" name="items[{{ $ri->id }}][unit_cost]" id="unit-cost-{{ $ri->id }}">
+                    <input type="hidden" name="items[{{ $ri->id }}][engas_unit_cost]" id="engas-cost-{{ $ri->id }}">
+                    <input type="hidden" name="items[{{ $ri->id }}][expiration_date]" id="expiry-date-{{ $ri->id }}">
                     @else
                         <input type="hidden" name="items[{{ $ri->id }}][quantity_issued]" value="0">
                     @endif
@@ -183,7 +171,7 @@
             <div class="card-body">
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Approved By (Name) <span style="color:red">*</span></label>
+                        <label class="form-label">Approved By (Name) <span class="req">*</span></label>
                         <input type="text" name="approved_by_name" class="form-control" value="{{ old('approved_by_name', auth()->user()->name) }}" required>
                     </div>
                     <div class="form-group">
@@ -191,7 +179,7 @@
                         <input type="text" name="approved_by_designation" class="form-control" value="{{ old('approved_by_designation') }}">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Issued By (Name) <span style="color:red">*</span></label>
+                        <label class="form-label">Issued By (Name) <span class="req">*</span></label>
                         <input type="text" name="issued_by_name" class="form-control" value="{{ old('issued_by_name', auth()->user()->name) }}" required>
                     </div>
                     <div class="form-group">
@@ -270,7 +258,7 @@ function onWhChange(idx, restoreItemId) {
     itemSel.innerHTML = '<option value="">— Loading stock records… —</option>';
     itemSel.disabled = true;
 
-    fetch(`${ITEMS_API_URL}?warehouse_id=${encodeURIComponent(sel.value)}`, {
+    fetch(`${ITEMS_API_URL}?warehouse_id=${encodeURIComponent(sel.value)}&description=${encodeURIComponent(sel.dataset.description || '')}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
     })
     .then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
@@ -283,10 +271,15 @@ function onWhChange(idx, restoreItemId) {
                 data-stock="${i.quantity}"
                 data-sn="${i.stock_number || ''}"
                 data-unit="${i.unit || ''}"
-            >${i.description}${i.stock_number ? ' [' + i.stock_number + ']' : ''} · ₱${Number(i.unit_cost || 0).toFixed(2)} · ${Number(i.quantity).toLocaleString('en-PH', { maximumFractionDigits: 0 })} ${i.unit || ''}</option>`
+            >${i.display_text || i.description}</option>`
         ).join('');
         itemSel.innerHTML = '<option value="">— Select Stock Record —</option>' + opts;
         itemSel.disabled = false;
+
+        // Sync with SearchableSelect component
+        if (window.SS && typeof window.SS.sync === 'function') {
+            window.SS.sync(itemSel);
+        }
 
         // Restore the exact stock record chosen before a validation re-render,
         // so the quantity can be corrected without reselecting anything.
@@ -305,21 +298,17 @@ function onWhChange(idx, restoreItemId) {
 }
 
 function resetDispatchFields(idx) {
-    ['unit-cost', 'engas-cost'].forEach(prefix => {
-        const el = document.getElementById(prefix + '-' + idx);
+    ['unit-cost', 'engas-cost', 'expiry-date'].forEach(id => {
+        const el = document.getElementById(id + '-' + idx);
         if (el) { el.value = ''; }
     });
-    const exp = document.getElementById('expiry-date-' + idx);
-    if (exp) { exp.value = ''; }
 }
 
 function fillDispatchItem(sel, idx) {
     const opt = sel.options[sel.selectedIndex];
-    const stockEl = document.getElementById('stock-' + idx);
 
     if (!opt.value) {
         resetDispatchFields(idx);
-        if (stockEl) { stockEl.textContent = ''; }
         return;
     }
 
@@ -327,19 +316,14 @@ function fillDispatchItem(sel, idx) {
     if (cost) { cost.value = opt.dataset.unitCost || ''; }
 
     const engas = document.getElementById('engas-cost-' + idx);
-    if (engas && !engas.value) { engas.value = opt.dataset.engas || ''; }
+    if (engas) { engas.value = opt.dataset.engas || ''; }
 
     const exp = document.getElementById('expiry-date-' + idx);
-    if (exp && !exp.value) { exp.value = opt.dataset.expiry || ''; }
-
-    if (stockEl) {
-        const stock = parseFloat(opt.dataset.stock || 0);
-        stockEl.textContent = 'Available on this record: ' + Number(stock).toLocaleString('en-PH', { maximumFractionDigits: 0 });
-        stockEl.style.color = stock > 0 ? 'var(--success)' : 'var(--danger)';
-    }
+    if (exp) { exp.value = opt.dataset.expiry || ''; }
 
     const qtyInput = document.getElementById('qty-' + idx);
     if (qtyInput) { qtyInput.max = opt.dataset.stock || ''; }
+    
     checkDispatch(idx);
 }
 

@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit Transfer — ' . $transfer->transfer_number)
 @section('page-title', 'Edit Stock Transfer')
 
@@ -58,7 +58,7 @@
                                    readonly style="background:#f7fafc">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Transfer Date <span style="color:red">*</span></label>
+                            <label class="form-label">Transfer Date <span class="req">*</span></label>
                             <input type="date" name="transfer_date" class="form-control"
                                    value="{{ old('transfer_date', $transfer->transfer_date->format('Y-m-d')) }}" required>
                             @error('transfer_date')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
@@ -99,10 +99,10 @@
                                 <th>Item (Source)</th>
                                 <th>Destination Item</th>
                                 <th>Unit</th>
-                                <th style="width:130px">Requested Qty <span style="color:red">*</span></th>
+                                <th style="width:130px">Requested Qty <span class="req">*</span></th>
                                 <th style="text-align:right">Currently Dispatched</th>
-                                <th style="width:130px">New Dispatched Qty <span style="color:red">*</span></th>
-                                <th style="width:130px">Unit Cost (₱) <span style="color:red">*</span></th>
+                                <th style="width:130px">New Dispatched Qty <span class="req">*</span></th>
+                                <th style="width:130px">Unit Cost (₱) <span class="req">*</span></th>
                                 <th style="text-align:right">New Total</th>
                             </tr>
                         </thead>

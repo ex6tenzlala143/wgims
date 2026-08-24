@@ -24,7 +24,7 @@
         <a href="{{ route('requisitions.print', $requisition->id) }}" class="btn btn-outline" target="_blank"><i class="fas fa-print"></i> Print RIS</a>
         @if(auth()->user()->canWrite())
         <a href="{{ route('requisitions.audit_log', $requisition->id) }}" class="btn btn-outline"><i class="fas fa-history"></i> Correction History</a>
-        <button type="button" class="btn btn-primary" onclick="openCorrectRisModal()"><i class="fas fa-sync-alt"></i> Correct RIS</button>
+        <button type="button" class="btn btn-primary" onclick="openCorrectRisModal()"><i class="fas fa-edit"></i> Edit RIS</button>
         @endif
     </div>
 </div>
@@ -220,14 +220,17 @@
                         $groupQtyIssued = $groupDispatches->sum('quantity_issued');
                         $showAsSubRow = $dispatchGroups->count() > 1; // Multiple cost groups
                     } else {
-                        // Original requisition item (no dispatches or showing the undispatched portion)
-                        $stockNumber = $ri->item?->stock_number ?? '-';
-                        $unit = $ri->unit ?? $ri->item?->unit ?? '-';
-                        $description = $ri->description ?? $ri->item?->description ?? '-';
-                        $warehouse = $ri->warehouse?->name ?? $ri->item?->warehouse?->name ?? '-';
-                        $expiryDate = $ri->expiration_date ?? $ri->item?->expiration_date;
-                        $unitCost = ($ri->unit_cost !== null && $ri->unit_cost > 0) ? $ri->unit_cost : ($ri->item?->unit_cost ?? null);
-                        $engasCost = $ri->engas_unit_cost ?? $ri->item?->engas_unit_cost;
+                        // Original requisition item — NOTHING issued yet. Only
+                        // request-stage data is shown; stock/cost details come
+                        // exclusively from actual dispatch records, never from
+                        // a linked or guessed stock record.
+                        $stockNumber = '-';
+                        $unit = $ri->unit ?? '-';
+                        $description = $ri->description ?? '-';
+                        $warehouse = '-';
+                        $expiryDate = null;  // NO expiration until stock is dispatched
+                        $unitCost = null;    // NO cost until stock is dispatched
+                        $engasCost = null;   // NO ENGAS cost until stock is dispatched
                         $riSub = null;
                         if ($ri->item && in_array($ri->item->source_subsidy_status, ['deleted', 'archived'], true)) {
                             $riSub = $ri->item;
@@ -356,7 +359,10 @@
 
                     <td>
                         @if(!$showAsSubRow)
-                            @if($ri->stock_available)
+                            @if($ri->dispatchItems->isEmpty() && !$ri->quantity_issued)
+                                {{-- Availability is only known once stock is allocated at issuance --}}
+                                <span style="color:var(--text-muted);font-size:12px">—</span>
+                            @elseif($ri->stock_available)
                             <span class="badge badge-success"><i class="fas fa-check"></i> Yes</span>
                             @else
                             <span class="badge badge-danger"><i class="fas fa-times"></i> No</span>
@@ -405,8 +411,6 @@
                                 @foreach($drList as $dr)
                                 <code style="font-size:12px;margin-right:4px">{{ $dr }}</code>
                                 @endforeach
-                            @elseif($ri->dr_number)
-                                <code style="font-size:12px">{{ $ri->dr_number }}</code>
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
@@ -429,10 +433,9 @@
             </tbody>
             @php
                 $grandTotal = $requisition->items->sum(function ($ri) {
-                    $cost = ($ri->unit_cost !== null && $ri->unit_cost > 0)
-                        ? $ri->unit_cost
-                        : ($ri->item?->unit_cost ?? 0);
-                    return $cost * $ri->quantity_requested;
+                    // Cost comes exclusively from dispatch records, never from
+                    // the requisition item itself.  Pending lines contribute 0.
+                    return $ri->dispatchItems->sum(fn($di) => $di->quantity_issued * $di->unit_cost);
                 });
                 $labelColspan = 7 + (auth()->user()->hasAdminAccess() ? 2 : 0);
             @endphp
@@ -481,9 +484,9 @@
                         <i class="fas fa-warehouse"></i> {{ $ri->dispatchItems->pluck('item.warehouse.name')->filter()->unique()->implode(', ') }}
                     </span>
                 @endif
-                @if($ri->dr_number)
+                @if($ri->dispatchItems->pluck('dr_number')->filter()->isNotEmpty())
                     <span style="font-size:11px;background:#eef2ff;padding:1px 6px;border-radius:4px;color:#4f46e5;margin-left:6px">
-                        <i class="fas fa-file-alt"></i> DR {{ $ri->dr_number }}
+                        <i class="fas fa-file-alt"></i> DR {{ $ri->dispatchItems->pluck('dr_number')->filter()->unique()->implode(', ') }}
                     </span>
                 @endif
             </div>
@@ -611,10 +614,25 @@
                         </td>
                         @if(auth()->user()->canWrite())
                         <td style="padding:10px 14px;white-space:nowrap">
+                            @if($di->item)
+                            <a href="{{ route('stock_cards.item_history', $di->item->id) }}"
+                               class="btn btn-sm btn-outline btn-icon"
+                               title="View Stock Card{{ $di->item->stock_number ? ': '.$di->item->stock_number : '' }}">
+                                <i class="fas fa-book"></i>
+                            </a>
+                            @endif
                             <button type="button" class="btn btn-sm btn-outline btn-icon"
                                     onclick="openDispatchEditModal({{ $di->id }})"
                                     title="Edit this issued item (warehouse, quantity, costs, DR, expiry)">
                                 <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline btn-icon dd-delete-btn"
+                                    onclick="openDispatchDeleteModal({{ $di->id }})"
+                                    data-dispatch-id="{{ $di->id }}"
+                                    data-label="{{ trim(($di->item?->stock_number ? $di->item->stock_number.' · ' : '').($di->item?->description ?? ($ri->description ?? ''))) }}"
+                                    data-qty="{{ $di->quantity_issued }}"
+                                    title="Delete this issued item and return its quantity to the originating stock">
+                                <i class="fas fa-trash" style="color:var(--danger)"></i>
                             </button>
                         </td>
                         @endif
@@ -658,65 +676,6 @@
 </div>
 @endif
 
-<!-- Correction History -->
-@if(auth()->user()->canWrite() && $requisition->auditLogs()->exists())
-@php $recentCorrections = $requisition->auditLogs()->with('user')->take(5)->get(); @endphp
-<div class="card" style="margin-bottom:24px">
-    <div class="card-header">
-        <h3><i class="fas fa-history"></i> Recent Corrections</h3>
-        <a href="{{ route('requisitions.audit_log', $requisition->id) }}" class="btn btn-sm btn-outline">View Full History</a>
-    </div>
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date / Time</th>
-                    <th>Corrected By</th>
-                    <th>Changes</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($recentCorrections as $log)
-                <tr>
-                    <td style="white-space:nowrap;font-size:12px">
-                        {{ $log->created_at->format('M d, Y') }}<br>
-                        <span style="color:var(--text-muted)">{{ $log->created_at->format('h:i A') }}</span>
-                    </td>
-                    <td style="font-size:13px">
-                        <strong>{{ $log->user->name ?? '—' }}</strong><br>
-                        <span style="font-size:11px;color:var(--text-muted)">{{ $log->user?->getRoleLabel() ?? '' }}</span>
-                    </td>
-                    <td style="font-size:12px">
-                        @php
-                            $lines = collect($log->changed_fields)->map(function ($change, $field) {
-                                $label = match (true) {
-                                    str_starts_with($field, 'items.') && str_ends_with($field, '.item') => 'Item',
-                                    str_starts_with($field, 'items.') => 'Requested Qty',
-                                    $field === 'total_requested' => 'Total Requested',
-                                    $field === 'status' => 'RIS Status',
-                                    default => ucfirst(str_replace('_', ' ', $field)),
-                                };
-                                return '<strong>'.$label.'</strong>: '
-                                    .(is_numeric($change['old'] ?? null) ? number_format((float) $change['old'], 2) : ($change['old'] ?? '—'))
-                                    .' → '
-                                    .(is_numeric($change['new'] ?? null) ? number_format((float) $change['new'], 2) : ($change['new'] ?? '—'));
-                            })->take(4);
-                        @endphp
-                        <span>{!! $lines->implode('<br>') !!}</span>
-                        @if(count($log->changed_fields) > 4)
-                        <a href="{{ route('requisitions.audit_log', $requisition->id) }}" style="display:block;margin-top:2px;font-size:11px">
-                            + {{ count($log->changed_fields) - 4 }} more
-                        </a>
-                        @endif
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
-</div>
-@endif
-
 <!-- Signatories -->
 <div class="card">
     <div class="card-header">
@@ -744,5 +703,6 @@
 
 @if(auth()->user()->canWrite())
 @include('requisitions._dispatch_edit_modal')
+@include('requisitions._dispatch_delete_modal')
 @include('requisitions._correct_ris_modal')
 @endif

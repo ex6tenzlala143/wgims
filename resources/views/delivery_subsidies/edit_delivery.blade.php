@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit Shipment')
 @section('page-title', 'Edit Shipment')
 
@@ -40,13 +40,13 @@
                 <div class="card-body">
                     <div class="form-row cols-2">
                         <div class="form-group">
-                            <label class="form-label">Delivery Date <span style="color:red">*</span></label>
+                            <label class="form-label">Delivery Date <span class="req">*</span></label>
                             <input type="date" name="delivery_date" class="form-control"
                                    value="{{ old('delivery_date', $delivery->delivery_date->format('Y-m-d')) }}" required>
                             @error('delivery_date')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Qty Delivered <span style="color:red">*</span>
+                            <label class="form-label">Qty Delivered <span class="req">*</span>
                                 <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— auto = sum of items below</span>
                             </label>
                             <input type="number" name="quantity_delivered" id="qty-delivered-header"
@@ -65,7 +65,7 @@
                                    style="background:#f7fafc;color:var(--text-muted)" readonly>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Condition Status <span style="color:red">*</span></label>
+                            <label class="form-label">Condition Status <span class="req">*</span></label>
                             <select name="condition_status" class="form-control" required>
                                 <option value="good"    {{ old('condition_status', $delivery->condition_status) === 'good'    ? 'selected' : '' }}>Good</option>
                                 <option value="damaged" {{ old('condition_status', $delivery->condition_status) === 'damaged' ? 'selected' : '' }}>Damaged</option>
@@ -124,7 +124,7 @@
                         {{-- Row 1: Warehouse · Qty Delivered · Unit Cost --}}
                         <div class="shipment-item-grid">
                             <div class="form-group">
-                                <label class="form-label">Warehouse <span style="color:red">*</span></label>
+                                <label class="form-label">Warehouse <span class="req">*</span></label>
                                 <select name="items[{{ $idx }}][warehouse_id]" class="form-control" required>
                                     <option value="">— Select —</option>
                                     @foreach($warehouses as $wh)
@@ -141,7 +141,7 @@
                                 @php
                                     $oldQtyVal = old("items.{$idx}.quantity_delivered", $di->quantity_delivered);
                                 @endphp
-                                <label class="form-label">Quantity Delivered <span style="color:red">*</span></label>
+                                <label class="form-label">Quantity Delivered <span class="req">*</span></label>
                                 <input type="number"
                                        name="items[{{ $idx }}][quantity_delivered]"
                                        id="qty-{{ $idx }}"
@@ -161,7 +161,7 @@
                                 @enderror
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Unit Cost (₱) <span style="color:red">*</span></label>
+                                <label class="form-label">Unit Cost (₱) <span class="req">*</span></label>
                                 <input type="number"
                                        name="items[{{ $idx }}][unit_cost]"
                                        id="cost-{{ $idx }}"
@@ -178,7 +178,7 @@
                         {{-- Row 2: ENGAS Unit Cost · DR No. · Expiration --}}
                         <div class="shipment-item-grid">
                             <div class="form-group">
-                                <label class="form-label">ENGAS Unit Cost (₱) <span style="color:red">*</span></label>
+                                <label class="form-label">ENGAS Unit Cost (₱) <span class="req">*</span></label>
                                 <input type="number"
                                        name="items[{{ $idx }}][engas_unit_cost]"
                                        id="engas-{{ $idx }}"
@@ -191,7 +191,7 @@
                                 @enderror
                             </div>
                             <div class="form-group">
-                                <label class="form-label">DR No. <span style="color:red">*</span></label>
+                                <label class="form-label">DR No. <span class="req">*</span></label>
                                 <input type="text"
                                        name="items[{{ $idx }}][dr_number]"
                                        id="dr-{{ $idx }}"

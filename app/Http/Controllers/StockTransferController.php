@@ -492,9 +492,40 @@ class StockTransferController extends Controller
             ->where('quantity', '>', 0)
             ->where('is_active', true)
             ->orderBy('description')
-            ->get(['id', 'description', 'unit', 'category', 'unit_cost', 'engas_unit_cost', 'quantity', 'stock_number']);
+            ->get(['id', 'description', 'unit', 'category', 'unit_cost', 'engas_unit_cost', 'quantity', 'stock_number', 'expiration_date']);
 
-        return response()->json($items);
+        return response()->json($items->map(function ($i) {
+            $expiryFormatted = $i->expiration_date ? $i->expiration_date->format('M d, Y') : '—';
+            $engasDisplay = $i->engas_unit_cost !== null 
+                ? '₱' . number_format($i->engas_unit_cost, 2) 
+                : '—';
+            
+            // Build enhanced display text for dropdown option
+            $displayText = sprintf(
+                "%s\nQty: %s · ₱%s · ENGAS ₱%s · Exp: %s",
+                $i->description,
+                number_format($i->quantity, 0),
+                number_format($i->unit_cost, 2),
+                $engasDisplay,
+                $expiryFormatted
+            );
+            
+            return [
+                'id'             => $i->id,
+                'description'    => $i->description,
+                'display_text'   => $displayText,  // Enhanced display for dropdown
+                'unit'           => $i->unit,
+                'category'       => $i->category,
+                'unit_cost'      => $i->unit_cost,
+                'unit_cost_formatted' => '₱' . number_format($i->unit_cost, 2),
+                'engas_unit_cost' => $i->engas_unit_cost,
+                'engas_formatted' => $engasDisplay,
+                'quantity'       => $i->quantity,
+                'stock_number'   => $i->stock_number,
+                'expiration_date' => $i->expiration_date?->format('Y-m-d'),
+                'expiry_formatted' => $expiryFormatted,
+            ];
+        }));
     }
 
     /**

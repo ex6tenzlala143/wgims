@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit Delivery/Subsidy')
 @section('page-title', 'Edit Delivery/Subsidy')
 
@@ -34,13 +34,13 @@
             <div class="card-body">
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Date <span style="color:red">*</span></label>
+                        <label class="form-label">Date <span class="req">*</span></label>
                         <input type="date" name="date" class="form-control" value="{{ old('date', $deliverySubsidy->date?->format('Y-m-d')) }}" required>
                     </div>
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Supplier/Subsidy <span style="color:red">*</span></label>
+                        <label class="form-label">Supplier/Subsidy <span class="req">*</span></label>
                         <select name="supplier_id" class="form-control" required>
                             @foreach($suppliers as $s)
                             <option value="{{ $s->id }}" {{ old('supplier_id', $deliverySubsidy->supplier_id)==$s->id?'selected':'' }}>{{ $s->name }}</option>
@@ -50,7 +50,7 @@
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">RIS No. <span style="color:red">*</span></label>
+                        <label class="form-label">RIS No. <span class="req">*</span></label>
                         <input type="text" name="ris_number" class="form-control" value="{{ old('ris_number', $deliverySubsidy->ris_number) }}" placeholder="e.g. RIS-2026-001" required>
                     </div>
                     <div class="form-group">
@@ -60,7 +60,7 @@
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Status <span style="color:red">*</span></label>
+                        <label class="form-label">Status <span class="req">*</span></label>
                         <select name="status" class="form-control" required>
                             <option value="pending" {{ old('status', $deliverySubsidy->status)=='pending'?'selected':'' }}>Pending</option>
                             <option value="partial" {{ old('status', $deliverySubsidy->status)=='partial'?'selected':'' }}>Partial Delivery</option>
@@ -76,7 +76,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Qty Requested <span style="color:red">*</span>
+                        <label class="form-label">Qty Requested <span class="req">*</span>
                             <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— total target for this request</span>
                         </label>
                         <input type="number" name="quantity_requested" class="form-control"
@@ -101,7 +101,7 @@
                 <div class="table-wrapper">
                     <table class="line-items-table" id="items-table">
                         <thead>
-                            <tr><th>Item</th><th>Unit</th><th>Qty</th><th>Unit Cost (₱)</th><th>Amount (₱)</th><th>Warehouse <span style="color:red">*</span></th><th></th></tr>
+                            <tr><th>Item</th><th>Unit</th><th>Qty</th><th>Unit Cost (₱)</th><th>Amount (₱)</th><th>Warehouse <span class="req">*</span></th><th></th></tr>
                         </thead>
                         <tbody id="items-body">
                             @foreach($deliverySubsidy->items as $idx => $poi)

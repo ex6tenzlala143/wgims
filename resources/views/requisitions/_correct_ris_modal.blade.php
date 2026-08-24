@@ -3,7 +3,7 @@
     .cr-modal-overlay {
         position: fixed;
         inset: 0;
-        z-index: 1400;
+        z-index: 1410;
         background: rgba(15, 23, 42, 0.55);
         backdrop-filter: blur(3px);
         -webkit-backdrop-filter: blur(3px);
@@ -205,7 +205,7 @@
     <div class="cr-modal-shell" role="dialog" aria-modal="true" aria-labelledby="correctRisTitle">
         <div class="cr-modal-header">
             <div style="min-width:0">
-                <h2 id="correctRisTitle"><i class="fas fa-sync-alt"></i> Correct RIS <span id="cr-ris-ref" style="color:var(--text-muted);font-weight:600"></span></h2>
+                <h2 id="correctRisTitle"><i class="fas fa-edit"></i> Edit RIS <span id="cr-ris-ref" style="color:var(--text-muted);font-weight:600"></span></h2>
                 <div class="cr-modal-subtitle">
                     Fix the request itself — header and requested quantities. Existing
                     dispatches, DR numbers and stock deductions stay untouched.

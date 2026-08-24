@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Add Warehouse')
 @section('page-title', 'Add Warehouse')
 
@@ -16,12 +16,12 @@
         <form action="{{ route('warehouses.store') }}" method="POST">
             @csrf
             <div class="form-group">
-                <label class="form-label">Warehouse Name <span style="color:red">*</span></label>
+                <label class="form-label">Warehouse Name <span class="req">*</span></label>
                 <input type="text" name="name" class="form-control {{ $errors->has('name') ? 'is-invalid' : '' }}" value="{{ old('name') }}" required>
                 @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
             <div class="form-group">
-                <label class="form-label">Warehouse Code <span style="color:red">*</span></label>
+                <label class="form-label">Warehouse Code <span class="req">*</span></label>
                 <input type="text" name="code" class="form-control {{ $errors->has('code') ? 'is-invalid' : '' }}" value="{{ old('code') }}" required placeholder="e.g. CFA, RC, YC" style="text-transform:uppercase">
                 <small style="color:var(--text-muted);font-size:11px">Short unique code used for stock number generation.</small>
                 @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror

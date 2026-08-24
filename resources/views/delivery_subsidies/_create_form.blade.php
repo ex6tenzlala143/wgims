@@ -1,4 +1,4 @@
-@php
+﻿@php
     $createModalOpen = $createModalOpen ?? false;
     $modalOnlyPage   = $modalOnlyPage ?? false;
 
@@ -65,11 +65,11 @@
                             <div class="card-body">
                                 <div class="form-row cols-2">
                                     <div class="form-group">
-                                        <label class="form-label">Date <span style="color:red">*</span></label>
+                                        <label class="form-label">Date <span class="req">*</span></label>
                                         <input type="date" name="date" class="form-control" value="{{ old('date', date('Y-m-d')) }}" required>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Supplier/Subsidy <span style="color:red">*</span></label>
+                                        <label class="form-label">Supplier/Subsidy <span class="req">*</span></label>
                                         <select name="supplier_id" class="form-control" required>
                                             <option value="">— Select Supplier/Subsidy —</option>
                                             @foreach($suppliers as $s)
@@ -80,7 +80,7 @@
                                 </div>
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label class="form-label">RIS No. <span style="color:red">*</span></label>
+                                        <label class="form-label">RIS No. <span class="req">*</span></label>
                                         <input type="text" name="ris_number" class="form-control" value="{{ old('ris_number') }}" placeholder="e.g. RIS-2026-001" required>
                                     </div>
                                 </div>
@@ -102,9 +102,9 @@
                                     <table class="line-items-table" id="items-table">
                                         <thead>
                                             <tr>
-                                                <th style="width:44%">Description <span style="color:red">*</span></th>
-                                                <th style="width:12%">Unit <span style="color:red">*</span></th>
-                                                <th style="width:18%">Category <span style="color:red">*</span></th>
+                                                <th style="width:44%">Description <span class="req">*</span></th>
+                                                <th style="width:12%">Unit <span class="req">*</span></th>
+                                                <th style="width:18%">Category <span class="req">*</span></th>
                                                 <th style="width:20%">Quantity Requested</th>
                                                 <th style="width:6%"></th>
                                             </tr>
@@ -170,276 +170,6 @@
     </div>
 </div>
 
-@push('styles')
-<style>
-    .modal-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 1200;
-        background: rgba(15, 23, 42, 0.55);
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding: 20px;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.25s ease, visibility 0.25s ease;
-    }
-    .modal-overlay.open {
-        opacity: 1;
-        visibility: visible;
-    }
-    .modal-shell {
-        width: 95%;
-        max-width: 1560px;
-        height: calc(100vh - 40px);
-        max-height: calc(100vh - 40px);
-        background: #ffffff;
-        border-radius: 14px;
-        box-shadow: 0 24px 70px rgba(2, 6, 23, 0.35);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        transform: translateY(28px) scale(0.985);
-        opacity: 0;
-        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.2s ease;
-    }
-    .modal-overlay.open .modal-shell {
-        transform: none;
-        opacity: 1;
-    }
-    .modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 16px 24px;
-        border-bottom: 1px solid var(--border);
-        background: linear-gradient(180deg, #ffffff, #f9fbfd);
-        flex-shrink: 0;
-    }
-    .modal-header h2 {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--text);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0;
-    }
-    .modal-header h2 i { color: var(--primary); }
-    .modal-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
-    .modal-close {
-        background: none;
-        border: none;
-        cursor: pointer;
-        color: var(--text-muted);
-        font-size: 18px;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        transition: all 0.15s;
-    }
-    .modal-close:hover { background: #fee2e2; color: var(--danger); }
-    .modal-shell > form {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-height: 0;
-    }
-    .modal-body {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        padding: 20px 24px;
-        background: #f8fafc;
-        -webkit-overflow-scrolling: touch;
-    }
-    .modal-footer {
-        flex-shrink: 0;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 12px;
-        padding: 14px 24px;
-        border-top: 1px solid var(--border);
-        background: #ffffff;
-    }
-    body.modal-open { overflow: hidden; }
-
-    .subsidy-form-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 18px;
-        align-items: start;
-    }
-    .subsidy-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 20px;
-        flex-wrap: wrap;
-        padding: 14px 20px;
-        background: var(--card-bg, var(--surface));
-        border: 1px solid var(--border);
-        border-radius: 10px;
-    }
-    .summary-left { flex-shrink: 0; }
-    .summary-note { font-size: 12.5px; color: var(--text-muted); line-height: 1.6; max-width: 640px; }
-    .subsidy-form .form-section { margin-bottom: 20px; }
-    .subsidy-form .form-section:last-child { margin-bottom: 0; }
-
-    /* Line Items = a dedicated workspace, not a cramped table */
-    .modal-body .line-items-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-    .modal-body .line-items-table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: var(--surface-soft);
-        box-shadow: 0 1px 0 var(--border);
-    }
-    .modal-body .table-wrapper {
-        /* Removed fixed min-height that was causing the blank space */
-        max-height: calc(100vh - 420px);
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    .modal-body .line-items-table th,
-    .modal-body .line-items-table td { padding: 18px 16px; }
-    .modal-body .line-items-table td { border-bottom: 1px solid var(--border); }
-    .modal-body .line-items-table tbody tr:last-child td { border-bottom: none; }
-    .modal-body .line-items-table input,
-    .modal-body .line-items-table select {
-        width: 100%;
-        padding: 13px 14px;
-        font-size: 14px;
-        border-radius: 7px;
-        border-color: #cbd5e0;
-        box-sizing: border-box;
-    }
-    .modal-body .line-items-table .remove-row {
-        width: 40px;
-        height: 40px;
-        border-radius: 7px;
-        border: 1px solid #feb2b2;
-        background: #fff5f5;
-        color: var(--danger);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 15px;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-    .modal-body .line-items-table .remove-row:hover { background: #fed7d7; }
-
-    /* Custom Autocomplete Dropdown Styles */
-    .autocomplete-wrapper {
-        position: relative;
-        width: 100%;
-    }
-    .autocomplete-dropdown {
-        position: fixed;
-        max-height: 320px;
-        min-width: 300px;
-        overflow-y: auto;
-        background: #ffffff;
-        border: 1px solid #cbd5e0;
-        border-radius: 7px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-        z-index: 9999;
-        display: none;
-    }
-    .autocomplete-dropdown.open {
-        display: block;
-    }
-    .autocomplete-item {
-        padding: 12px 14px;
-        cursor: pointer;
-        border-bottom: 1px solid #f0f0f0;
-        transition: background-color 0.1s ease;
-        font-size: 14px;
-        color: #2d3748;
-    }
-    .autocomplete-item:last-child {
-        border-bottom: none;
-    }
-    .autocomplete-item:hover,
-    .autocomplete-item.selected {
-        background-color: #ebf8ff;
-        color: var(--primary);
-    }
-    .autocomplete-item .item-category {
-        font-size: 11px;
-        color: #718096;
-        margin-top: 2px;
-    }
-    .autocomplete-no-results {
-        padding: 16px 14px;
-        text-align: center;
-        color: #718096;
-        font-size: 13px;
-    }
-    .desc-input:focus {
-        border-color: var(--primary);
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-    }
-
-    @media (max-width: 1150px) {
-        .subsidy-summary { align-items: flex-start; }
-    }
-    /* On small screens stack the item fields instead of cramming them */
-    @media (max-width: 820px) {
-        .modal-body .line-items-table,
-        .modal-body .line-items-table tbody,
-        .modal-body .line-items-table tr,
-        .modal-body .line-items-table td {
-            display: block;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        .modal-body .line-items-table thead { display: none; }
-        .modal-body .line-items-table tr {
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 14px;
-            background: #ffffff;
-        }
-        .modal-body .line-items-table td { padding: 8px 4px; border: none; }
-        .modal-body .line-items-table td::before {
-            content: attr(data-label);
-            display: block;
-            font-size: 11.5px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-        .modal-body .line-items-table td[data-label=""]::before,
-        .modal-body .line-items-table td:not([data-label])::before { display: none; }
-    }
-    @media (max-width: 640px) {
-        .modal-overlay { padding: 10px; }
-        .modal-shell { width: 100%; height: calc(100vh - 20px); max-height: calc(100vh - 20px); }
-        .modal-header { padding: 12px 16px; }
-        .modal-body { padding: 14px; }
-        .modal-footer { padding: 12px 16px; }
-    }
-</style>
-@endpush
 
 @push('scripts')
 <script>

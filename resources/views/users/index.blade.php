@@ -80,7 +80,10 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">No users found.</td></tr>
+                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">
+                    <i class="fas fa-users-gear" style="font-size:32px;display:block;margin-bottom:8px;opacity:.3"></i>
+                    No users found.
+                </td></tr>
                 @endforelse
             </tbody>
         </table>

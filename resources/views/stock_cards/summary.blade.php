@@ -6,6 +6,7 @@
 <div class="page-header">
     <div>
         <h1>Stock Summary — All Categories</h1>
+        <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / Stock Cards</div>
     </div>
 </div>
 

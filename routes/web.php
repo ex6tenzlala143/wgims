@@ -81,6 +81,7 @@ Route::middleware('auth')->group(function () {
         Route::middleware('admin')->group(function () {
             Route::get('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}/edit', [DeliverySubsidyController::class, 'editDelivery'])->name('delivery_subsidies.edit_delivery');
             Route::put('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}',      [DeliverySubsidyController::class, 'updateDelivery'])->name('delivery_subsidies.update_delivery');
+            Route::delete('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}',   [DeliverySubsidyController::class, 'destroyDelivery'])->name('delivery_subsidies.destroy_delivery');
             Route::get('/delivery-subsidies/{deliverySubsidy}/audit-log',                  [DeliverySubsidyController::class, 'auditLog'])->name('delivery_subsidies.audit_log');
         });
     });
@@ -103,6 +104,9 @@ Route::middleware('auth')->group(function () {
         // Dispatch edit endpoints (must be before {requisition} wildcard)
         Route::get('/requisitions/dispatch/{dispatch}/edit-data', [RequisitionController::class, 'dispatchEditData'])->name('requisitions.dispatch_edit_data');
         Route::put('/requisitions/dispatch/{dispatch}',           [RequisitionController::class, 'updateDispatch'])->name('requisitions.dispatch_update');
+
+        // Admin-only: delete one dispatched RIS item and reverse its inventory effect
+        Route::delete('/requisitions/dispatch/{dispatch}',        [RequisitionController::class, 'destroyDispatch'])->name('requisitions.dispatch_destroy');
         
         // Requisition edit endpoints
         Route::get('/requisitions/{requisition}/edit',            [RequisitionController::class, 'edit'])->name('requisitions.edit');

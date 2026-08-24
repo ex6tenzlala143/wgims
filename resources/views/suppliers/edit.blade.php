@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit Supplier')
 @section('page-title', 'Edit Supplier')
 
@@ -17,7 +17,7 @@
             @csrf @method('PUT')
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Supplier Name <span style="color:red">*</span></label>
+                    <label class="form-label">Supplier Name <span class="req">*</span></label>
                     <input type="text" name="name" class="form-control" value="{{ old('name', $supplier->name) }}" required>
                 </div>
                 <div class="form-group">

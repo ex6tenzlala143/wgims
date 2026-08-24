@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Items')
 @section('page-title', 'Items')
 
@@ -161,7 +161,7 @@
                             @endif
                             @if(auth()->user()->canWrite())
                             <a href="{{ route('items.edit', $item->id) }}" class="btn btn-sm btn-outline btn-icon" title="Edit"><i class="fas fa-edit"></i></a>
-                            <form action="{{ route('items.destroy', $item->id) }}" method="POST" onsubmit="return confirm('Delete this item?')">
+                            <form action="{{ route('items.destroy', $item->id) }}" method="POST" onsubmit="return confirm('Delete this item?\n\nThis will permanently remove the item record. If this item has stock card entries, those references will remain. This action cannot be undone.')"  style="display:inline">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                             </form>
@@ -178,7 +178,7 @@
                         </div>
                         <table style="width:100%;font-size:12px;border-collapse:collapse">
                             <thead>
-                                <tr style="background:#e2e8f0">
+                                <tr style="background:var(--border-strong)">
                                     <th style="padding:6px;text-align:left">Stock No.</th>
                                     <th style="padding:6px;text-align:left">Description</th>
                                     <th style="padding:6px;text-align:right">Quantity</th>

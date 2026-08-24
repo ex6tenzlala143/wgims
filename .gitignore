@@ -33,3 +33,6 @@ Thumbs.db
 test_*.php
 verify_*.php
 backup_*.bat
+
+# OpenCode local config and dependencies
+.opencode/

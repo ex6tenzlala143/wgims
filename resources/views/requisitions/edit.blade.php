@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit RIS')
 @section('page-title', 'Edit Requisition')
 
@@ -24,14 +24,14 @@
                         <input type="text" class="form-control" value="{{ $requisition->ris_code ?? $requisition->ris_id }}" readonly style="background:var(--surface-soft);font-family:monospace;color:var(--primary);font-weight:700">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">RIS No. <span style="color:red">*</span></label>
+                        <label class="form-label">RIS No. <span class="req">*</span></label>
                         <input type="text" name="ris_number" class="form-control {{ $errors->has('ris_number') ? 'is-invalid' : '' }}" value="{{ old('ris_number', $requisition->ris_number) }}" required>
                         @error('ris_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Date Requested <span style="color:red">*</span></label>
+                        <label class="form-label">Date Requested <span class="req">*</span></label>
                         <input type="date" name="date_requested" class="form-control" value="{{ old('date_requested', $requisition->date_requested->format('Y-m-d')) }}" required>
                     </div>
                     <div class="form-group">
@@ -86,7 +86,7 @@
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Status <span style="color:red">*</span></label>
+                        <label class="form-label">Status <span class="req">*</span></label>
                         <select name="status" class="form-control" required>
                             <option value="pending"             {{ old('status', $requisition->status) == 'pending'             ? 'selected' : '' }}>Pending</option>
                             <option value="approved"            {{ old('status', $requisition->status) == 'approved'            ? 'selected' : '' }}>Approved</option>
@@ -100,7 +100,7 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Purpose <span style="color:red">*</span></label>
+                    <label class="form-label">Purpose <span class="req">*</span></label>
                     <textarea name="purpose" class="form-control @error('purpose') is-invalid @enderror" rows="2" required>{{ old('purpose', $requisition->purpose) }}</textarea>
                     @error('purpose')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>

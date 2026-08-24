@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Add Item')
 @section('page-title', 'Add Item')
 
@@ -19,7 +19,7 @@
             {{-- Row 1: Description + Expiration Date --}}
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Description <span style="color:red">*</span></label>
+                    <label class="form-label">Description <span class="req">*</span></label>
                     <input type="text" name="description"
                         class="form-control {{ $errors->has('description') ? 'is-invalid' : '' }}"
                         value="{{ old('description') }}" placeholder="Item description" required>
@@ -38,7 +38,7 @@
             {{-- Row 2: Unit + Category --}}
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Unit of Measurement <span style="color:red">*</span></label>
+                    <label class="form-label">Unit of Measurement <span class="req">*</span></label>
                     <select name="unit" class="form-control {{ $errors->has('unit') ? 'is-invalid' : '' }}" required>
                         <option value="">— Select Unit —</option>
                         @foreach(App\Models\Item::UNITS as $key => $label)
@@ -49,7 +49,7 @@
                     <small style="color:var(--text-muted);font-size:11px">Select the appropriate unit of measurement.</small>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Category <span style="color:red">*</span></label>
+                    <label class="form-label">Category <span class="req">*</span></label>
                     <select name="category" id="category"
                         class="form-control {{ $errors->has('category') ? 'is-invalid' : '' }}"
                         required onchange="fillAccountCode()">
@@ -73,7 +73,7 @@
                     <small style="color:var(--text-muted);font-size:11px">Automatically filled based on category.</small>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Warehouse Assignment <span style="color:red">*</span></label>
+                    <label class="form-label">Warehouse Assignment <span class="req">*</span></label>
                     @if(auth()->user()->hasAdminAccess())
                     <select name="warehouse_id" class="form-control {{ $errors->has('warehouse_id') ? 'is-invalid' : '' }}" required>
                         <option value="">— Select Warehouse —</option>

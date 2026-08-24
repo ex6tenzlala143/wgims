@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Item Categories')
 @section('page-title', 'Item Categories')
 
@@ -23,18 +23,18 @@
                 <form action="{{ route('item_categories.store') }}" method="POST" id="add-form">
                     @csrf
                     <div class="form-group">
-                        <label class="form-label">Category Label <span style="color:red">*</span>
+                        <label class="form-label">Category Label <span class="req">*</span>
                             <span style="font-size:11px;color:var(--text-muted);font-weight:normal">— display name shown everywhere</span>
                         </label>
                         <input type="text" name="label" class="form-control {{ $errors->has('label') ? 'is-invalid' : '' }}"
                                value="{{ old('label') }}" placeholder="e.g. Welfare Goods for Distribution (FOOD)" required>
-                        @error('label')<div style="color:var(--danger);font-size:12px;margin-top:3px">{{ $message }}</div>@enderror
+                        @error('label')<div class="invalid-feedback" style="display:block">{{ $message }}</div>@enderror
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Account Code <span style="color:red">*</span></label>
+                        <label class="form-label">Account Code <span class="req">*</span></label>
                         <input type="text" name="account_code" class="form-control {{ $errors->has('account_code') ? 'is-invalid' : '' }}"
                                value="{{ old('account_code') }}" placeholder="e.g. 1040202000-03" required>
-                        @error('account_code')<div style="color:var(--danger);font-size:12px;margin-top:3px">{{ $message }}</div>@enderror
+                        @error('account_code')<div class="invalid-feedback" style="display:block">{{ $message }}</div>@enderror
                     </div>
                     <div class="form-group">
                         <label class="form-label">Key
@@ -42,7 +42,7 @@
                         </label>
                         <input type="text" name="key" class="form-control {{ $errors->has('key') ? 'is-invalid' : '' }}"
                                value="{{ old('key') }}" placeholder="e.g. medicine (auto-generated if blank)">
-                        @error('key')<div style="color:var(--danger);font-size:12px;margin-top:3px">{{ $message }}</div>@enderror
+                        @error('key')<div class="invalid-feedback" style="display:block">{{ $message }}</div>@enderror
                     </div>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Category</button>
                 </form>
@@ -61,11 +61,11 @@
                 <form action="" method="POST" id="edit-form">
                     @csrf @method('PUT')
                     <div class="form-group">
-                        <label class="form-label">Category Label <span style="color:red">*</span></label>
+                        <label class="form-label">Category Label <span class="req">*</span></label>
                         <input type="text" name="label" id="edit-label" class="form-control" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Account Code <span style="color:red">*</span></label>
+                        <label class="form-label">Account Code <span class="req">*</span></label>
                         <input type="text" name="account_code" id="edit-account-code" class="form-control" required>
                     </div>
                     <div class="form-group">
@@ -204,7 +204,7 @@
                                     @csrf
                                     <input type="hidden" name="item_category_id" value="{{ $cat->id }}">
                                     <div style="flex:1;min-width:300px">
-                                        <label class="form-label" style="font-size:12px">Item Name / Description <span style="color:red">*</span></label>
+                                        <label class="form-label" style="font-size:12px">Item Name / Description <span class="req">*</span></label>
                                         <input type="text" name="name" class="form-control" placeholder="e.g. Bond Paper A4 (Account Code: {{ $cat->account_code }})" value="{{ old('item_category_id') == $cat->id ? old('name') : '' }}" required>
                                         <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
                                             <i class="fas fa-info-circle"></i> Account Code will automatically inherit from category: <strong>{{ $cat->account_code }}</strong>

@@ -14,14 +14,16 @@
 </div>
 
 <div class="card">
-    <div class="card-header">
-        <form method="GET" class="filters-bar" style="margin:0">
-            <div class="search-input">
-                <i class="fas fa-search"></i>
-                <input type="text" name="search" class="form-control" placeholder="Search suppliers..." value="{{ request('search') }}">
+    <div class="card-header-filters">
+        <form method="GET" style="margin:0">
+            <div class="search-row">
+                <div class="search-input">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="search" class="form-control" placeholder="Search suppliers..." value="{{ request('search') }}">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+                <a href="{{ route('suppliers.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
             </div>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-            <a href="{{ route('suppliers.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
         </form>
     </div>
     <div class="table-wrapper">
@@ -70,7 +72,10 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">No suppliers found.</td></tr>
+                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">
+                    <i class="fas fa-handshake" style="font-size:32px;display:block;margin-bottom:8px;opacity:.3"></i>
+                    No suppliers found.
+                </td></tr>
                 @endforelse
             </tbody>
         </table>

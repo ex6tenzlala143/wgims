@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Edit User')
 @section('page-title', 'Edit User')
 
@@ -17,12 +17,12 @@
             @csrf @method('PUT')
             <div class="form-row cols-2">
                 <div class="form-group">
-                    <label class="form-label">Username <span style="color:red">*</span></label>
+                    <label class="form-label">Username <span class="req">*</span></label>
                     <input type="text" name="username" id="username" class="form-control" value="{{ old('username', $user->username) }}" required>
                     <div id="username-check" style="font-size:12px;margin-top:4px"></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Full Name <span style="color:red">*</span></label>
+                    <label class="form-label">Full Name <span class="req">*</span></label>
                     <input type="text" name="name" class="form-control" value="{{ old('name', $user->name) }}" required>
                 </div>
             </div>
@@ -32,7 +32,7 @@
                     <input type="email" name="email" class="form-control" value="{{ old('email', $user->email) }}">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Role <span style="color:red">*</span></label>
+                    <label class="form-label">Role <span class="req">*</span></label>
                     <select name="role" id="role" class="form-control" required onchange="toggleCenter()">
                         <option value="admin" {{ old('role', $user->role)=='admin'?'selected':'' }}>Administrator</option>
                         <option value="warehouse_manager" {{ old('role', $user->role)=='warehouse_manager'?'selected':'' }}>Warehouse Manager</option>
