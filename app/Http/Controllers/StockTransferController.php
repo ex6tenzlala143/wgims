@@ -419,6 +419,26 @@ class StockTransferController extends Controller
                 ]);
             }
 
+            // Rebuild running stock-card balances for every touched item.
+            // Inline-computed balances in the entries above may drift if the same
+            // item had earlier partial dispatches or other concurrent entries.
+            foreach ($request->items as $line) {
+                if ((int) ($line['quantity'] ?? 0) > 0) {
+                    $sti = StockTransferItem::with(['sourceItem', 'destinationItem'])
+                        ->where('id', $line['sti_id'])
+                        ->where('stock_transfer_id', $transfer->id)
+                        ->first();
+                    if ($sti) {
+                        if ($sti->item_id) {
+                            StockCardEntry::recalculateBalancesForItem($sti->item_id);
+                        }
+                        if ($sti->destination_item_id) {
+                            StockCardEntry::recalculateBalancesForItem($sti->destination_item_id);
+                        }
+                    }
+                }
+            }
+
             // Refresh items and recalculate status
             $transfer->load('items');
             $transfer->updateTransferStatus();

@@ -44,7 +44,11 @@ class StockCardEntry extends Model
                 ->get();
 
             $runningQty      = 0.0;
-            $runningUnitCost = 0.0;
+            // Seed the running unit cost from the item record so that issue-only
+            // entries (e.g. a newly dispatched RIS against a non-delivery item)
+            // carry the correct cost even when no prior receipt entry exists.
+            $item            = \App\Models\Item::find($itemId);
+            $runningUnitCost = $item ? (float) $item->unit_cost : 0.0;
 
             foreach ($entries as $entry) {
                 $runningQty += (float) $entry->receipt_qty - (float) $entry->issue_qty;

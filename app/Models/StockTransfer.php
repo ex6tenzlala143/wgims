@@ -182,22 +182,32 @@ class StockTransfer extends Model
 
     /**
      * Generate a unique transfer number in the format TRF-YYYY-NNNN.
-     * Race-condition guarded (same pattern as Requisition::generateRisNumber).
+     *
+     * Uses an advisory lock (GET_LOCK / RELEASE_LOCK) so concurrent requests
+     * cannot generate the same candidate number.  This mirrors the same pattern
+     * used in Item::generateStockNumber().
      */
     public static function generateTransferNumber(): string
     {
-        $year = date('Y');
-        $base = static::whereYear('created_at', $year)->count();
+        $year   = date('Y');
+        $lockName = 'trf_number_' . $year;
 
-        $candidate = 'TRF-' . $year . '-' . str_pad($base + 1, 4, '0', STR_PAD_LEFT);
+        try {
+            \Illuminate\Support\Facades\DB::select("SELECT GET_LOCK(?, 10)", [$lockName]);
 
-        $attempts = 0;
-        while (static::where('transfer_number', $candidate)->exists() && $attempts < 20) {
-            $base++;
-            $attempts++;
+            $base      = static::whereYear('created_at', $year)->count();
             $candidate = 'TRF-' . $year . '-' . str_pad($base + 1, 4, '0', STR_PAD_LEFT);
-        }
 
-        return $candidate;
+            $attempts = 0;
+            while (static::where('transfer_number', $candidate)->exists() && $attempts < 50) {
+                $base++;
+                $attempts++;
+                $candidate = 'TRF-' . $year . '-' . str_pad($base + 1, 4, '0', STR_PAD_LEFT);
+            }
+
+            return $candidate;
+        } finally {
+            \Illuminate\Support\Facades\DB::select("SELECT RELEASE_LOCK(?)", [$lockName]);
+        }
     }
 }

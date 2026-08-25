@@ -253,9 +253,10 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
         $this->assertNull($transfer->fresh()->source_subsidy_status);
         $this->assertFalse($transfer->fresh()->isRelatedToDeletedSubsidy());
 
-        // Items return to 'active' — a restore never clobbers another subsidy.
-        $this->assertEquals('active', $flow['sourceItem']->fresh()->source_subsidy_status);
-        $this->assertEquals('active', $flow['destItem']->fresh()->source_subsidy_status);
+        // Items return to null status — restore clears the 'archived' warning flag.
+        // The system uses null (not 'active') to mean "no subsidy warning" after restore.
+        $this->assertNull($flow['sourceItem']->fresh()->source_subsidy_status);
+        $this->assertNull($flow['destItem']->fresh()->source_subsidy_status);
         $this->assertFalse($flow['destItem']->fresh()->isRelatedToDeletedSubsidy());
 
         $this->assertDatabaseHas('stock_transfer_audit_logs', [

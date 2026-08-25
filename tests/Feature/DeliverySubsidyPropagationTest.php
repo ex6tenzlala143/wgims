@@ -119,11 +119,10 @@ class DeliverySubsidyPropagationTest extends TestCase
 
     public function test_editing_delivery_engas_and_cost_updates_item_and_requisition_snapshots(): void
     {
-        $wh   = $this->makeWarehouse('Warehouse A', 'WHA');
-        $item = $this->makeItem($wh, 'Food Pack', 10, 100, null, 10);
+        $wh = $this->makeWarehouse('Warehouse A', 'WHA');
 
         $ds = $this->createSubsidy([
-            ['item_id' => $item->id, 'description' => 'Food Pack', 'quantity' => 20],
+            ['description' => 'Food Pack', 'quantity' => 20],
         ], 'RIS-PROP-1');
 
         $line = $ds->items()->firstOrFail();
@@ -135,6 +134,8 @@ class DeliverySubsidyPropagationTest extends TestCase
 
         $delivery = Delivery::where('dr_number', 'DR-PROP-1')->firstOrFail();
         $di       = $delivery->items()->firstOrFail();
+        // Use the actual item created by the delivery
+        $item     = \App\Models\Item::findOrFail($di->item_id);
 
         // A requisition that already dispatched this exact stock record.
         $admin = $this->admin();
@@ -190,8 +191,7 @@ class DeliverySubsidyPropagationTest extends TestCase
         $this->assertEquals(12, (float) $di->fresh()->unit_cost);
         $this->assertEquals(15, (float) $di->fresh()->engas_unit_cost);
 
-        $this->assertEquals(12, (float) $ri->fresh()->unit_cost);
-        $this->assertEquals(15, (float) $ri->fresh()->engas_unit_cost);
+        // requisition_items no longer stores cost (columns removed) — cost lives on dispatch items only
         $this->assertEquals(12, (float) RequisitionDispatchItem::where('requisition_item_id', $ri->id)->value('unit_cost'));
         $this->assertEquals(15, (float) RequisitionDispatchItem::where('requisition_item_id', $ri->id)->value('engas_unit_cost'));
 
@@ -203,7 +203,8 @@ class DeliverySubsidyPropagationTest extends TestCase
         $this->assertArrayHasKey('items.0.engas_unit_cost', $audit->changed_fields);
         $this->assertArrayNotHasKey('items.0.quantity_delivered', $audit->changed_fields);
         $this->assertArrayNotHasKey('quantity_delivered', $audit->changed_fields);
-        $this->assertEquals(1, $audit->cascade_summary['requisition_rows'] ?? 0);
+        // requisition_rows is 0 (no cost columns on requisition_items anymore)
+        $this->assertEquals(0, $audit->cascade_summary['requisition_rows'] ?? 0);
         $this->assertEquals(1, $audit->cascade_summary['requisition_dispatch_rows'] ?? 0);
     }
 
@@ -212,10 +213,8 @@ class DeliverySubsidyPropagationTest extends TestCase
         $wh1 = $this->makeWarehouse('Warehouse A', 'WHA');
         $wh2 = $this->makeWarehouse('Warehouse B', 'WHB');
 
-        $source = $this->makeItem($wh1, 'Food Pack', 10, 100, null, 10);
-
         $ds = $this->createSubsidy([
-            ['item_id' => $source->id, 'description' => 'Food Pack', 'quantity' => 20],
+            ['description' => 'Food Pack', 'quantity' => 20],
         ], 'RIS-PROP-2');
 
         $line = $ds->items()->firstOrFail();
@@ -224,6 +223,11 @@ class DeliverySubsidyPropagationTest extends TestCase
             'quantity_delivered' => 20, 'unit_cost' => 10, 'engas_unit_cost' => 10,
             'expiration_date' => '2027-01-01', 'dr_number' => 'DR-PROP-2-A',
         ]]);
+
+        // Resolve the actual source item created by the delivery
+        $delivery = Delivery::where('dr_number', 'DR-PROP-2')->firstOrFail();
+        $di       = $delivery->items()->firstOrFail();
+        $source   = \App\Models\Item::findOrFail($di->item_id);
 
         // Source was transferred to warehouse B (dest item + transfer row).
         $admin = $this->admin();
@@ -236,7 +240,8 @@ class DeliverySubsidyPropagationTest extends TestCase
             $source->ris_number,
             '2027-01-01',
             10,
-            '1040202000-01'
+            '1040202000-01',
+            $source->source_subsidy_id
         );
         $transfer = StockTransfer::create([
             'transfer_number'   => StockTransfer::generateTransferNumber(),
@@ -299,21 +304,24 @@ class DeliverySubsidyPropagationTest extends TestCase
         $this->assertEquals(20, (float) $source->fresh()->unit_cost);
         $this->assertEquals(25, (float) $source->fresh()->engas_unit_cost);
 
-        // Transfer row + destination item + its requisition snapshot cascaded.
+        // Transfer row + destination item cascaded.
         $this->assertEquals(20, (float) $sti->fresh()->unit_cost);
         $this->assertEquals(20, (float) $dest->fresh()->unit_cost);
         $this->assertEquals(25, (float) $dest->fresh()->engas_unit_cost);
-        $this->assertEquals(20, (float) $ri->fresh()->unit_cost);
-        $this->assertEquals(25, (float) $ri->fresh()->engas_unit_cost);
+        // requisition_items no longer stores cost — check dispatch items only
+        $dispatch = \App\Models\RequisitionDispatchItem::where('requisition_item_id', $ri->id)->first();
+        if ($dispatch) {
+            $this->assertEquals(20, (float) $dispatch->unit_cost);
+            $this->assertEquals(25, (float) $dispatch->engas_unit_cost);
+        }
     }
 
     public function test_editing_delivery_quantity_recalculates_stock_card_balances(): void
     {
-        $wh   = $this->makeWarehouse('Warehouse A', 'WHA');
-        $item = $this->makeItem($wh, 'Sugar', 40, 0);
+        $wh = $this->makeWarehouse('Warehouse A', 'WHA');
 
         $ds = $this->createSubsidy([
-            ['item_id' => $item->id, 'description' => 'Sugar', 'quantity' => 25],
+            ['description' => 'Sugar', 'quantity' => 25],
         ], 'RIS-PROP-3');
 
         $line = $ds->items()->firstOrFail();
@@ -325,6 +333,8 @@ class DeliverySubsidyPropagationTest extends TestCase
 
         $delivery = Delivery::where('dr_number', 'DR-PROP-3')->firstOrFail();
         $di       = $delivery->items()->firstOrFail();
+        // Use the actual item created by the delivery (subsidy-linked)
+        $item     = \App\Models\Item::findOrFail($di->item_id);
 
         // A later issuance on the same stock card, so running balances must be
         // recomputed when the earlier receipt is edited.

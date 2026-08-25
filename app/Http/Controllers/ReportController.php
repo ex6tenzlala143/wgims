@@ -102,7 +102,7 @@ class ReportController extends Controller
     public function rsmi(Request $request)
     {
         $user = Auth::user();
-        $query = Requisition::with(['warehouse', 'items.item'])
+        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
         // Since warehouse_id is now null on all requisitions (multi-warehouse dispatch
@@ -136,7 +136,16 @@ class ReportController extends Controller
         // Group by RIS number — same structure used by the print view
         $risGroups = $requisitions->map(function (Requisition $ris) {
             $issuedItems = $ris->items->filter(fn ($ri) => $ri->quantity_issued > 0)->values();
-            $subtotal    = $issuedItems->sum(fn ($ri) => $ri->quantity_issued * ($ri->item->unit_cost ?? 0));
+            // Use per-dispatch costs (source of truth). Each dispatch line records
+            // the exact unit_cost at the time of issuance — never aggregate from
+            // the item record which may have been updated by a cost correction.
+            $subtotal = $issuedItems->sum(function ($ri) {
+                if ($ri->dispatchItems->isNotEmpty()) {
+                    return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0));
+                }
+                // Fallback for legacy rows without dispatch records
+                return $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
+            });
 
             return [
                 'ris'      => $ris,
@@ -166,7 +175,7 @@ class ReportController extends Controller
     public function printRsmi(Request $request)
     {
         $user = Auth::user();
-        $query = Requisition::with(['warehouse', 'items.item'])
+        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
         // Use dispatch-based warehouse scoping (warehouse_id is null on requisitions)
@@ -196,17 +205,33 @@ class ReportController extends Controller
         $risGroups = $requisitions->map(function (Requisition $ris) {
             $issuedItems = $ris->items->filter(fn ($ri) => $ri->quantity_issued > 0)->values();
 
-            $subtotal = $issuedItems->sum(fn ($ri) => $ri->quantity_issued * ($ri->item->unit_cost ?? 0));
+            // Use per-dispatch costs (source of truth) for accurate subtotals.
+            $subtotal = $issuedItems->sum(function ($ri) {
+                if ($ri->dispatchItems->isNotEmpty()) {
+                    return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0));
+                }
+                return $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
+            });
 
-            // Recapitulation: group items by stock number within this RIS
+            // Recapitulation: group items by stock number within this RIS.
+            // For dispatch-aware rows, also sum dispatch costs per stock number.
             $recap = $issuedItems->groupBy(fn ($ri) => $ri->item->stock_number ?? '')
                 ->map(function ($group) {
                     $first = $group->first();
+                    // Use dispatch-level costs for recap totals too
+                    $totalCost = $group->sum(function ($ri) {
+                        if ($ri->dispatchItems->isNotEmpty()) {
+                            return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0));
+                        }
+                        return $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
+                    });
+                    $totalQty = $group->sum('quantity_issued');
+                    $unitCost = $totalQty > 0 ? $totalCost / $totalQty : ($first->item->unit_cost ?? 0);
                     return [
                         'stock_no'   => $first->item->stock_number ?? '',
-                        'qty'        => $group->sum('quantity_issued'),
-                        'unit_cost'  => $first->item->unit_cost ?? 0,
-                        'total_cost' => $group->sum(fn ($ri) => $ri->quantity_issued * ($ri->item->unit_cost ?? 0)),
+                        'qty'        => $totalQty,
+                        'unit_cost'  => $unitCost,
+                        'total_cost' => $totalCost,
                     ];
                 })->values();
 
@@ -234,7 +259,7 @@ class ReportController extends Controller
         $user = Auth::user();
         $request->validate(['period_month' => 'required|string']);
 
-        $query = Requisition::with(['warehouse', 'items.item'])
+        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
         // Use dispatch-based warehouse scoping (warehouse_id is null on requisitions)
@@ -257,14 +282,21 @@ class ReportController extends Controller
         }
 
         $data = $query->get()->flatMap(fn ($r) => $r->items->map(fn ($ri) => [
-            'ris_number' => $r->ris_number,
+            'ris_number'     => $r->ris_number,
             'warehouse_code' => $r->warehouse->code ?? '',
-            'stock_number' => $ri->item->stock_number ?? '',
-            'description' => $ri->item->description ?? '',
-            'unit' => $ri->item->unit ?? '',
-            'quantity_issued' => $ri->quantity_issued,
-            'unit_cost' => $ri->item->unit_cost ?? 0,
-            'amount' => $ri->quantity_issued * ($ri->item->unit_cost ?? 0),
+            'stock_number'   => $ri->item->stock_number ?? '',
+            'description'    => $ri->item->description ?? '',
+            'unit'           => $ri->item->unit ?? '',
+            'quantity_issued'=> $ri->quantity_issued,
+            // Use dispatch-level unit cost for accuracy (same as the screen view)
+            'unit_cost'      => $ri->dispatchItems->isNotEmpty()
+                ? ($ri->quantity_issued > 0
+                    ? round($ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0)) / $ri->quantity_issued, 4)
+                    : 0)
+                : ($ri->item->unit_cost ?? 0),
+            'amount'         => $ri->dispatchItems->isNotEmpty()
+                ? $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0))
+                : $ri->quantity_issued * ($ri->item->unit_cost ?? 0),
         ]));
 
         ReportSnapshot::create([
@@ -467,7 +499,7 @@ class ReportController extends Controller
     public function exportRsmi(Request $request)
     {
         $user = Auth::user();
-        $query = Requisition::with(['warehouse', 'items.item'])
+        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
         // Use dispatch-based warehouse scoping (warehouse_id is null on requisitions)
@@ -537,7 +569,13 @@ class ReportController extends Controller
                 if ($ri->quantity_issued <= 0) {
                     continue;
                 }
-                $amount = $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
+                // Use dispatch-level unit cost for accurate export figures
+                $unitCost = ($ri->dispatchItems->isNotEmpty() && $ri->quantity_issued > 0)
+                    ? round($ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0)) / $ri->quantity_issued, 4)
+                    : ($ri->item->unit_cost ?? 0);
+                $amount = ($ri->dispatchItems->isNotEmpty())
+                    ? $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0))
+                    : $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
                 $grandTotal += $amount;
 
                 $sheet->setCellValue("A{$row}", $ris->ris_number);
@@ -546,7 +584,7 @@ class ReportController extends Controller
                 $sheet->setCellValue("D{$row}", $ri->item->description ?? '');
                 $sheet->setCellValue("E{$row}", $ri->item->unit ?? '');
                 $sheet->setCellValue("F{$row}", $ri->quantity_issued);
-                $sheet->setCellValue("G{$row}", $ri->item->unit_cost ?? 0);
+                $sheet->setCellValue("G{$row}", $unitCost);
                 $sheet->setCellValue("H{$row}", $ri->item->engas_unit_cost ?? '');
                 $sheet->setCellValue("I{$row}", $amount);
 

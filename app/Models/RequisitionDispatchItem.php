@@ -12,7 +12,7 @@ class RequisitionDispatchItem extends Model
     ];
 
     protected $casts = [
-        'quantity_issued'  => 'integer',
+        'quantity_issued'  => 'float',
         'unit_cost'        => 'float',
         'engas_unit_cost'  => 'float',
         'expiration_date'  => 'date',
@@ -26,10 +26,11 @@ class RequisitionDispatchItem extends Model
     /**
      * The exact warehouse-specific stock record this dispatch came from.
      * Its warehouse (items.warehouse_id) determines the dispatch's warehouse.
+     * Load 'item.warehouse' explicitly in controllers when the warehouse is needed.
      */
     public function item()
     {
-        return $this->belongsTo(Item::class)->with('warehouse');
+        return $this->belongsTo(Item::class);
     }
 
     public function creator()

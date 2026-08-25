@@ -53,10 +53,9 @@ class DeliverySubsidyCascadeService
             ]);
         $summary['stock_card_delivery_rows'] = ($summary['stock_card_delivery_rows'] ?? 0) + $updated;
 
-        // 3. Requisition items tied to source item
-        $updated = RequisitionItem::where('item_id', $sourceItem->id)
-            ->update(['unit_cost' => $newCost]);
-        $summary['requisition_rows'] = ($summary['requisition_rows'] ?? 0) + $updated;
+        // 3. Requisition items: unit_cost column was dropped in migration 2026_08_24_210730.
+        // Cost data now lives exclusively on requisition_dispatch_items.
+        $summary['requisition_rows'] = ($summary['requisition_rows'] ?? 0);
 
         // 4. Walk the full transfer chain recursively
         $this->walkTransferChain($sourceItem->id, $newCost, $summary, []);
@@ -118,13 +117,22 @@ class DeliverySubsidyCascadeService
      */
     public function cascadeItemCost(Item $sourceItem, float $newCost, ?float $newEngas, array &$summary): void
     {
-        $this->applyCostToItemSnapshots($sourceItem, $newCost, $newEngas, $summary);
-        $this->walkTransferChainCost($sourceItem->id, $newCost, $newEngas, $summary, []);
+        // Wrap the full cascade in a transaction so a partial failure (e.g. during
+        // a multi-hop transfer chain walk) does not leave costs inconsistent across
+        // requisition_items, dispatch_items, transfer_items and downstream item records.
+        DB::transaction(function () use ($sourceItem, $newCost, $newEngas, &$summary) {
+            $this->applyCostToItemSnapshots($sourceItem, $newCost, $newEngas, $summary);
+            $this->walkTransferChainCost($sourceItem->id, $newCost, $newEngas, $summary, []);
+        });
     }
 
     /**
      * Apply a cost change to the requisition / dispatch / transfer snapshot rows
      * that reference one item (the item record itself is not touched).
+     *
+     * Note: requisition_items no longer stores unit_cost / engas_unit_cost
+     * (those columns were dropped in migration 2026_08_24_210730). Cost data
+     * lives exclusively on requisition_dispatch_items.
      */
     private function applyCostToItemSnapshots(Item $item, float $newCost, ?float $newEngas, array &$summary): void
     {
@@ -133,8 +141,9 @@ class DeliverySubsidyCascadeService
             $snapshotUpdate['engas_unit_cost'] = $newEngas;
         }
 
-        $updated = RequisitionItem::where('item_id', $item->id)->update($snapshotUpdate);
-        $summary['requisition_rows'] = ($summary['requisition_rows'] ?? 0) + $updated;
+        // requisition_items: no cost columns since migration 2026_08_24_210730.
+        // Cost data lives exclusively on requisition_dispatch_items.
+        $summary['requisition_rows'] = ($summary['requisition_rows'] ?? 0);
 
         $updated = RequisitionDispatchItem::where('item_id', $item->id)->update($snapshotUpdate);
         $summary['requisition_dispatch_rows'] = ($summary['requisition_dispatch_rows'] ?? 0) + $updated;

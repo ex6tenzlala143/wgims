@@ -177,9 +177,10 @@ class StockTransferAdminCorrectionTest extends TestCase
                 'transfer_date' => '2026-08-12',
                 'remarks'       => 'Corrected dispatched quantity',
                 'items'         => [[
-                    'sti_id'    => $sti->id,
-                    'quantity'  => 80,
-                    'unit_cost' => 250.00,
+                    'sti_id'             => $sti->id,
+                    'quantity_requested' => 80, // corrected to match new dispatched qty
+                    'quantity'           => 80,
+                    'unit_cost'          => 250.00,
                 ]],
             ]);
 
@@ -250,9 +251,10 @@ class StockTransferAdminCorrectionTest extends TestCase
                 'transfer_date' => '2026-08-12',
                 'remarks'       => null,
                 'items'         => [[
-                    'sti_id'    => $sti->id,
-                    'quantity'  => 90,
-                    'unit_cost' => 250.00,
+                    'sti_id'             => $sti->id,
+                    'quantity_requested' => 90, // increasing requested to allow larger dispatch
+                    'quantity'           => 90,
+                    'unit_cost'          => 250.00,
                 ]],
             ])
             ->assertRedirect(route('transfers.show', $transfer))
@@ -289,9 +291,10 @@ class StockTransferAdminCorrectionTest extends TestCase
             ->put(route('transfers.update', $transfer), [
                 'transfer_date' => '2026-08-12',
                 'items'         => [[
-                    'sti_id'    => $sti->id,
-                    'quantity'  => 70, // needs +20 more than source holds (10)
-                    'unit_cost' => 100.00,
+                    'sti_id'             => $sti->id,
+                    'quantity_requested' => $sti->quantity_requested,
+                    'quantity'           => 70, // needs +20 more than source holds (10)
+                    'unit_cost'          => 100.00,
                 ]],
             ])
             ->assertRedirect()
@@ -324,9 +327,10 @@ class StockTransferAdminCorrectionTest extends TestCase
             ->put(route('transfers.update', $transfer), [
                 'transfer_date' => '2026-08-12',
                 'items'         => [[
-                    'sti_id'    => $sti->id,
-                    'quantity'  => 30, // would return 30 units but dest only holds 5
-                    'unit_cost' => 100.00,
+                    'sti_id'             => $sti->id,
+                    'quantity_requested' => $sti->quantity_requested,
+                    'quantity'           => 30, // would return 30 units but dest only holds 5
+                    'unit_cost'          => 100.00,
                 ]],
             ])
             ->assertRedirect()
@@ -363,13 +367,15 @@ class StockTransferAdminCorrectionTest extends TestCase
         $this->assertEquals('partial', $transfer->status);
 
         // Correct the dispatched total from 75 down to 50.
+        // quantity_requested is also adjusted to preserve the outstanding plan.
         $this->actingAs($this->admin())
             ->put(route('transfers.update', $transfer), [
                 'transfer_date' => '2026-08-12',
                 'items'         => [[
-                    'sti_id'    => $sti->id,
-                    'quantity'  => 50,
-                    'unit_cost' => 100.00,
+                    'sti_id'             => $sti->id,
+                    'quantity_requested' => 75, // preserve original plan (admin explicitly sets this)
+                    'quantity'           => 50,
+                    'unit_cost'          => 100.00,
                 ]],
             ])
             ->assertRedirect(route('transfers.show', $transfer))
@@ -422,9 +428,10 @@ class StockTransferAdminCorrectionTest extends TestCase
             ->put(route('transfers.update', $transfer), [
                 'transfer_date' => '2026-08-12',
                 'items'         => [[
-                    'sti_id'    => $sti->id,
-                    'quantity'  => 10,
-                    'unit_cost' => 100.00,
+                    'sti_id'             => $sti->id,
+                    'quantity_requested' => $sti->quantity_requested,
+                    'quantity'           => 10,
+                    'unit_cost'          => 100.00,
                 ]],
             ])
             ->assertForbidden();
@@ -449,9 +456,10 @@ class StockTransferAdminCorrectionTest extends TestCase
                 'transfer_date' => '2026-08-20',
                 'remarks'       => 'Line corrected after review',
                 'items'         => [[
-                    'sti_id'    => $flow['sti']->id,
-                    'quantity'  => 45,
-                    'unit_cost' => 500.00,
+                    'sti_id'             => $flow['sti']->id,
+                    'quantity_requested' => $flow['sti']->quantity_requested,
+                    'quantity'           => 45,
+                    'unit_cost'          => 500.00,
                 ]],
             ])
             ->assertRedirect(route('transfers.show', $transfer));

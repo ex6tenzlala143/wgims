@@ -242,22 +242,35 @@ class Requisition extends Model
         $this->status = $status;
     }
 
+    /**
+     * Generate a unique RIS number in the format RIS-YYYYMM-NNNN.
+     *
+     * Uses an advisory lock (GET_LOCK / RELEASE_LOCK) so concurrent requests
+     * cannot generate the same candidate number.  This mirrors the same pattern
+     * used in Item::generateStockNumber() and StockTransfer::generateTransferNumber().
+     */
     public static function generateRisNumber(): string
     {
-        $year = date('Y');
-        $month = date('m');
-        $base = static::whereYear('created_at', $year)->whereMonth('created_at', $month)->count();
+        $year     = date('Y');
+        $month    = date('m');
+        $lockName = 'ris_number_' . $year . $month;
 
-        $candidate = 'RIS-'.$year.$month.'-'.str_pad($base + 1, 4, '0', STR_PAD_LEFT);
+        try {
+            \Illuminate\Support\Facades\DB::select("SELECT GET_LOCK(?, 10)", [$lockName]);
 
-        // Retry if the candidate already exists (race condition guard)
-        $attempts = 0;
-        while (static::where('ris_number', $candidate)->exists() && $attempts < 20) {
-            $base++;
-            $attempts++;
-            $candidate = 'RIS-'.$year.$month.'-'.str_pad($base + 1, 4, '0', STR_PAD_LEFT);
+            $base      = static::whereYear('created_at', $year)->whereMonth('created_at', $month)->count();
+            $candidate = 'RIS-' . $year . $month . '-' . str_pad($base + 1, 4, '0', STR_PAD_LEFT);
+
+            $attempts = 0;
+            while (static::where('ris_number', $candidate)->exists() && $attempts < 50) {
+                $base++;
+                $attempts++;
+                $candidate = 'RIS-' . $year . $month . '-' . str_pad($base + 1, 4, '0', STR_PAD_LEFT);
+            }
+
+            return $candidate;
+        } finally {
+            \Illuminate\Support\Facades\DB::select("SELECT RELEASE_LOCK(?)", [$lockName]);
         }
-
-        return $candidate;
     }
 }

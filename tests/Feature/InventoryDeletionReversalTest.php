@@ -283,14 +283,18 @@ class InventoryDeletionReversalTest extends TestCase
 
         $items = [];
         foreach ($lines as $i => $line) {
-            $items[] = [
-                'item_id'         => $line['item_id'],
+            $item = [
                 'description'     => $line['description'],
                 'unit'            => 'piece',
                 'category'        => 'food',
                 'quantity'        => $line['quantity'],
-                'expiration_date' => '2027-01-01',
+                'expiration_date' => $line['expiration_date'] ?? '2027-01-01',
             ];
+            // item_id is optional — catalog-based lines don't supply it
+            if (array_key_exists('item_id', $line)) {
+                $item['item_id'] = $line['item_id'];
+            }
+            $items[] = $item;
         }
 
         $this->actingAs($this->admin())
@@ -307,22 +311,21 @@ class InventoryDeletionReversalTest extends TestCase
 
     public function test_delete_subsidy_reverses_delivered_stock_per_item_and_warehouse(): void
     {
-        $wh1   = $this->makeWarehouse('WH One', 'WH1');
-        $wh2   = $this->makeWarehouse('WH Two', 'WH2');
-        $wh3   = $this->makeWarehouse('WH Three', 'WH3');
-        $itemA = $this->makeItem($wh1, 'Item A', 100, 100);
-        $itemB = $this->makeItem($wh2, 'Item B', 0, 200);
-        $itemC = $this->makeItem($wh3, 'Item C', 0, 50);
+        $wh1 = $this->makeWarehouse('WH One', 'WH1');
+        $wh2 = $this->makeWarehouse('WH Two', 'WH2');
+        $wh3 = $this->makeWarehouse('WH Three', 'WH3');
 
+        // Items are created by the delivery (catalog-based, no pre-existing items needed).
         $ds = $this->createSubsidy([
-            ['item_id' => $itemA->id, 'description' => 'Item A', 'quantity' => 20],
-            ['item_id' => $itemB->id, 'description' => 'Item B', 'quantity' => 10],
-            ['item_id' => $itemC->id, 'description' => 'Item C', 'quantity' => 7],
+            ['description' => 'Item A', 'quantity' => 20],
+            ['description' => 'Item B', 'quantity' => 10],
+            ['description' => 'Item C', 'quantity' => 7],
         ], 'RIS-DEL-1');
 
-        $lineA = $ds->items()->where('item_id', $itemA->id)->firstOrFail();
-        $lineB = $ds->items()->where('item_id', $itemB->id)->firstOrFail();
-        $lineC = $ds->items()->where('item_id', $itemC->id)->firstOrFail();
+        $lines   = $ds->items()->get()->keyBy('description');
+        $lineA   = $lines->get('Item A');
+        $lineB   = $lines->get('Item B');
+        $lineC   = $lines->get('Item C');
 
         $this->actingAs($this->admin())
             ->post(route('delivery_subsidies.store_delivery', $ds), [
@@ -361,10 +364,17 @@ class InventoryDeletionReversalTest extends TestCase
                 ],
             ])->assertSessionHasNoErrors();
 
-        // Dispatch added stock: A 100→120, B 0→10, C 0→7
-        $this->assertEquals(120, (float) $itemA->fresh()->quantity);
-        $this->assertEquals(10, (float) $itemB->fresh()->quantity);
-        $this->assertEquals(7, (float) $itemC->fresh()->quantity);
+        // Look up items by subsidy identity (each delivery creates its own record).
+        $itemA = Item::where('warehouse_id', $wh1->id)->where('description', 'Item A')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $itemB = Item::where('warehouse_id', $wh2->id)->where('description', 'Item B')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $itemC = Item::where('warehouse_id', $wh3->id)->where('description', 'Item C')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+
+        $this->assertEquals(20, (float) $itemA->quantity);
+        $this->assertEquals(10, (float) $itemB->quantity);
+        $this->assertEquals(7,  (float) $itemC->quantity);
 
         $delivery = Delivery::where('dr_number', 'DR-DEL-1')->firstOrFail();
         $this->assertEquals(3, StockCardEntry::where('reference_type', 'delivery')->where('reference_id', $delivery->id)->count());
@@ -377,12 +387,10 @@ class InventoryDeletionReversalTest extends TestCase
         $this->assertDatabaseMissing('delivery_subsidies', ['id' => $ds->id]);
         $this->assertDatabaseMissing('deliveries', ['id' => $delivery->id]);
 
-        $this->assertEquals(100, (float) $itemA->fresh()->quantity);
-        // Items B and C existed only for this subsidy (0 stock before) → removed entirely.
+        // All three items existed only for this subsidy → removed entirely.
+        $this->assertNull($itemA->fresh());
         $this->assertNull($itemB->fresh());
         $this->assertNull($itemC->fresh());
-        $this->assertDatabaseMissing('items', ['id' => $itemB->id]);
-        $this->assertDatabaseMissing('items', ['id' => $itemC->id]);
 
         $this->assertEquals(0, StockCardEntry::where('reference_type', 'delivery')->where('reference_id', $delivery->id)->count());
     }
@@ -406,10 +414,13 @@ class InventoryDeletionReversalTest extends TestCase
 
     public function test_delete_subsidy_recomputes_remaining_stock_card_balances(): void
     {
-        $wh1   = $this->makeWarehouse('WH One', 'WH1');
-        $itemA = $this->makeItem($wh1, 'Rice', 0, 30);
+        $wh1 = $this->makeWarehouse('WH One', 'WH1');
 
-        // Pre-existing receipt of 50 (an older delivery that must stay intact)
+        // Create an item with a pre-existing stock card entry (from an older delivery).
+        // We create the item without a subsidy link (raw insert) to simulate legacy stock.
+        $itemA = $this->makeItem($wh1, 'Rice', 50, 30);
+
+        // Pre-existing receipt of 50 (an older delivery that must stay intact).
         StockCardEntry::create([
             'item_id'            => $itemA->id,
             'entry_date'         => '2026-07-01',
@@ -424,10 +435,10 @@ class InventoryDeletionReversalTest extends TestCase
             'balance_unit_cost'  => 30,
             'balance_total_cost' => 1500,
         ]);
-        $itemA->update(['quantity' => 50]);
 
+        // New subsidy — no item_id (catalog-based) so a fresh linked item is created.
         $ds = $this->createSubsidy([
-            ['item_id' => $itemA->id, 'description' => 'Rice', 'quantity' => 10],
+            ['description' => 'Rice', 'quantity' => 10],
         ], 'RIS-DEL-3');
 
         $lineA = $ds->items()->firstOrFail();
@@ -449,14 +460,20 @@ class InventoryDeletionReversalTest extends TestCase
                 ]],
             ])->assertSessionHasNoErrors();
 
-        $this->assertEquals(60, (float) $itemA->fresh()->quantity);
+        // The delivery creates a NEW item linked to ds (separate from $itemA).
+        $deliveredItem = Item::where('warehouse_id', $wh1->id)->where('description', 'Rice')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $this->assertEquals(10, (float) $deliveredItem->quantity);
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
             ->assertRedirect(route('delivery_subsidies.index'));
 
+        // The delivery item is reversed back to 0 and removed (no other references).
+        $this->assertNull($deliveredItem->fresh());
+        // The original pre-existing item is untouched.
         $this->assertEquals(50, (float) $itemA->fresh()->quantity);
-
+        // The pre-existing stock card entry is still intact.
         $this->assertEquals(1, StockCardEntry::where('item_id', $itemA->id)->count());
         $entry = StockCardEntry::where('item_id', $itemA->id)->first();
         $this->assertEquals(50, (float) $entry->balance_qty);

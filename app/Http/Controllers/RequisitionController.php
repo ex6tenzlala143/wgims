@@ -341,7 +341,7 @@ class RequisitionController extends Controller
     {
         abort_unless(Auth::user()->canWrite(), 403);
 
-        $requisition->load(['items.item', 'items.warehouse', 'items.dispatchItems']);
+        $requisition->load(['items.item', 'items.warehouse', 'items.dispatchItems.item.warehouse']);
 
         return view('requisitions.edit', compact('requisition'));
     }
@@ -1022,6 +1022,20 @@ class RequisitionController extends Controller
                 ]);
             }
 
+            // Rebuild running stock-card balances for every item that was issued.
+            // processApproval creates entries with inline-computed balances, but if
+            // the same item is dispatched in multiple passes (partial fulfilment) the
+            // later entries need to account for all previous ones.
+            $affectedItemIds = [];
+            foreach ($request->items as $riItemId => $data) {
+                if ((int) ($data['quantity_issued'] ?? 0) > 0 && ! empty($data['item_id'])) {
+                    $affectedItemIds[(int) $data['item_id']] = true;
+                }
+            }
+            foreach (array_keys($affectedItemIds) as $affectedId) {
+                StockCardEntry::recalculateBalancesForItem($affectedId);
+            }
+
             // Refresh items to get updated quantity_issued values, then recalculate status
             $requisition->load('items');
             $requisition->updateFulfilmentStatus();
@@ -1447,6 +1461,9 @@ class RequisitionController extends Controller
     public function updateSignatories(Request $request, Requisition $requisition)
     {
         $user = Auth::user();
+        // Signatories may only be updated by users who can approve (admin, warehouse
+        // manager, center_head, supply_custodian). center_staff are explicitly excluded.
+        abort_unless($user->canApprove(), 403, 'You do not have permission to update signatories.');
         abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
         $requisition->update($request->only([
             'requested_by_name', 'requested_by_designation',

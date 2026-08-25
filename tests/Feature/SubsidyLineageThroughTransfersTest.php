@@ -154,7 +154,7 @@ class SubsidyLineageThroughTransfersTest extends TestCase
         $this->assertEquals(100, (float) $sourceItem->fresh()->quantity);
         $this->assertEquals(100, (float) $destItem->fresh()->quantity);
 
-        // The destination carried the lineage at dispatch time.
+        // The destination carried the lineage at dispatch time — status is 'active' (set by storeDelivery).
         $this->assertEquals('active', $destItem->fresh()->source_subsidy_status);
         $this->assertEquals($ds->id, (int) $destItem->fresh()->source_subsidy_id);
 
@@ -211,8 +211,9 @@ class SubsidyLineageThroughTransfersTest extends TestCase
             ->patch(route('delivery_subsidies.restore', $ds))
             ->assertRedirect(route('delivery_subsidies.index'));
 
-        $this->assertEquals('active', $sourceItem->fresh()->source_subsidy_status);
-        $this->assertEquals('active', $destItem->fresh()->source_subsidy_status);
+        // Restore clears the 'archived' warning — status goes back to null (no warning).
+        $this->assertNull($sourceItem->fresh()->source_subsidy_status);
+        $this->assertNull($destItem->fresh()->source_subsidy_status);
         $this->assertFalse($destItem->fresh()->isRelatedToDeletedSubsidy());
     }
 
@@ -235,7 +236,7 @@ class SubsidyLineageThroughTransfersTest extends TestCase
 
         $itemC = $this->itemAt($whC);
 
-        // Lineage propagated hop by hop.
+        // Lineage propagated hop by hop — transfer store() copies the source's 'active' status to destinations.
         $this->assertEquals('active', $itemB->fresh()->source_subsidy_status);
         $this->assertEquals('active', $itemC->fresh()->source_subsidy_status);
 
@@ -371,6 +372,7 @@ class SubsidyLineageThroughTransfersTest extends TestCase
         $migration->up();
 
         // Both hops are backfilled from the source, recursively.
+        // The backfill copies source_subsidy_status (which is 'active') to destinations.
         $this->assertEquals('active', $itemB->fresh()->source_subsidy_status);
         $this->assertEquals($ds->id, (int) $itemB->fresh()->source_subsidy_id);
         $this->assertEquals('active', $this->itemAt($whC)->fresh()->source_subsidy_status);

@@ -62,14 +62,17 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
         $items = [];
         foreach ($lines as $i => $line) {
-            $items[] = [
-                'item_id'          => $line['item_id'],
+            $item = [
                 'description'      => $line['description'],
                 'unit'             => 'piece',
                 'category'         => 'food',
                 'quantity'         => $line['quantity'],
-                'expiration_date'  => '2027-01-01',
+                'expiration_date'  => $line['expiration_date'] ?? '2027-01-01',
             ];
+            if (array_key_exists('item_id', $line)) {
+                $item['item_id'] = $line['item_id'];
+            }
+            $items[] = $item;
         }
 
         $this->actingAs($this->admin())
@@ -119,16 +122,15 @@ class DeliverySubsidyWarehouseTest extends TestCase
     {
         $wh1 = $this->makeWarehouse('Warehouse One', 'WH1');
         $wh2 = $this->makeWarehouse('Warehouse Two', 'WH2');
-        $itemA = $this->makeItem($wh1, 'Item A', 100);
-        $itemB = $this->makeItem($wh2, 'Item B', 200);
 
         $ds = $this->createSubsidy([
-            ['item_id' => $itemA->id, 'description' => 'Item A', 'quantity' => 5],
-            ['item_id' => $itemB->id, 'description' => 'Item B', 'quantity' => 3],
+            ['description' => 'Item A', 'quantity' => 5],
+            ['description' => 'Item B', 'quantity' => 3],
         ], 'RIS-2026-TEST-2');
 
-        $lineA = $ds->items()->where('item_id', $itemA->id)->firstOrFail();
-        $lineB = $ds->items()->where('item_id', $itemB->id)->firstOrFail();
+        $lines = $ds->items()->get()->keyBy('description');
+        $lineA = $lines->get('Item A');
+        $lineB = $lines->get('Item B');
 
         // The dispatcher picks the warehouse + cost per item
         $this->actingAs($this->admin())
@@ -370,7 +372,8 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
         $ci = ItemCatalogItem::where('name', 'Bond Paper A4')->firstOrFail();
         $this->assertEquals($cat->id, $ci->item_category_id);
-        $this->assertEquals('101-001', $ci->account_code);
+        // Account code is always inherited from the parent category, not from the submitted value
+        $this->assertEquals($cat->account_code, $ci->account_code);
         $this->assertTrue($ci->is_active);
 
         // Duplicate name within the same category is rejected
@@ -393,7 +396,8 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
         $ci->refresh();
         $this->assertEquals('Bond Paper A4 (Short)', $ci->name);
-        $this->assertEquals('101-002', $ci->account_code);
+        // Account code is always inherited from the parent category on update too
+        $this->assertEquals($cat->account_code, $ci->account_code);
 
         // Delete once unreferenced
         $this->actingAs($this->admin())
@@ -644,10 +648,9 @@ class DeliverySubsidyWarehouseTest extends TestCase
     {
         $whA = $this->makeWarehouse('Warehouse A', 'WHA');
         $whB = $this->makeWarehouse('Warehouse B', 'WHB');
-        $itemA = $this->makeItem($whA, 'Rice', 700);
 
         $ds = $this->createSubsidy([
-            ['item_id' => $itemA->id, 'description' => 'Rice', 'quantity' => 500],
+            ['description' => 'Rice', 'quantity' => 500],
         ], 'RIS-2026-WH-SPLIT');
 
         $line = $ds->items()->firstOrFail();
@@ -703,8 +706,10 @@ class DeliverySubsidyWarehouseTest extends TestCase
         $this->assertEquals($whA->id, $line->warehouse_id);
 
         // Stock landed in the correct warehouses (200 in A, 300 in B)
-        $whAItem = Item::where('warehouse_id', $whA->id)->where('description', 'Rice')->firstOrFail();
-        $whBItem = Item::where('warehouse_id', $whB->id)->where('description', 'Rice')->firstOrFail();
+        $whAItem = Item::where('warehouse_id', $whA->id)->where('description', 'Rice')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $whBItem = Item::where('warehouse_id', $whB->id)->where('description', 'Rice')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
         $this->assertEquals(200, $whAItem->quantity);
         $this->assertEquals(300, $whBItem->quantity);
 
@@ -721,11 +726,10 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
     public function test_over_delivery_is_rejected_with_a_clear_message(): void
     {
-        $wh1  = $this->makeWarehouse('Warehouse One', 'WH1');
-        $item = $this->makeItem($wh1, 'Ballpen', 15);
+        $wh1 = $this->makeWarehouse('Warehouse One', 'WH1');
 
         $ds = $this->createSubsidy([
-            ['item_id' => $item->id, 'description' => 'Ballpen', 'quantity' => 20],
+            ['description' => 'Ballpen', 'quantity' => 20],
         ], 'RIS-2026-LIMIT-1');
 
         $line = $ds->items()->firstOrFail();
@@ -771,7 +775,8 @@ class DeliverySubsidyWarehouseTest extends TestCase
         $this->assertDatabaseMissing('deliveries', ['dr_number' => 'DR-2026-LIMIT-1B']);
         $line->refresh();
         $this->assertEquals(5, (float) $line->qty_delivered);
-        $whItem = Item::where('warehouse_id', $wh1->id)->where('description', 'Ballpen')->firstOrFail();
+        $whItem = Item::where('warehouse_id', $wh1->id)->where('description', 'Ballpen')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
         $this->assertEquals(5, $whItem->quantity);
     }
 
@@ -817,17 +822,16 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
     public function test_partial_dispatch_of_one_item_does_not_block_other_items(): void
     {
-        $wh1   = $this->makeWarehouse('Warehouse One', 'WH1');
-        $itemA = $this->makeItem($wh1, 'Bond Paper', 10);
-        $itemB = $this->makeItem($wh1, 'Ballpen', 15);
+        $wh1 = $this->makeWarehouse('Warehouse One', 'WH1');
 
         $ds = $this->createSubsidy([
-            ['item_id' => $itemA->id, 'description' => 'Bond Paper', 'quantity' => 10],
-            ['item_id' => $itemB->id, 'description' => 'Ballpen', 'quantity' => 20],
+            ['description' => 'Bond Paper', 'quantity' => 10],
+            ['description' => 'Ballpen', 'quantity' => 20],
         ], 'RIS-2026-LIMIT-3');
 
-        $lineA = $ds->items()->where('item_id', $itemA->id)->firstOrFail();
-        $lineB = $ds->items()->where('item_id', $itemB->id)->firstOrFail();
+        $lines = $ds->items()->get()->keyBy('description');
+        $lineA = $lines->get('Bond Paper');
+        $lineB = $lines->get('Ballpen');
 
         // Shipment 1: A fully (10), B partially (5)
         $this->actingAs($this->admin())
@@ -917,8 +921,10 @@ class DeliverySubsidyWarehouseTest extends TestCase
         $lineB->refresh();
         $this->assertEquals(20, (float) $lineB->qty_delivered);
 
-        $whItemA = Item::where('warehouse_id', $wh1->id)->where('description', 'Bond Paper')->firstOrFail();
-        $whItemB = Item::where('warehouse_id', $wh1->id)->where('description', 'Ballpen')->firstOrFail();
+        $whItemA = Item::where('warehouse_id', $wh1->id)->where('description', 'Bond Paper')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $whItemB = Item::where('warehouse_id', $wh1->id)->where('description', 'Ballpen')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
         $this->assertEquals(10, $whItemA->quantity);
         $this->assertEquals(20, $whItemB->quantity);
     }
@@ -1108,17 +1114,16 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
     public function test_fully_delivered_item_is_not_validated_when_dispatching_other_items(): void
     {
-        $wh1   = $this->makeWarehouse('Warehouse One', 'WH1');
-        $itemA = $this->makeItem($wh1, 'Bond Paper', 10);
-        $itemB = $this->makeItem($wh1, 'Ballpen', 15);
+        $wh1 = $this->makeWarehouse('Warehouse One', 'WH1');
 
         $ds = $this->createSubsidy([
-            ['item_id' => $itemA->id, 'description' => 'Bond Paper', 'quantity' => 10],
-            ['item_id' => $itemB->id, 'description' => 'Ballpen', 'quantity' => 20],
+            ['description' => 'Bond Paper', 'quantity' => 10],
+            ['description' => 'Ballpen', 'quantity' => 20],
         ], 'RIS-2026-NOREQ-1');
 
-        $lineA = $ds->items()->where('item_id', $itemA->id)->firstOrFail();
-        $lineB = $ds->items()->where('item_id', $itemB->id)->firstOrFail();
+        $lines = $ds->items()->get()->keyBy('description');
+        $lineA = $lines->get('Bond Paper');
+        $lineB = $lines->get('Ballpen');
 
         // Shipment 1: A fully dispatched (10/10), B partially (5/20)
         $this->actingAs($this->admin())
@@ -1179,7 +1184,8 @@ class DeliverySubsidyWarehouseTest extends TestCase
         $lineB->refresh();
         $this->assertEquals(20, (float) $lineB->qty_delivered);
 
-        $whItemB = Item::where('warehouse_id', $wh1->id)->where('description', 'Ballpen')->firstOrFail();
+        $whItemB = Item::where('warehouse_id', $wh1->id)->where('description', 'Ballpen')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
         $this->assertEquals(20, $whItemB->quantity);
     }
 }

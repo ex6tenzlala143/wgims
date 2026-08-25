@@ -122,10 +122,14 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
         $wh1 = $this->makeWarehouse('Warehouse A', 'WHA');
         $wh2 = $this->makeWarehouse('Warehouse B', 'WHB');
 
-        // Same description in the same warehouse at two different unit costs.
-        $fp700 = $this->makeItem($wh1, 'Food Pack', 700, 100, '2026-12-31', 800);
-        $fp800 = $this->makeItem($wh2, 'Food Pack', 800, 200, '2027-06-30', 900);
+        // Design principle: items from different subsidies are ALWAYS separate records,
+        // even when description and unit cost match. findOrCreateByUnitCost includes
+        // source_subsidy_id in the identity key, so each subsidy gets its own item slot.
+        // Pre-existing unlinked stock (source_subsidy_id=null) is never merged with
+        // subsidy-delivered stock.
 
+        // Create two subsidies delivering the same item description at different costs
+        // to different warehouses.
         $ds1 = $this->createSubsidy([
             ['description' => 'Food Pack', 'quantity' => 50, 'expiration_date' => '2026-12-31'],
         ], 'RIS-SUB-001');
@@ -136,7 +140,8 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
         $line1 = $ds1->items()->firstOrFail();
         $line2 = $ds2->items()->firstOrFail();
 
-        // SUB-001 lands @ ₱700 (matching the existing 700 record), SUB-002 @ ₱800.
+        // SUB-001 delivers 50 units @ ₱700 to Warehouse A.
+        // SUB-002 delivers 30 units @ ₱800 to Warehouse B.
         $this->dispatch($ds1, 'DR-SUB-001', [[
             'ds_item_id' => $line1->id, 'warehouse_id' => $wh1->id,
             'quantity_delivered' => 50, 'unit_cost' => 700,
@@ -148,23 +153,32 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             'expiration_date' => '2027-06-30', 'dr_number' => 'DR-SUB-002-A',
         ]]);
 
-        $variant700 = Item::where('warehouse_id', $wh1->id)->where('description', 'Food Pack')->where('unit_cost', 700)->firstOrFail();
-        $variant800 = Item::where('warehouse_id', $wh2->id)->where('description', 'Food Pack')->where('unit_cost', 800)->firstOrFail();
+        // Each delivery creates a new item record linked to its subsidy.
+        // Look up by the subsidy's ID, not just unit_cost (design intent).
+        $variant700 = Item::where('warehouse_id', $wh1->id)
+            ->where('description', 'Food Pack')
+            ->where('source_subsidy_id', $ds1->id)
+            ->firstOrFail();
+        $variant800 = Item::where('warehouse_id', $wh2->id)
+            ->where('description', 'Food Pack')
+            ->where('source_subsidy_id', $ds2->id)
+            ->firstOrFail();
 
-        $this->assertEquals(150, (float) $variant700->fresh()->quantity);
-        $this->assertEquals(230, (float) $variant800->fresh()->quantity);
+        // After both deliveries each subsidy-linked record holds exactly what was delivered.
+        $this->assertEquals(50, (float) $variant700->fresh()->quantity);
+        $this->assertEquals(30, (float) $variant800->fresh()->quantity);
 
-        // Delete only SUB-001
+        // Delete only SUB-001.
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds1))
             ->assertRedirect(route('delivery_subsidies.index'));
 
-        // The 700 variant returns exactly to its pre-subsidy quantity…
-        $this->assertEquals(100, (float) $variant700->fresh()->quantity);
-        // …and the 800 variant is completely untouched.
-        $this->assertEquals(230, (float) $variant800->fresh()->quantity);
+        // The SUB-001 item is reversed back to 0 (or deleted if orphaned)…
+        $this->assertEquals(0, (float) ($variant700->fresh()?->quantity ?? 0));
+        // …and the SUB-002 item is completely untouched.
+        $this->assertEquals(30, (float) $variant800->fresh()->quantity);
 
-        // Stock cards: only the deleted subsidy's movement is gone.
+        // Stock cards: only the deleted subsidy's delivery entry is gone.
         $this->assertEquals(0, StockCardEntry::where('item_id', $variant700->id)
             ->where('reference', 'DR-SUB-001-A')->count());
         $this->assertEquals(1, StockCardEntry::where('item_id', $variant800->id)
@@ -174,13 +188,14 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
     public function test_deleting_one_subsidy_does_not_reduce_shared_item_below_other_subsidy_stock(): void
     {
         $wh1 = $this->makeWarehouse('Warehouse A', 'WHA');
-        $base = $this->makeItem($wh1, 'Rice', 50, 100);
 
+        // Two subsidies delivering the same item at the same unit cost to the same warehouse.
+        // Each creates its own item record (source_subsidy_id separates them).
         $ds1 = $this->createSubsidy([
-            ['item_id' => $base->id, 'description' => 'Rice', 'quantity' => 40],
+            ['description' => 'Rice', 'quantity' => 40],
         ], 'RIS-SHARE-1');
         $ds2 = $this->createSubsidy([
-            ['item_id' => $base->id, 'description' => 'Rice', 'quantity' => 20],
+            ['description' => 'Rice', 'quantity' => 20],
         ], 'RIS-SHARE-2');
 
         $line1 = $ds1->items()->firstOrFail();
@@ -195,19 +210,28 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             'quantity_delivered' => 20, 'unit_cost' => 50, 'dr_number' => 'DR-SHARE-2-A',
         ]]);
 
-        $item = Item::where('warehouse_id', $wh1->id)->where('description', 'Rice')->firstOrFail();
-        $this->assertEquals(160, (float) $item->fresh()->quantity);
+        // Lookup by source_subsidy_id — the authoritative identity.
+        $item1 = Item::where('warehouse_id', $wh1->id)->where('description', 'Rice')
+            ->where('source_subsidy_id', $ds1->id)->firstOrFail();
+        $item2 = Item::where('warehouse_id', $wh1->id)->where('description', 'Rice')
+            ->where('source_subsidy_id', $ds2->id)->firstOrFail();
+
+        $this->assertEquals(40, (float) $item1->fresh()->quantity);
+        $this->assertEquals(20, (float) $item2->fresh()->quantity);
 
         // Delete the FIRST subsidy only — the second subsidy's 20 must remain.
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds1))
             ->assertRedirect(route('delivery_subsidies.index'));
 
-        $this->assertEquals(120, (float) $item->fresh()->quantity);
+        // ds1's item reversed to 0 (or deleted if orphaned).
+        $this->assertEquals(0, (float) ($item1->fresh()?->quantity ?? 0));
+        // ds2's item completely untouched.
+        $this->assertEquals(20, (float) $item2->fresh()->quantity);
 
-        $this->assertEquals(0, StockCardEntry::where('item_id', $item->id)
+        $this->assertEquals(0, StockCardEntry::where('item_id', $item1->id)
             ->where('reference', 'DR-SHARE-1-A')->count());
-        $this->assertEquals(20, StockCardEntry::where('item_id', $item->id)
+        $this->assertEquals(20, StockCardEntry::where('item_id', $item2->id)
             ->where('reference', 'DR-SHARE-2-A')->sum('receipt_qty'));
     }
 
@@ -215,15 +239,16 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
     {
         $whA = $this->makeWarehouse('Warehouse A', 'WHA');
         $whB = $this->makeWarehouse('Warehouse B', 'WHB');
-        $base = $this->makeItem($whA, 'Coffee', 300, 10);
 
+        // One subsidy, two deliveries to different warehouses.
+        // Each delivery creates/finds the item for that warehouse.
         $ds = $this->createSubsidy([
-            ['item_id' => $base->id, 'description' => 'Coffee', 'quantity' => 15],
+            ['description' => 'Coffee', 'quantity' => 15],
         ], 'RIS-MULTI-WH');
 
         $line = $ds->items()->firstOrFail();
 
-        // One subsidy, two deliveries: 10 to WH-A, 5 to WH-B.
+        // 10 to WH-A, 5 to WH-B.
         $this->dispatch($ds, 'DR-MULTI-WH-1', [[
             'ds_item_id' => $line->id, 'warehouse_id' => $whA->id,
             'quantity_delivered' => 10, 'unit_cost' => 300, 'dr_number' => 'DR-MULTI-WH-1-A',
@@ -233,32 +258,35 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             'quantity_delivered' => 5, 'unit_cost' => 300, 'dr_number' => 'DR-MULTI-WH-2-A',
         ]]);
 
-        $itemA = Item::where('warehouse_id', $whA->id)->where('description', 'Coffee')->firstOrFail();
-        $itemB = Item::where('warehouse_id', $whB->id)->where('description', 'Coffee')->firstOrFail();
-        $this->assertEquals(20, (float) $itemA->fresh()->quantity);
+        $itemA = Item::where('warehouse_id', $whA->id)->where('description', 'Coffee')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $itemB = Item::where('warehouse_id', $whB->id)->where('description', 'Coffee')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $this->assertEquals(10, (float) $itemA->fresh()->quantity);
         $this->assertEquals(5, (float) $itemB->fresh()->quantity);
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
             ->assertRedirect(route('delivery_subsidies.index'));
 
-        $this->assertEquals(10, (float) $itemA->fresh()->quantity);
-        // The WH-B variant existed only for this subsidy → it is removed entirely.
+        // Both items were created only for this subsidy → both removed.
+        $this->assertNull($itemA->fresh());
+        $this->assertDatabaseMissing('items', ['id' => $itemA->id]);
         $this->assertNull($itemB->fresh());
         $this->assertDatabaseMissing('items', ['id' => $itemB->id]);
 
         $this->assertEquals(0, StockCardEntry::where('item_id', $itemA->id)
-            ->where('reference_type', 'delivery')->where('reference_id', $this->deliveryId('DR-MULTI-WH-1'))->count());
+            ->where('reference_type', 'delivery')->count());
         $this->assertEquals(0, StockCardEntry::where('item_id', $itemB->id)
-            ->where('reference_type', 'delivery')->where('reference_id', $this->deliveryId('DR-MULTI-WH-2'))->count());
+            ->where('reference_type', 'delivery')->count());
     }
 
     public function test_deleting_subsidy_respects_expiry_variants(): void
     {
         $whA = $this->makeWarehouse('Warehouse A', 'WHA');
-        $exp2026 = $this->makeItem($whA, 'Milk', 60, 30, '2026-12-31');
-        $exp2027 = $this->makeItem($whA, 'Milk', 60, 40, '2027-12-31');
 
+        // Two subsidies: same item, same cost, same warehouse, different expiry dates.
+        // Each creates its own item record (expiration_date is part of the identity).
         $ds1 = $this->createSubsidy([
             ['description' => 'Milk', 'quantity' => 20, 'expiration_date' => '2026-12-31'],
         ], 'RIS-EXP-1');
@@ -280,27 +308,32 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             'expiration_date' => '2027-12-31', 'dr_number' => 'DR-EXP-2-A',
         ]]);
 
-        $milk2026 = Item::where('warehouse_id', $whA->id)->where('description', 'Milk')->whereDate('expiration_date', '2026-12-31')->firstOrFail();
-        $milk2027 = Item::where('warehouse_id', $whA->id)->where('description', 'Milk')->whereDate('expiration_date', '2027-12-31')->firstOrFail();
+        // Look up by subsidy id — the authoritative identity per-delivery.
+        $milk2026 = Item::where('warehouse_id', $whA->id)->where('description', 'Milk')
+            ->where('source_subsidy_id', $ds1->id)->whereDate('expiration_date', '2026-12-31')->firstOrFail();
+        $milk2027 = Item::where('warehouse_id', $whA->id)->where('description', 'Milk')
+            ->where('source_subsidy_id', $ds2->id)->whereDate('expiration_date', '2027-12-31')->firstOrFail();
 
-        $this->assertEquals(50, (float) $milk2026->fresh()->quantity);
-        $this->assertEquals(50, (float) $milk2027->fresh()->quantity);
+        $this->assertEquals(20, (float) $milk2026->fresh()->quantity);
+        $this->assertEquals(10, (float) $milk2027->fresh()->quantity);
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds1))
             ->assertRedirect(route('delivery_subsidies.index'));
 
-        $this->assertEquals(30, (float) $milk2026->fresh()->quantity);
-        $this->assertEquals(50, (float) $milk2027->fresh()->quantity);
+        // ds1's item reversed to 0 (or deleted).
+        $this->assertEquals(0, (float) ($milk2026->fresh()?->quantity ?? 0));
+        // ds2's item untouched.
+        $this->assertEquals(10, (float) $milk2027->fresh()->quantity);
     }
 
     public function test_stock_card_running_balances_are_correct_after_subsidy_deletion(): void
     {
         $whA = $this->makeWarehouse('Warehouse A', 'WHA');
-        $base = $this->makeItem($whA, 'Sugar', 40, 0);
 
+        // Catalog-based subsidy line (no item_id) — delivery creates the item from scratch.
         $ds = $this->createSubsidy([
-            ['item_id' => $base->id, 'description' => 'Sugar', 'quantity' => 25],
+            ['description' => 'Sugar', 'quantity' => 25],
         ], 'RIS-BALANCE');
 
         $line = $ds->items()->firstOrFail();
@@ -309,7 +342,8 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             'quantity_delivered' => 25, 'unit_cost' => 40, 'dr_number' => 'DR-BALANCE-A',
         ]]);
 
-        $item = Item::where('warehouse_id', $whA->id)->where('description', 'Sugar')->firstOrFail();
+        $item = Item::where('warehouse_id', $whA->id)->where('description', 'Sugar')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
         $this->assertEquals(25, (float) $item->fresh()->quantity);
 
         $this->actingAs($this->admin())
@@ -326,10 +360,10 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
     public function test_second_delete_does_not_double_reverse(): void
     {
         $whA = $this->makeWarehouse('Warehouse A', 'WHA');
-        $base = $this->makeItem($whA, 'Flour', 25, 100);
 
+        // Catalog-based subsidy — item created by the delivery, not pre-existing.
         $ds = $this->createSubsidy([
-            ['item_id' => $base->id, 'description' => 'Flour', 'quantity' => 30],
+            ['description' => 'Flour', 'quantity' => 30],
         ], 'RIS-DOUBLE-DEL');
 
         $line = $ds->items()->firstOrFail();
@@ -338,20 +372,22 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
             'quantity_delivered' => 30, 'unit_cost' => 25, 'dr_number' => 'DR-DOUBLE-DEL-A',
         ]]);
 
-        $item = Item::where('warehouse_id', $whA->id)->where('description', 'Flour')->firstOrFail();
-        $this->assertEquals(130, (float) $item->fresh()->quantity);
+        $item = Item::where('warehouse_id', $whA->id)->where('description', 'Flour')
+            ->where('source_subsidy_id', $ds->id)->firstOrFail();
+        $this->assertEquals(30, (float) $item->fresh()->quantity);
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
             ->assertRedirect(route('delivery_subsidies.index'));
-        $this->assertEquals(100, (float) $item->fresh()->quantity);
+        // Item deleted (no other references).
+        $this->assertNull($item->fresh());
 
         // Second delete hits a missing record → 404, no second reversal.
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds->id))
             ->assertNotFound();
 
-        $this->assertEquals(100, (float) $item->fresh()->quantity);
+        $this->assertDatabaseMissing('items', ['id' => $item->id]);
     }
 
     public function test_deleting_subsidy_removes_item_created_solely_for_it(): void
