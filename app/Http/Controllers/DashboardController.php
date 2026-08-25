@@ -70,6 +70,8 @@ class DashboardController extends Controller
 
             $unliquidated = DeliverySubsidy::with('warehouse')
                 ->whereIn('status', ['pending', 'partial'])
+                ->orderByDesc('date')
+                ->limit(200)
                 ->get()
                 ->groupBy('warehouse_id');
 

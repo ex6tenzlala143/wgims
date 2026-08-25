@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WGIMS Process Flow — DSWD Region X</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; display: flex; flex-direction: column; align-items: center; font-family: 'Segoe UI', Arial, sans-serif; }
+  header { width: 100%; background: #1a1f2e; border-bottom: 1px solid #2d3348; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  header h1 { color: #e2e8f0; font-size: 18px; }
+  header small { color: #8892a4; font-size: 12px; }
+  .controls { display: flex; gap: 8px; }
+  button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn-print { background: #3b82f6; color: #fff; }
+  .btn-fit   { background: #374151; color: #e2e8f0; }
+  .legend { width: 100%; max-width: 2400px; padding: 12px 32px; display: flex; gap: 20px; flex-wrap: wrap; background: #1a1f2e; border-bottom: 1px solid #2d3348; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8892a4; }
+  .leg-box { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; }
+  .scroll-container { width: 100%; overflow: auto; }
+  svg { display: block; }
+  @media print {
+    header, .controls, .legend { display: none; }
+    body { background: white; }
+    .scroll-container { overflow: visible; }
+    svg { width: 100%; height: auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>WGIMS — Welfare Goods Inventory Management System</h1>
+    <small>Complete Process Flow · DSWD Region X</small>
+  </div>
+  <div class="controls">
+    <button class="btn-fit" onclick="toggleFit()">⇔ Fit Width</button>
+    <button class="btn-print" onclick="window.print()">🖨 Print / Save as PDF</button>
+  </div>
+</header>
+<div class="legend">
+  <div class="leg-item"><div class="leg-box" style="background:#22c55e;border:1px solid #16a34a"></div>Start / End</div>
+  <div class="leg-item"><div class="leg-box" style="background:#1e3a5f;border:1px solid #3b82f6"></div>Step / Action</div>
+  <div class="leg-item"><div class="leg-box" style="background:#312e81;border:1px solid #818cf8"></div>Admin Only</div>
+  <div class="leg-item"><div class="leg-box" style="background:#164e63;border:1px solid #22d3ee"></div>System Auto</div>
+  <div class="leg-item"><div class="leg-box" style="background:#78350f;border:1px solid #f59e0b"></div>Decision</div>
+  <div class="leg-item"><div class="leg-box" style="background:#7f1d1d;border:1px solid #ef4444"></div>Blocked / Error</div>
+  <div class="leg-item"><div class="leg-box" style="background:#14532d;border:1px solid #4ade80"></div>Report / Output</div>
+  <div class="leg-item" style="margin-left:auto;color:#4ade80">▶ Green arrow = YES</div>
+  <div class="leg-item" style="color:#f87171">▶ Red arrow = NO / Blocked</div>
+  <div class="leg-item" style="color:#94a3b8">▶ Gray arrow = Flow</div>
+</div>
+<div class="scroll-container" id="scrollBox">
+  <object data="WGIMS-Process-Flow.svg" type="image/svg+xml" id="svgObj"
+          style="min-width:2400px;display:block"></object>
+</div>
+<script>
+var fitted = false;
+function toggleFit() {
+  var obj = document.getElementById('svgObj');
+  fitted = !fitted;
+  obj.style.width  = fitted ? '100%' : '2400px';
+  obj.style.minWidth = fitted ? 'unset' : '2400px';
+}
+</script>
+</body>
+</html>

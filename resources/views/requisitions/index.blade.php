@@ -35,8 +35,8 @@
                 </select>
                 <select name="related_to_deleted_subsidy" class="form-control">
                     <option value="">All Subsidy Sources</option>
-                    <option value="yes" {{ request('related_to_deleted_subsidy') === 'yes' ? 'selected' : '' }}>Related to Deleted/Archived Subsidy</option>
-                    <option value="no" {{ request('related_to_deleted_subsidy') === 'no' ? 'selected' : '' }}>Not Related to Deleted/Archived Subsidy</option>
+                    <option value="yes" {{ request('related_to_deleted_subsidy') === 'yes' ? 'selected' : '' }}>Related to Deleted Subsidy</option>
+                    <option value="no" {{ request('related_to_deleted_subsidy') === 'no' ? 'selected' : '' }}>Not Related to Deleted Subsidy</option>
                 </select>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
                 <a href="{{ route('requisitions.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>

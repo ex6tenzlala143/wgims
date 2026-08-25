@@ -331,7 +331,7 @@
             </tbody>
             <tfoot>
                 <tr style="background:#f7fafc;font-weight:700">
-                    <td colspan="10" style="text-align:right;padding:12px 14px">Total Value Dispatched:</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 12 : 10 }}" style="text-align:right;padding:12px 14px">Total Value Dispatched:</td>
                     <td style="text-align:right;padding:12px 14px">₱ {{ number_format($grandTotal, 2) }}</td>
                 </tr>
             </tfoot>

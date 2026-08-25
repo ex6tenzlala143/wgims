@@ -96,11 +96,6 @@
                     </td>
                     <td>
                         <strong>{{ $subsidy->ris_number }}</strong>
-                        @if($subsidy->isArchived())
-                        <div style="margin-top:5px">
-                            <span class="badge badge-secondary"><i class="fas fa-archive"></i> Archived</span>
-                        </div>
-                        @endif
                     </td>
                     <td>{{ $subsidy->date ? $subsidy->date->format('M d, Y') : '-' }}</td>
                     <td>{{ $subsidy->supplier->name ?? '-' }}</td>
@@ -146,24 +141,11 @@
                     <td>
                         <div style="display:flex;gap:4px">
                             <a href="{{ route('delivery_subsidies.show', $subsidy->id) }}" class="btn btn-sm btn-outline btn-icon" title="View"><i class="fas fa-eye"></i></a>
-                            @if($subsidy->status !== 'fully_delivered' && $subsidy->status !== 'cancelled' && ! $subsidy->isArchived())
+                            @if($subsidy->status !== 'fully_delivered' && $subsidy->status !== 'cancelled')
                             <a href="{{ route('delivery_subsidies.delivery', $subsidy->id) }}" class="btn btn-sm btn-success btn-icon" title="Record Delivery"><i class="fas fa-truck"></i></a>
                             @endif
-                            @if(auth()->user()->canWrite() && $subsidy->status !== 'cancelled' && ! $subsidy->isArchived())
+                            @if(auth()->user()->canWrite() && $subsidy->status !== 'cancelled')
                             <button type="button" class="btn btn-sm btn-outline btn-icon" title="Edit" onclick="openEditModal({{ $subsidy->id }})"><i class="fas fa-edit"></i></button>
-                            @endif
-                            @if(auth()->user()->canWrite() && ! $subsidy->isArchived())
-                            <form action="{{ route('delivery_subsidies.archive', $subsidy->id) }}" method="POST"
-                                onsubmit="return confirm('Archive RIS #{{ $subsidy->ris_number }}? Related stock transfers will be flagged for review — nothing is deleted.')">
-                                @csrf @method('PATCH')
-                                <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Archive"><i class="fas fa-archive"></i></button>
-                            </form>
-                            @elseif(auth()->user()->canWrite() && $subsidy->isArchived())
-                            <form action="{{ route('delivery_subsidies.restore', $subsidy->id) }}" method="POST"
-                                onsubmit="return confirm('Restore RIS #{{ $subsidy->ris_number }}? Related stock transfer flags will be cleared.')">
-                                @csrf @method('PATCH')
-                                <button type="submit" class="btn btn-sm btn-outline btn-icon" title="Restore"><i class="fas fa-undo"></i></button>
-                            </form>
                             @endif
                             @if(auth()->user()->canWrite())
                             <form action="{{ route('delivery_subsidies.destroy', $subsidy->id) }}" method="POST"

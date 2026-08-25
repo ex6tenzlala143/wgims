@@ -179,14 +179,13 @@
     if (!modal) return;
 
     function open(status, ris, dr, code) {
-        var isDeleted = status === 'deleted';
-        var label     = isDeleted ? 'Deleted' : 'Archived';
+        var label = 'Deleted';
 
         var title = document.getElementById('subsidyDetailsTitle');
-        if (title) title.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + label + ' Subsidy';
+        if (title) title.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Deleted Subsidy';
 
         var stat = document.getElementById('subsidy-detail-status');
-        if (stat) stat.innerHTML = '<span class="badge ' + (isDeleted ? 'badge-danger' : 'badge-warning') + '">' + label + '</span>';
+        if (stat) stat.innerHTML = '<span class="badge badge-danger">Deleted</span>';
 
         var codeEl = document.getElementById('subsidy-detail-code');
         if (codeEl) codeEl.textContent = code || '—';

@@ -67,7 +67,6 @@
                 <select name="source_subsidy_status" class="form-control">
                     <option value="">All Sources</option>
                     <option value="deleted"  {{ $sourceStatus === 'deleted'  ? 'selected' : '' }}>From Deleted Subsidy</option>
-                    <option value="archived" {{ $sourceStatus === 'archived' ? 'selected' : '' }}>From Archived Subsidy</option>
                     <option value="active"   {{ $sourceStatus === 'active'   ? 'selected' : '' }}>From Active Subsidy</option>
                 </select>
             </div>
@@ -95,7 +94,7 @@
         <span class="badge badge-secondary">{{ $allItems->firstWhere('id', $itemId)?->description ?? 'Item #'.$itemId }}</span>
     @endif
     @if($sourceStatus)
-        <span class="badge badge-info">Source: {{ $sourceStatus === 'deleted' ? 'Deleted Subsidy' : ($sourceStatus === 'archived' ? 'Archived Subsidy' : 'Active Subsidy') }}</span>
+        <span class="badge badge-info">Source: {{ $sourceStatus === 'deleted' ? 'Deleted Subsidy' : 'Active Subsidy' }}</span>
     @endif
 </div>
 @endif

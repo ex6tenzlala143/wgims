@@ -41,7 +41,6 @@
                 <select name="source_subsidy_status" class="form-control">
                     <option value="">All Sources</option>
                     <option value="deleted"  {{ request('source_subsidy_status') == 'deleted'  ? 'selected' : '' }}>From Deleted Subsidy</option>
-                    <option value="archived" {{ request('source_subsidy_status') == 'archived' ? 'selected' : '' }}>From Archived Subsidy</option>
                     <option value="active"   {{ request('source_subsidy_status') == 'active'   ? 'selected' : '' }}>From Active Subsidy</option>
                 </select>
                 @if($warehouses->count() > 1)

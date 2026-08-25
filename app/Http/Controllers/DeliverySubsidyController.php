@@ -305,7 +305,7 @@ class DeliverySubsidyController extends Controller
             'quantity'        => (float) $dsi->quantity,
             'expiration_date' => $dsi->expiration_date?->format('Y-m-d')
                 ?? ($dsi->item?->expiration_date?->format('Y-m-d') ?? ''),
-            'has_deliveries'  => $dsi->deliveryItems()->count() > 0,
+            'has_deliveries'  => $dsi->deliveryItems->count() > 0,
             'qty_delivered'   => (float) $dsi->qty_delivered,
             'locked'          => (float) $dsi->qty_delivered > 0,
         ]);
@@ -830,111 +830,6 @@ class DeliverySubsidyController extends Controller
     }
 
     /**
-     * Admin: archive a Subsidy (freeze it without deleting). Related Stock
-     * Transfers are flagged 'archived' so the administrator can find them.
-     */
-    public function archive(DeliverySubsidy $deliverySubsidy)
-    {
-        abort_unless(Auth::user()->canWrite(), 403);
-
-        if (! $deliverySubsidy->isArchived()) {
-            try {
-                DB::transaction(function () use ($deliverySubsidy) {
-                    $deliverySubsidy->update(['is_archived' => true]);
-
-                    $this->markTransfersWithSubsidyState($deliverySubsidy, 'archived', 'subsidy_archived');
-
-                    $this->markItemsWithSubsidyState($deliverySubsidy, 'archived');
-
-                    DeliverySubsidyAuditLog::create([
-                        'delivery_subsidy_id' => $deliverySubsidy->id,
-                        'user_id'             => Auth::user()->id,
-                        'action'              => 'archive',
-                        'changed_fields'      => [
-                            'is_archived' => ['old' => false, 'new' => true],
-                        ],
-                    ]);
-                });
-            } catch (ValidationException $e) {
-                throw $e;
-            } catch (\Throwable $e) {
-                Log::error('Delivery / subsidy archiving failed', [
-                    'delivery_subsidy_id' => $deliverySubsidy->id,
-                    'error'               => $e->getMessage(),
-                    'trace'               => $e->getTraceAsString(),
-                ]);
-
-                return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
-            }
-        }
-
-        return redirect()->route('delivery_subsidies.index')
-            ->with('success', "RIS #{$deliverySubsidy->ris_number} archived. Related stock transfers are now flagged for review.");
-    }
-
-    /**
-     * Admin: restore an archived Subsidy. Transfers flagged 'archived' by it
-     * return to their normal state (the flag is cleared so they blend back into
-     * the active list).
-     */
-    public function restore(DeliverySubsidy $deliverySubsidy)
-    {
-        abort_unless(Auth::user()->canWrite(), 403);
-
-        if ($deliverySubsidy->isArchived()) {
-            try {
-                DB::transaction(function () use ($deliverySubsidy) {
-                    $deliverySubsidy->update(['is_archived' => false]);
-
-                    foreach ($this->relatedStockTransfers($deliverySubsidy) as $transfer) {
-                        if ($transfer->source_subsidy_status !== 'archived') {
-                            continue;
-                        }
-
-                        $transfer->update(['source_subsidy_status' => null]);
-
-                        StockTransferAuditLog::create([
-                            'stock_transfer_id' => $transfer->id,
-                            'transfer_number'   => $transfer->transfer_number,
-                            'user_id'           => Auth::user()->id,
-                            'action'            => 'subsidy_restored',
-                            'changed_fields'    => [
-                                'ris_number'     => $deliverySubsidy->ris_number,
-                                'dr_number'      => $deliverySubsidy->dr_number,
-                                'subsidy_status' => null,
-                            ],
-                        ]);
-                    }
-
-                    $this->markItemsWithSubsidyState($deliverySubsidy, 'active');
-
-                    DeliverySubsidyAuditLog::create([
-                        'delivery_subsidy_id' => $deliverySubsidy->id,
-                        'user_id'             => Auth::user()->id,
-                        'action'              => 'restore',
-                        'changed_fields'      => [
-                            'is_archived' => ['old' => true, 'new' => false],
-                        ],
-                    ]);
-                });
-            } catch (ValidationException $e) {
-                throw $e;
-            } catch (\Throwable $e) {
-                Log::error('Delivery / subsidy restore failed', [
-                    'delivery_subsidy_id' => $deliverySubsidy->id,
-                    'error'               => $e->getMessage(),
-                    'trace'               => $e->getTraceAsString(),
-                ]);
-
-                return back()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
-            }
-        }
-
-        return redirect()->route('delivery_subsidies.index')
-            ->with('success', "RIS #{$deliverySubsidy->ris_number} restored. Related stock transfer flags were cleared.");
-    }
-
-    /**
      * All Stock Transfers that trace back to this Subsidy: linked directly by
      * FK, or matched by the RIS/DR snapshot on transfers whose subsidy row is
      * already gone.
@@ -967,7 +862,7 @@ class DeliverySubsidyController extends Controller
 
     /**
      * Flag every Stock Transfer related to the given Subsidy with a new source
-     * state ('deleted' | 'archived'), snapshot the RIS/DR references, and write
+     * state ('deleted'), snapshot the RIS/DR references, and write
      * an audit entry on each transfer so the trail outlives the subsidy record.
      *
      * Returns the number of transfers flagged.
@@ -1014,9 +909,7 @@ class DeliverySubsidyController extends Controller
      * Sync the source-subsidy snapshot on every Item delivered by the given
      * Subsidy AND on every Item that received that stock through a Stock
      * Transfer (including multi-hop chains), so the marker follows the stock
-     * across warehouses. When restoring an archived subsidy, we clear the
-     * 'archived' flag (set to null) instead of marking it as 'active', since
-     * 'active' is confusing and looks like a warning.
+     * across warehouses.
      */
     private function markItemsWithSubsidyState(DeliverySubsidy $deliverySubsidy, string $state): void
     {
@@ -1025,22 +918,7 @@ class DeliverySubsidyController extends Controller
         );
 
         foreach (Item::whereIn('id', $lineageIds)->get() as $item) {
-            // When restoring (state = 'active'), only clear items that this subsidy previously archived
-            if ($state === 'active') {
-                if ($item->source_subsidy_status === 'archived' && $item->source_subsidy_id === $deliverySubsidy->id) {
-                    // Clear the archived status by setting to null
-                    $item->applySubsidySnapshot(
-                        $deliverySubsidy->id,
-                        $deliverySubsidy->ris_number,
-                        $deliverySubsidy->dr_number,
-                        null,
-                        $deliverySubsidy->subsidy_code
-                    );
-                }
-                continue;
-            }
-
-            // For deleted/archived states, apply the status
+            // For deleted state, apply the status
             $item->applySubsidySnapshot(
                 $deliverySubsidy->id,
                 $deliverySubsidy->ris_number,
@@ -1095,10 +973,6 @@ class DeliverySubsidyController extends Controller
         if (! $this->canAccessDeliverySubsidy($user, $deliverySubsidy)) {
             abort(403);
         }
-        if ($deliverySubsidy->isArchived()) {
-            return redirect()->route('delivery_subsidies.show', $deliverySubsidy)
-                ->with('error', 'This Subsidy is archived. Restore it before recording new deliveries.');
-        }
         $deliverySubsidy->load(['items.item', 'items.warehouse', 'supplier', 'warehouse']);
 
         // Warehouses the dispatcher may route this shipment to (center users are
@@ -1115,9 +989,6 @@ class DeliverySubsidyController extends Controller
         $user = Auth::user();
         if (! $this->canAccessDeliverySubsidy($user, $deliverySubsidy)) {
             abort(403);
-        }
-        if ($deliverySubsidy->isArchived()) {
-            return back()->with('error', 'This Subsidy is archived. Restore it before recording new deliveries.');
         }
 
         // Build per-item validation rules. A line is treated as a real dispatch

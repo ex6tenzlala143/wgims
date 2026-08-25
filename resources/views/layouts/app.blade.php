@@ -592,6 +592,16 @@
         select.form-control { cursor: pointer; }
         textarea.form-control { resize: vertical; min-height: 80px; }
 
+        /* ── Remove browser spinner arrows from number inputs ─────────────── */
+        input[type="number"] {
+            -moz-appearance: textfield; /* Firefox */
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none; /* Chrome, Safari, Edge */
+            margin: 0;
+        }
+
         /* ── Alerts ───────────────────────────────────────────────────────── */
         .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 10px; font-size: 14px; }
         .alert-success { background: var(--success-bg); border: 1px solid var(--success); color: var(--success-text); }
@@ -1574,6 +1584,14 @@
     })();
     </script>
     <script>
+    // Prevent mouse wheel from changing number input values (scroll should only
+    // scroll the page, not increment/decrement quantity fields).
+    document.addEventListener('wheel', function (e) {
+        if (document.activeElement && document.activeElement.type === 'number') {
+            document.activeElement.blur();
+        }
+    }, { passive: true });
+
     // Disable a form's submit button the instant it is submitted, so a
     // double-click (or any second submit) can never fire the same request twice.
     // Native-submit forms only — fetch-based modals manage their own buttons.

@@ -75,8 +75,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/delivery-subsidies/{deliverySubsidy}/edit-data',               [DeliverySubsidyController::class, 'editData'])->name('delivery_subsidies.edit_data');
         Route::put('/delivery-subsidies/{deliverySubsidy}',                         [DeliverySubsidyController::class, 'update'])->name('delivery_subsidies.update');
         Route::delete('/delivery-subsidies/{deliverySubsidy}',                      [DeliverySubsidyController::class, 'destroy'])->name('delivery_subsidies.destroy');
-        Route::patch('/delivery-subsidies/{deliverySubsidy}/archive',               [DeliverySubsidyController::class, 'archive'])->name('delivery_subsidies.archive');
-        Route::patch('/delivery-subsidies/{deliverySubsidy}/restore',               [DeliverySubsidyController::class, 'restore'])->name('delivery_subsidies.restore');
         // Admin-only: edit/update individual delivery records + audit log
         Route::middleware('admin')->group(function () {
             Route::get('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}/edit', [DeliverySubsidyController::class, 'editDelivery'])->name('delivery_subsidies.edit_delivery');

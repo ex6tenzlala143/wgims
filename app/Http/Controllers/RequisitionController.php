@@ -59,13 +59,13 @@ class RequisitionController extends Controller
         }
         if ($request->related_to_deleted_subsidy === 'yes') {
             $query->where(function ($q) {
-                $q->whereHas('items.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']))
-                  ->orWhereHas('items.dispatchItems.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']));
+                $q->whereHas('items.item', fn ($i) => $i->where('source_subsidy_status', 'deleted'))
+                  ->orWhereHas('items.dispatchItems.item', fn ($i) => $i->where('source_subsidy_status', 'deleted'));
             });
         } elseif ($request->related_to_deleted_subsidy === 'no') {
             $query->where(function ($q) {
-                $q->whereDoesntHave('items.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']))
-                  ->whereDoesntHave('items.dispatchItems.item', fn ($i) => $i->whereIn('source_subsidy_status', ['deleted', 'archived']));
+                $q->whereDoesntHave('items.item', fn ($i) => $i->where('source_subsidy_status', 'deleted'))
+                  ->whereDoesntHave('items.dispatchItems.item', fn ($i) => $i->where('source_subsidy_status', 'deleted'));
             });
         }
         if ($search = $request->search) {
@@ -304,14 +304,20 @@ class RequisitionController extends Controller
                 ->orWhereIn('role', ['center_head', 'supply_custodian'])
                 ->get();
 
-            foreach ($approvers as $approver) {
-                SystemNotification::create([
-                    'user_id' => $approver->id,
-                    'title' => 'New RIS Submitted',
-                    'message' => "RIS #{$ris->ris_number} requires approval.",
-                    'type' => 'warning',
-                    'link' => route('requisitions.show', $ris->id),
-                ]);
+            $now = now();
+            $notifRows = $approvers->map(fn ($approver) => [
+                'user_id'    => $approver->id,
+                'title'      => 'New RIS Submitted',
+                'message'    => "RIS #{$ris->ris_number} requires approval.",
+                'type'       => 'warning',
+                'link'       => route('requisitions.show', $ris->id),
+                'is_read'    => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->toArray();
+
+            if (! empty($notifRows)) {
+                \App\Models\SystemNotification::insert($notifRows);
             }
             });
         } catch (ValidationException $e) {
@@ -1465,6 +1471,18 @@ class RequisitionController extends Controller
         // manager, center_head, supply_custodian). center_staff are explicitly excluded.
         abort_unless($user->canApprove(), 403, 'You do not have permission to update signatories.');
         abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
+
+        $request->validate([
+            'requested_by_name'        => 'nullable|string|max:255',
+            'requested_by_designation' => 'nullable|string|max:255',
+            'approved_by_name'         => 'nullable|string|max:255',
+            'approved_by_designation'  => 'nullable|string|max:255',
+            'issued_by_name'           => 'nullable|string|max:255',
+            'issued_by_designation'    => 'nullable|string|max:255',
+            'received_by_name'         => 'nullable|string|max:255',
+            'received_by_designation'  => 'nullable|string|max:255',
+        ]);
+
         $requisition->update($request->only([
             'requested_by_name', 'requested_by_designation',
             'approved_by_name',  'approved_by_designation',

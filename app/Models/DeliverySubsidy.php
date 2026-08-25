@@ -10,7 +10,6 @@ class DeliverySubsidy extends Model
         'subsidy_code', 'dr_number', 'supplier_id', 'warehouse_id', 'created_by', 'date',
         'ris_number', 'place_of_delivery', 'date_of_delivery',
         'date_of_expiration', 'total_amount', 'quantity_requested', 'status', 'remarks',
-        'is_archived',
     ];
 
     protected static function boot(): void
@@ -30,21 +29,12 @@ class DeliverySubsidy extends Model
     }
 
     protected $casts = [
-        'date'               => 'date',
-        'date_of_delivery'   => 'date',
-        'total_amount'       => 'float',
-        'quantity_requested' => 'integer',
-        'is_archived'        => 'boolean',
+        'date'                => 'date',
+        'date_of_delivery'    => 'date',
+        'date_of_expiration'  => 'date',
+        'total_amount'        => 'float',
+        'quantity_requested'  => 'integer',
     ];
-
-    /**
-     * Whether this Subsidy has been archived (frozen for review, not deleted).
-     * Related Stock Transfers are flagged accordingly so the admin can find them.
-     */
-    public function isArchived(): bool
-    {
-        return (bool) $this->is_archived;
-    }
 
     public function supplier()
     {

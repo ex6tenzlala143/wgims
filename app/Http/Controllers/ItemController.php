@@ -45,7 +45,7 @@ class ItemController extends Controller
             $query->whereIn('warehouse_id', $assignedIds);
         }
 
-        if ($request->search) {
+        if ($request->filled('search')) {
             $query->where(function ($q) use ($request) {
                 $q->where('description', 'like', '%'.$request->search.'%')
                     ->orWhere('stock_number', 'like', '%'.$request->search.'%')
@@ -78,8 +78,8 @@ class ItemController extends Controller
                 break;
         }
 
-        // Source subsidy filter (deleted / archived / active)
-        if (in_array($request->source_subsidy_status, ['deleted', 'archived', 'active'], true)) {
+        // Source subsidy filter (deleted / active)
+        if (in_array($request->source_subsidy_status, ['deleted', 'active'], true)) {
             $query->where('source_subsidy_status', $request->source_subsidy_status);
         }
 

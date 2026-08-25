@@ -16,7 +16,7 @@ class AdminOnly
 
         // Authenticated but not admin or warehouse manager — 403
         if (! auth()->user()->hasAdminAccess()) {
-            abort(403, 'Access denied. Admin only.');
+            abort(403, 'Access denied. Admin or Warehouse Manager access required.');
         }
 
         return $next($request);

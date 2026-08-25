@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'RIS Details')
 @section('page-title', 'RIS Details')
 
@@ -70,7 +70,7 @@
                     'prefix' => 'RELATED TO',
                 ])
                 <span style="font-size:12px;color:var(--text-muted)">
-                    This RIS draws from stock that traces back to a {{ $subSnapshot['status'] === 'deleted' ? 'deleted' : 'archived' }} Subsidy.
+                    This RIS draws from stock that traces back to a {{ $subSnapshot['status'] === 'deleted' }} Subsidy.
                 </span>
             </div>
             @endif
@@ -213,7 +213,7 @@
                         $expiryDate = $representativeDispatch->expiration_date ?? $representativeDispatch->item?->expiration_date;
                         $unitCost = $representativeDispatch->unit_cost;
                         $engasCost = $representativeDispatch->engas_unit_cost ?? $representativeDispatch->item?->engas_unit_cost;
-                        $riSub = ($representativeDispatch->item && in_array($representativeDispatch->item->source_subsidy_status, ['deleted', 'archived'], true)) 
+                        $riSub = ($representativeDispatch->item && $representativeDispatch->item->source_subsidy_status === 'deleted') 
                             ? $representativeDispatch->item 
                             : null;
                         // For dispatched groups, show the quantity from this group's dispatches
@@ -232,7 +232,7 @@
                         $unitCost = null;    // NO cost until stock is dispatched
                         $engasCost = null;   // NO ENGAS cost until stock is dispatched
                         $riSub = null;
-                        if ($ri->item && in_array($ri->item->source_subsidy_status, ['deleted', 'archived'], true)) {
+                        if ($ri->item && $ri->item->source_subsidy_status === 'deleted') {
                             $riSub = $ri->item;
                         }
                         $groupQtyIssued = 0;
@@ -558,7 +558,7 @@
                             @if($di->expiration_date)
                                 <div style="font-size:11px;color:var(--text-muted)">Exp. {{ $di->expiration_date->format('M d, Y') }}</div>
                             @endif
-                            @if($di->item && in_array($di->item->source_subsidy_status, ['deleted', 'archived'], true))
+                            @if($di->item && $di->item->source_subsidy_status === 'deleted')
                             <div style="margin-top:4px">
                                 @include('partials.subsidy-source-badge', [
                                     'status' => $di->item->source_subsidy_status,

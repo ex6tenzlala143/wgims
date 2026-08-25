@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('title', 'Item Details')
 @section('page-title', 'Item Details')
 
@@ -38,11 +38,11 @@
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Category</td><td><span class="badge badge-info">{{ $item->getCategoryLabel() }}</span></td></tr>
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Account Code</td><td><span class="badge badge-primary">{{ $item->account_code }}</span></td></tr>
                 <tr><td style="padding:8px 0;color:var(--text-muted)">Warehouse</td><td>{{ $item->warehouse->name ?? '—' }}</td></tr>
-                @if($item->sourceSubsidyCode() || in_array($item->source_subsidy_status, ['deleted', 'archived'], true))
+                @if($item->sourceSubsidyCode() || $item->source_subsidy_status === 'deleted')
                 <tr>
                     <td style="padding:8px 0;color:var(--text-muted)">Source Subsidy</td>
                     <td style="padding:8px 0">
-                        @if(in_array($item->source_subsidy_status, ['deleted', 'archived'], true))
+                        @if($item->source_subsidy_status === 'deleted')
                             @include('partials.subsidy-source-badge', [
                                 'status' => $item->source_subsidy_status,
                                 'ris'    => $item->sourceSubsidyReference(),
