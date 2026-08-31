@@ -51,7 +51,7 @@
                 <div><span style="color:var(--text-muted)">Subsidy ID</span><br><code style="font-weight:700;color:var(--primary)">{{ $deliverySubsidy->subsidy_code }}</code></div>
                 <div><span style="color:var(--text-muted)">RIS No.</span><br><strong>{{ $deliverySubsidy->ris_number }}</strong></div>
                 <div><span style="color:var(--text-muted)">Date</span><br>{{ $deliverySubsidy->date?->format('F d, Y') ?? '-' }}</div>
-                <div><span style="color:var(--text-muted)">Supplier/Subsidy</span><br><strong>{{ $deliverySubsidy->supplier->name ?? '-' }}</strong></div>
+                <div><span style="color:var(--text-muted)">Supplier</span><br><strong>{{ $deliverySubsidy->supplier->name ?? '-' }}</strong></div>
                 <div><span style="color:var(--text-muted)">Warehouse</span><br>{{ $deliverySubsidy->warehouse->name ?? '-' }}</div>
                 <div><span style="color:var(--text-muted)">Place of Delivery</span><br>{{ $deliverySubsidy->place_of_delivery ?? '-' }}</div>
                 <div><span style="color:var(--text-muted)">Date of Delivery</span><br>{{ $deliverySubsidy->date_of_delivery?->format('F d, Y') ?? '-' }}</div>

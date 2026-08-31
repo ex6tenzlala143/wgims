@@ -137,7 +137,7 @@ class AuthSecurityAuditTest extends TestCase
         // route-model binding, so a guest is redirected before any lookup runs.
         $protectedUris = [
             '/',                                             // dashboard
-            '/items', '/items/create', '/items/1', '/items/1/edit',
+            '/items', '/items/1', '/items/1/edit',
             '/delivery-subsidies', '/delivery-subsidies/create', '/delivery-subsidies/1',
             '/delivery-subsidies/1/delivery', '/delivery-subsidies/1/edit',
             '/delivery-subsidies/1/edit-data', '/delivery-subsidies/1/audit-log', '/delivery-subsidies/1/deliveries/1/edit',
@@ -410,7 +410,6 @@ class AuthSecurityAuditTest extends TestCase
             $this->get('/users')->assertForbidden();
             $this->get('/users/create')->assertForbidden();
             $this->get('/item-categories')->assertForbidden();
-            $this->get('/items/create')->assertForbidden();
             $this->get('/transfers')->assertOk();
             $this->get('/requisitions')->assertOk();
             $this->get('/delivery-subsidies')->assertOk();

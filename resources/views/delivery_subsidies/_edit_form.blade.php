@@ -84,9 +84,9 @@
                                         <input type="date" name="date" id="edit-date" class="form-control" required>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Supplier/Subsidy <span class="req">*</span> <i class="fas fa-lock" id="edit-supplier-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
+                                        <label class="form-label">Supplier <span class="req">*</span> <i class="fas fa-lock" id="edit-supplier-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
                                         <select name="supplier_id" id="edit-supplier" class="form-control" required>
-                                            <option value="">— Select Supplier/Subsidy —</option>
+                                            <option value="">— Select Supplier —</option>
                                             @foreach($suppliers as $s)
                                             <option value="{{ $s->id }}">{{ $s->name }}</option>
                                             @endforeach

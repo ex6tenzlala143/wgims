@@ -282,11 +282,7 @@
 
             {{-- Category header --}}
             <tr class="cat-header">
-                <td colspan="9">
-                    {{ $catInfo['label'] }}
-                    &nbsp;&nbsp;
-                    <span style="font-weight:normal;font-size:8pt">(Account Code: {{ $catInfo['account_code'] }})</span>
-                </td>
+                <td colspan="9">{{ $catInfo['label'] }}</td>
             </tr>
 
             {{-- Items --}}
@@ -314,9 +310,7 @@
 
             {{-- Category subtotal --}}
             <tr class="subtotal-row">
-                <td colspan="7" style="text-align:right;font-size:8.5pt">
-                    Sub-Total — {{ $catInfo['label'] }}:
-                </td>
+                <td colspan="7" style="text-align:right;font-size:8.5pt">Sub-Total — {{ $catInfo['label'] }}:</td>
                 <td class="right">{{ number_format($catTotals[$catKey]['value'], 2) }}</td>
                 <td></td>
             </tr>

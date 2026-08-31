@@ -53,12 +53,11 @@
     <div class="table-wrapper">
         <table>
             <thead>
-                <tr>
-                    <th>RIS ID / RIS No.</th>
+                 <tr>
+                    <th>RIS No. / RIS ID</th>
                     <th>DR No.</th>
                     <th>Date</th>
                     <th>Warehouse</th>
-                    <th>Office</th>
                     <th>Purpose</th>
                     <th style="min-width:150px">Fulfilment</th>
                     <th>Status</th>
@@ -76,16 +75,13 @@
                     $risBar  = $risPct >= 100 ? 'var(--success)' : ($risPct > 0 ? 'var(--primary)' : '#e2e8f0');
                     $subSnapshot = $ris->deletedSubsidySnapshot();
                 @endphp
-                <tr>
+                 <tr>
                     <td>
                         <div style="line-height:1.6">
+                            <div style="font-weight:600">{{ $ris->ris_number }}</div>
                             <div style="display:flex;align-items:baseline;gap:6px">
-                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;min-width:46px">RIS ID:</span>
+                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">RIS ID:</span>
                                 <strong style="color:var(--primary);font-family:monospace">{{ $ris->ris_code ?? $ris->ris_id }}</strong>
-                            </div>
-                            <div style="display:flex;align-items:baseline;gap:6px">
-                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;min-width:46px">RIS No.:</span>
-                                <span style="font-weight:600">{{ $ris->ris_number }}</span>
                             </div>
                         </div>
                         @if($subSnapshot)
@@ -111,7 +107,6 @@
                     </td>
                     <td>{{ $ris->date_requested->format('M d, Y') }}</td>
                     <td>{{ $ris->warehouse_names ?? ($ris->warehouse->name ?? '-') }}</td>
-                    <td>{{ $ris->office ?? '-' }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($ris->purpose, 40) }}</td>
                     <td>
                         @if($risReq > 0)
@@ -148,7 +143,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-clipboard" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No requisitions found.
                 </td></tr>

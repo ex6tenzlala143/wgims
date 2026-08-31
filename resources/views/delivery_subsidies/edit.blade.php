@@ -40,7 +40,7 @@
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Supplier/Subsidy <span class="req">*</span></label>
+                        <label class="form-label">Supplier <span class="req">*</span></label>
                         <select name="supplier_id" class="form-control" required>
                             @foreach($suppliers as $s)
                             <option value="{{ $s->id }}" {{ old('supplier_id', $deliverySubsidy->supplier_id)==$s->id?'selected':'' }}>{{ $s->name }}</option>

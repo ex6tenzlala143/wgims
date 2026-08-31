@@ -1,0 +1,39 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "default_agent": "wgims-architect",
+  "skills": {
+    "paths": [
+      ".kilo/skills"
+    ]
+  },
+  "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "ask",
+      "*.env.*": "ask",
+      "*.env.example": "allow"
+    },
+    "edit": "ask",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "bash": {
+      "*": "ask",
+      "cat *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "ls *": "allow",
+      "tree *": "allow",
+      "pwd *": "allow",
+      "echo *": "allow",
+      "wc *": "allow",
+      "which *": "allow",
+      "grep *": "allow",
+      "rg *": "allow",
+      "*>*": "ask"
+    },
+    "external_directory": "ask",
+    "question": "allow",
+    "doom_loop": "ask"
+  }
+}

@@ -338,14 +338,10 @@
 
             {{-- RIS subtotal --}}
             <tr>
-                <td colspan="5" style="text-align:right;font-weight:bold;border-top:2px solid #000">
-                    TOTAL:
-                </td>
+                <td colspan="5" style="text-align:right;font-weight:bold;border-top:2px solid #000">TOTAL:</td>
                 <td class="col-divider" style="border-top:2px solid #000"></td>
                 <td style="border-top:2px solid #000"></td>
-                <td class="right" style="font-weight:bold;border-top:2px solid #000">
-                    {{ number_format($subtotal, 2) }}
-                </td>
+                <td class="right" style="font-weight:bold;border-top:2px solid #000">{{ number_format($subtotal, 2) }}</td>
             </tr>
 
         </tbody>

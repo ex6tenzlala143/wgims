@@ -8,6 +8,7 @@ use App\Http\Controllers\ItemCatalogItemController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\DeliverySubsidyController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\RequisitionController;
 use App\Http\Controllers\StockCardController;
 use App\Http\Controllers\SupplierController;
@@ -45,18 +46,7 @@ Route::middleware('auth')->group(function () {
 
     // ── Items ─────────────────────────────────────────────────────────────────
     Route::get('/items', [ItemController::class, 'index'])->name('items.index');
-    // NOTE: /create must be before /{item} to avoid wildcard capture
-    Route::middleware('admin.create')->group(function () {
-        Route::get('/items/create',  [ItemController::class, 'create'])->name('items.create');
-        Route::post('/items',        [ItemController::class, 'store'])->name('items.store');
-    });
     Route::get('/items/{item}', [ItemController::class, 'show'])->name('items.show');
-    // Edit / Delete — admin only
-    Route::middleware('admin.write')->group(function () {
-        Route::get('/items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit');
-        Route::put('/items/{item}',      [ItemController::class, 'update'])->name('items.update');
-        Route::delete('/items/{item}',   [ItemController::class, 'destroy'])->name('items.destroy');
-    });
 
     // ── Delivery / Subsidies ──────────────────────────────────────────────────
     Route::get('/delivery-subsidies',                                  [DeliverySubsidyController::class, 'index'])->name('delivery_subsidies.index');
@@ -96,6 +86,19 @@ Route::middleware('auth')->group(function () {
     Route::post('/requisitions/{requisition}/approve',            [RequisitionController::class, 'processApproval'])->name('requisitions.process_approval');
     Route::get('/requisitions/{requisition}/signatories',         [RequisitionController::class, 'signatories'])->name('requisitions.signatories');
     Route::get('/requisitions/{requisition}/print',               [RequisitionController::class, 'printRis'])->name('requisitions.print');
+
+    // ── Reservations ──────────────────────────────────────────────────────────
+    Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
+    Route::middleware('admin.create')->group(function () {
+        Route::get('/reservations/create', [ReservationController::class, 'create'])->name('reservations.create');
+        Route::post('/reservations', [ReservationController::class, 'store'])->name('reservations.store');
+    });
+    // NOTE: items-by-warehouse MUST be before {reservation} to avoid wildcard capture
+    Route::get('/reservations/items-by-warehouse', [ReservationController::class, 'getItemsByWarehouse'])->name('reservations.items_by_warehouse');
+    Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])->name('reservations.show');
+    Route::post('/reservations/{reservation}/approve', [ReservationController::class, 'approve'])->name('reservations.approve');
+    Route::post('/reservations/{reservation}/ready', [ReservationController::class, 'markReady'])->name('reservations.ready');
+    Route::post('/reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])->name('reservations.cancel');
     
     // Write routes — ADMIN ONLY (blocked for Warehouse Manager)
     Route::middleware('admin.write')->group(function () {

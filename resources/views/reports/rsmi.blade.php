@@ -216,12 +216,8 @@
             </tbody>
             <tfoot>
                 <tr style="background:#f0f9ff;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 7 }}" style="text-align:right;padding:10px 14px">
-                        RIS Sub-Total:
-                    </td>
-                    <td style="text-align:right;padding:10px 14px;color:var(--primary)">
-                        ₱{{ number_format($subtotal, 2) }}
-                    </td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 7 }}" style="text-align:right;padding:10px 14px">RIS Sub-Total:</td>
+                    <td style="text-align:right;padding:10px 14px;color:var(--primary)">₱{{ number_format($subtotal, 2) }}</td>
                 </tr>
             </tfoot>
         </table>

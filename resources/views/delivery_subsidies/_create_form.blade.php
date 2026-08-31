@@ -69,9 +69,9 @@
                                         <input type="date" name="date" class="form-control" value="{{ old('date', date('Y-m-d')) }}" required>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Supplier/Subsidy <span class="req">*</span></label>
+                                        <label class="form-label">Supplier <span class="req">*</span></label>
                                         <select name="supplier_id" class="form-control" required>
-                                            <option value="">— Select Supplier/Subsidy —</option>
+                                            <option value="">— Select Supplier —</option>
                                             @foreach($suppliers as $s)
                                             <option value="{{ $s->id }}" {{ old('supplier_id')==$s->id?'selected':'' }}>{{ $s->name }}</option>
                                             @endforeach

@@ -186,9 +186,11 @@ class RequisitionController extends Controller
             return [
                 'id'             => $i->id,
                 'description'    => $i->description,
-                'display_text'   => $displayText,  // Enhanced display for dropdown
+                'display_text'   => $displayText,
                 'unit'           => $i->unit,
                 'quantity'       => $i->quantity,
+                'available_qty'  => $i->available_quantity,
+                'reserved_qty'   => $i->reserved_quantity,
                 'stock_number'   => $i->stock_number,
                 'expiry_date'    => $i->expiration_date?->format('Y-m-d'),
                 'expiry_formatted' => $expiryFormatted,
@@ -964,13 +966,18 @@ class RequisitionController extends Controller
                 // How much is still outstanding for this line
                 $stillNeeded = max(0, $riItem->quantity_requested - $riItem->quantity_issued);
 
+                // Check available quantity (physical - reserved)
+                $availableQty = $item->quantity - \App\Models\Reservation::reservedQuantityForItem($item->id);
+
                 // Reject instead of silently capping or borrowing from another record
-                if ($wanted > $item->quantity + 0.0001) {
+                if ($wanted > $availableQty + 0.0001) {
                     throw ValidationException::withMessages([
                         "items.{$riItemId}.quantity_issued" =>
-                            'Insufficient stock on the selected record "'.$item->description.'"'
+                            'Insufficient available stock on the selected record "'.$item->description.'"'
                             .' ('.$item->stock_number.' · ₱'.number_format($item->unit_cost, 2).'): '
-                            .'only '.number_format($item->quantity).' available. '
+                            .'physical '.number_format($item->quantity).', '
+                            .'reserved '.number_format(\App\Models\Reservation::reservedQuantityForItem($item->id)).', '
+                            .'available '.number_format($availableQty).'. '
                             .'No other unit-cost record will be used.',
                     ]);
                 }

@@ -12,9 +12,6 @@
         @if($item->stock_number)
         <a href="{{ route('stock_cards.item_history', $item->id) }}" class="btn btn-primary"><i class="fas fa-book"></i> Stock Card</a>
         @endif
-        @if(auth()->user()->canWrite())
-        <a href="{{ route('items.edit', $item->id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>
-        @endif
     </div>
 </div>
 

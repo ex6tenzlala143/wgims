@@ -138,6 +138,26 @@ class Item extends Model
         return $this->belongsTo(DeliverySubsidy::class, 'source_subsidy_id');
     }
 
+    public function reservations()
+    {
+        return $this->hasMany(Reservation::class);
+    }
+
+    public function activeReservations()
+    {
+        return $this->hasMany(Reservation::class)->whereIn('status', Reservation::ACTIVE_STATUSES);
+    }
+
+    public function getReservedQuantityAttribute(): float
+    {
+        return Reservation::reservedQuantityForItem($this->id);
+    }
+
+    public function getAvailableQuantityAttribute(): float
+    {
+        return Reservation::availableQuantityForItem($this);
+    }
+
     /**
      * Whether this item's source Subsidy has been deleted or archived. The
      * subsidy row may be gone; the snapshot columns keep the trail.

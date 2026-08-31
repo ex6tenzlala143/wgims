@@ -66,13 +66,12 @@
     </div>
     @endif
     <div class="table-wrapper">
-        <table>
+         <table>
             <thead>
                 <tr>
-                    <th>Subsidy ID</th>
-                    <th>RIS No.</th>
+                    <th>RIS No. / Subsidy ID</th>
                     <th>Date</th>
-                    <th>Supplier/Subsidy</th>
+                    <th>Supplier</th>
                     @if(auth()->user()->hasAdminAccess())<th>Warehouse</th>@endif
                     <th style="text-align:right">Total Amount</th>
                     <th style="text-align:right">Qty Requested</th>
@@ -92,13 +91,13 @@
                 @endphp
                 <tr>
                     <td>
-                        <code style="font-weight:700;color:var(--primary)">{{ $subsidy->subsidy_code }}</code>
+                        <div style="white-space:nowrap"><strong>{{ $subsidy->ris_number }}</strong></div>
+                        <div style="white-space:nowrap">
+                            <span style="font-size:11px;color:var(--text-muted)">Subsidy ID:</span>
+                            <code style="font-size:11px;color:var(--primary)">{{ $subsidy->subsidy_code }}</code>
+                        </div>
                     </td>
-                    <td>
-                        <strong>{{ $subsidy->ris_number }}</strong>
-                    </td>
-                    <td>{{ $subsidy->date ? $subsidy->date->format('M d, Y') : '-' }}</td>
-                    <td>{{ $subsidy->supplier->name ?? '-' }}</td>
+                                        <td style="white-space:nowrap">{{ $subsidy->date ? $subsidy->date->format('M d, Y') : '-' }}</td>                    <td>{{ $subsidy->supplier->name ?? '-' }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td>
                         @php
@@ -158,7 +157,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-file-invoice" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No delivery/subsidy records found.
                 </td></tr>

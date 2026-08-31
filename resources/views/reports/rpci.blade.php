@@ -83,9 +83,7 @@
                 @if($currentCat != $item->category)
                 @php $currentCat = $item->category; @endphp
                 <tr style="background:#f0f4f8">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}" style="font-weight:700;color:var(--primary)">                        {{ App\Models\Item::getCategories()[$item->category]['label'] ?? $item->category }}
-                        — Account Code: {{ App\Models\Item::getCategories()[$item->category]['account_code'] ?? '' }}
-                    </td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}" style="font-weight:700;color:var(--primary)">{{ App\Models\Item::getCategories()[$item->category]['label'] ?? $item->category }}</td>
                 </tr>
                 @endif
                 <tr>
@@ -122,7 +120,7 @@
             @if($items->count() > 0)
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700;font-size:15px">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 10 : 6 }}" style="text-align:right">GRAND TOTAL:</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 6 }}" style="text-align:right">GRAND TOTAL:</td>
                     <td style="text-align:right">₱{{ number_format($grandTotal, 2) }}</td>
                 </tr>
             </tfoot>
