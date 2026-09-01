@@ -99,6 +99,7 @@
                         @endif
                     </td>
                     <td style="text-align:right">
+                        @php $reservedQty = \App\Models\ReservationItem::reservedQuantityForItem($item->id); @endphp
                         @if($item->quantity <= 0)
                             <span style="color:var(--danger);font-weight:700">{{ number_format($item->quantity) }}</span>
                             <span class="badge badge-danger" style="font-size:10px;margin-left:4px">Out of Stock</span>
@@ -109,6 +110,12 @@
                             </span>
                         @else
                             <span style="color:var(--success);font-weight:600">{{ number_format($item->quantity) }}</span>
+                        @endif
+                        @if($reservedQty > 0)
+                        <div style="font-size:10px;margin-top:2px">
+                            <span style="color:var(--warning)"><i class="fas fa-lock"></i> {{ number_format($reservedQty) }} reserved</span><br>
+                            <span style="color:var(--primary)">{{ number_format(max(0, $item->quantity - $reservedQty)) }} avail.</span>
+                        </div>
                         @endif
                     </td>
                     <td>{{ $item->expiration_date ? $item->expiration_date->format('M d, Y') : '—' }}</td>

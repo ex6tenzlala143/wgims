@@ -197,6 +197,9 @@ class ReportController extends Controller
         if ($request->date_to) {
             $query->whereDate('date_approved', '<=', $request->date_to);
         }
+        if ($request->filled('ris_number')) {
+            $query->where('ris_number', $request->ris_number);
+        }
 
         $requisitions = $query->orderBy('date_approved')->get();
 

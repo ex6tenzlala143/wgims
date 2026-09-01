@@ -143,19 +143,25 @@ class Item extends Model
         return $this->hasMany(Reservation::class);
     }
 
-    public function activeReservations()
+    public function reservationItems()
     {
-        return $this->hasMany(Reservation::class)->whereIn('status', Reservation::ACTIVE_STATUSES);
+        return $this->hasMany(ReservationItem::class);
+    }
+
+    public function activeReservationItems()
+    {
+        return $this->hasMany(ReservationItem::class)
+            ->whereIn('status', ReservationItem::ACTIVE_STATUSES);
     }
 
     public function getReservedQuantityAttribute(): float
     {
-        return Reservation::reservedQuantityForItem($this->id);
+        return ReservationItem::reservedQuantityForItem($this->id);
     }
 
     public function getAvailableQuantityAttribute(): float
     {
-        return Reservation::availableQuantityForItem($this);
+        return max(0, $this->quantity - $this->reserved_quantity);
     }
 
     /**

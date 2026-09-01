@@ -42,6 +42,9 @@
     </div>
 </div>
 
+{{-- ── Reservation Summary ──────────────────────────────────────────────── --}}
+@include('dashboard._reservation_summary', ['reservationStats' => $reservationStats, 'recentReservations' => $recentReservations, 'reservedItems' => $reservedItems])
+
 <!-- Inventory Balances per Warehouse -->
 <div class="card" style="margin-bottom:24px">
     <div class="card-header">

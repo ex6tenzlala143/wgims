@@ -271,14 +271,24 @@
     }
 
     function stockOptionHtml(r) {
+        var avail    = (r.available_qty !== undefined) ? r.available_qty : r.quantity;
+        var reserved = r.reserved_qty || 0;
+        var label    = (r.display_text || r.description);
+        // If display_text doesn't already mention reserved, append available note
+        if (!r.display_text) {
+            label += ' · Avail: ' + Number(avail).toLocaleString('en-PH', {maximumFractionDigits:0});
+            if (reserved > 0) label += ' · 🔒 ' + Number(reserved).toLocaleString('en-PH', {maximumFractionDigits:0}) + ' reserved';
+        }
         return '<option value="' + r.id + '"' +
             ' data-unit-cost="' + (r.unit_cost || 0) + '"' +
             ' data-engas="' + (r.engas_unit_cost || '') + '"' +
             ' data-expiry="' + (r.expiry_date || '') + '"' +
-            ' data-stock="' + r.quantity + '"' +
+            ' data-stock="' + avail + '"' +
+            ' data-physical="' + r.quantity + '"' +
+            ' data-reserved="' + reserved + '"' +
             ' data-sn="' + (r.stock_number || '') + '"' +
             ' data-unit="' + (r.unit || '') + '"' +
-            '>' + (r.display_text || r.description) + '</option>';
+            '>' + label + '</option>';
     }
 
     function populateItemSelect(records, selectItemId) {
@@ -358,9 +368,16 @@
         LOCK_FIELDS = false;
 
         if (hint) {
-            var stock = parseFloat(opt.dataset.stock || 0);
-            hint.textContent = 'Available on this record: ' + Number(stock).toLocaleString('en-PH', { maximumFractionDigits: 0 });
-            hint.style.color = stock > 0 ? 'var(--success)' : 'var(--danger)';
+            var avail    = parseFloat(opt.dataset.stock || 0);
+            var reserved = parseFloat(opt.dataset.reserved || 0);
+            var physical = parseFloat(opt.dataset.physical || avail);
+            var hintParts = ['Available: ' + Number(avail).toLocaleString('en-PH', { maximumFractionDigits: 0 })];
+            if (reserved > 0) {
+                hintParts.push('On Hand: ' + Number(physical).toLocaleString('en-PH', { maximumFractionDigits: 0 }));
+                hintParts.push('🔒 ' + Number(reserved).toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' reserved');
+            }
+            hint.textContent = hintParts.join(' · ');
+            hint.style.color = avail > 0 ? 'var(--success)' : 'var(--danger)';
         }
 
         $('dispatch-qty').max = opt.dataset.stock || '';

@@ -108,8 +108,7 @@
                             <div class="card-header">
                                 <h3><i class="fas fa-list" style="color:var(--primary)"></i> Requested Items</h3>
                                 <button type="button" class="btn btn-sm btn-primary" onclick="risAddRow()"><i class="fas fa-plus"></i> Add Item</button>
-                            </div>
-                            <div class="card-body" style="padding:0">
+                            </div>                            <div class="card-body" style="padding:0">
                                 <div class="table-wrapper">
                                     <table class="line-items-table" id="ris-items-table">
                                         <thead>
@@ -510,5 +509,8 @@ function risRemoveRow(id) {
 
 // Never allow a double-click to submit the same RIS twice.
 guardFormSubmit(document.getElementById('ris-form'));
+
+// ── Reservation integration ───────────────────────────────────────────────
+
 </script>
 @endpush

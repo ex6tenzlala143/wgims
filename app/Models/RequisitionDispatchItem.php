@@ -7,8 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 class RequisitionDispatchItem extends Model
 {
     protected $fillable = [
-        'requisition_item_id', 'item_id', 'quantity_issued',
-        'unit_cost', 'engas_unit_cost', 'expiration_date', 'dr_number', 'created_by',
+        'requisition_item_id',
+        'item_id',
+        'quantity_issued',
+        'unit_cost',
+        'engas_unit_cost',
+        'expiration_date',
+        'dr_number',
+        'created_by',
+        'reservation_item_id',
     ];
 
     protected $casts = [
@@ -23,11 +30,6 @@ class RequisitionDispatchItem extends Model
         return $this->belongsTo(RequisitionItem::class);
     }
 
-    /**
-     * The exact warehouse-specific stock record this dispatch came from.
-     * Its warehouse (items.warehouse_id) determines the dispatch's warehouse.
-     * Load 'item.warehouse' explicitly in controllers when the warehouse is needed.
-     */
     public function item()
     {
         return $this->belongsTo(Item::class);
@@ -36,5 +38,10 @@ class RequisitionDispatchItem extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function reservationItem()
+    {
+        return $this->belongsTo(ReservationItem::class);
     }
 }

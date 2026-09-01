@@ -40,6 +40,9 @@
     </div>
 </div>
 
+{{-- ── Reservation Summary ──────────────────────────────────────────────── --}}
+@include('dashboard._reservation_summary', ['reservationStats' => $reservationStats, 'recentReservations' => $recentReservations, 'reservedItems' => $reservedItems])
+
 <div class="card">
     <div class="card-header">
         <h3><i class="fas fa-balance-scale" style="color:var(--primary)"></i> {{ $warehouseLabel }} — Inventory Balance</h3>

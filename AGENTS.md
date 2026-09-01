@@ -1,231 +1,339 @@
-# WGIMS — Agent Instructions
+# WGIMS — AI Agent Instructions
 
-This file contains the permanent project rules that every AI coding agent must understand before working on this codebase.
+## Technology Stack
 
-## System Overview
+- **PHP**: 8.2+
+- **Laravel**: 12.0
+- **Database**: SQLite (primary), supports MySQL
+- **Frontend**: Blade templates, Tailwind CSS v4 (via Vite), vanilla JavaScript (no framework)
+- **Build**: Vite 7 with Laravel Vite plugin
+- **Auth**: Session-based (single web guard), login via `username` field
+- **Authorization**: Custom middleware + Spatie Laravel Permission (roles only, no permissions used)
+- **Excel**: PhpSpreadsheet (PhpOffice)
+- **Packages**: spatie/laravel-permission, laravel/tinker, laravel/pint, laravel/pail
 
-WGIMS (Welfare Goods Inventory Management System) is a Laravel 12 PHP inventory management system for tracking welfare goods across multiple warehouses. It manages the complete lifecycle of inventory from subsidy delivery to requisition dispatch and stock transfers.
+## Role/Permission System
 
-## Laravel Architecture
+Roles (stored in `users.role` column, NOT via Spatie roles):
+- `admin` — full access
+- `warehouse_manager` — can create but not edit/delete
+- `supply_custodian` — can approve
+- `center_staff` — read-only, cannot create
+- `center_head` — can approve
 
-- **Laravel 12** — no `app/Http/Kernel.php`. Middleware registered in `bootstrap/app.php`.
-- **Single web guard** using session driver (no API guard).
-- **Pagination** uses Bootstrap 5 (`Paginator::useBootstrap` in `AppServiceProvider`).
-- **No policies directory** — authorization via middleware and gates.
-- **No Form Request classes** — validation handled directly in controllers.
-- **No observers/events** — side effects handled in controller methods and model boot methods.
+Middleware:
+- `admin` — admin + warehouse_manager (view access)
+- `admin.write` — admin only (mutating actions)
+- `admin.create` — admin + warehouse_manager (create actions)
+- `admin.only.strict` — admin only (no warehouse_manager)
 
-### Middleware Stack
-- `admin` — allows admins and warehouse managers
-- `admin.write` — allows admins only (read-only for warehouse managers)
-- `admin.create` — allows admins and warehouse managers to create
-- `admin.only.strict` — allows admins only (no warehouse managers)
-- `EnsureUserIsActive` — logs out deactivated users
-- `NoCache` — prevents caching of authenticated pages
+## Critical Models & Relationships
 
-### Auth System
-- Login via `username` (not email)
-- Rate limited: 10 attempts/minute per username+IP
-- Session regenerated on login
-- Logout invalidates session, clears cache and bfcache
-- Users have roles: admin, warehouse_manager, custodian, staff, head
+```
+Warehouse
+  ├── users (legacy warehouse_id)
+  ├── user_warehouse (pivot)
+  ├── items
+  ├── delivery_subsidies
+  └── requisitions
 
-## Database Schema
+DeliverySubsidy
+  ├── supplier
+  ├── warehouse (legacy, often null)
+  ├── creator
+  ├── items (delivery_subsidy_items)
+  ├── deliveries
+  └── auditLogs
 
-### Core Tables
-| Table | Purpose |
-|-------|---------|
-| users | User accounts with role and warehouse assignments |
-| warehouses | Physical storage locations |
-| user_warehouse | Pivot table for multi-warehouse user assignments |
-| suppliers | Source of delivery subsidies |
-| items | Stock records — NOT a simple catalog |
-| item_categories | Food/non-food classification |
-| item_catalog_items | Catalog items under categories |
+DeliverySubsidyItem
+  ├── delivery_subsidy
+  ├── warehouse (per-line destination)
+  ├── item (resolved inventory record)
+  ├── catalog_item
+  └── deliveryItems
 
-### Transaction Tables
-| Table | Purpose |
-|-------|---------|
-| delivery_subsidies | Subsidy/delivery header records |
-| delivery_subsidy_items | Line items for subsidies |
-| deliveries | Actual delivery events |
-| delivery_items | Items delivered in each event |
-| requisitions | RIS (Requisition and Issue Slip) headers |
-| requisition_items | Line items for RIS |
-| requisition_dispatch_items | Dispatch records linking RIS to stock |
-| stock_transfers | Transfer requests between warehouses |
-| stock_transfer_items | Line items for transfers |
-| stock_card_entries | Transaction history for each stock record |
-| delivery_subsidy_audit_logs | Audit trail for subsidy changes |
-| requisition_audit_logs | Audit trail for RIS changes |
-| stock_transfer_audit_logs | Audit trail for transfer changes |
-| report_snapshots | Saved report snapshots |
-| system_notifications | User notifications |
+Delivery
+  ├── delivery_subsidy
+  ├── receiver
+  └── items (delivery_items)
 
-### Key Database Columns
-- `items.stock_number` — system-generated unique identifier
-- `items.quantity` — integer, current stock level
-- `items.unit_cost` — float, cost per unit
-- `items.engas_unit_cost` — float, ENGAS cost per unit
-- `items.expiration_date` — nullable date
-- `items.source_subsidy_id` — links to originating subsidy
-- `delivery_subsidies.subsidy_code` — SUB-000001 format
-- `requisitions.ris_code` — RIS-000001 format
-- `stock_transfers.transfer_number` — TRF-YYYY-NNNN format
+DeliveryItem
+  ├── delivery
+  ├── delivery_subsidy_item
+  ├── item (exact stock record)
+  ├── warehouse (where stock landed)
+  └── dr_number (per-item DR#)
 
-## Important Business Rules
+Item (stock record)
+  ├── warehouse
+  ├── stockCardEntries
+  ├── deliverySubsidyItems
+  ├── requisitionItems
+  ├── requisitionDispatchItems
+  ├── sourceSubsidy
+  ├── reservations
+  └── activeReservations
+
+Requisition (RIS)
+  ├── warehouse (legacy, often null)
+  ├── creator
+  ├── approver
+  ├── items
+  └── auditLogs
+
+RequisitionItem
+  ├── requisition
+  ├── item (representative, often null)
+  ├── catalogItem
+  ├── warehouse (per-line, often null)
+  └── dispatchItems
+
+RequisitionDispatchItem
+  ├── requisitionItem
+  ├── item (exact stock record dispatched from)
+  ├── creator
+  └── dr_number (per-dispatch DR#)
+
+StockCardEntry
+  ├── item
+  └── dispatchItem (linked issuance)
+
+StockTransfer
+  ├── fromWarehouse
+  ├── toWarehouse
+  ├── transferredBy
+  ├── deliverySubsidy (optional)
+  ├── items
+  └── auditLogs
+
+StockTransferItem
+  ├── transfer
+  ├── sourceItem
+  └── destinationItem
+
+Reservation
+  ├── warehouse
+  ├── item
+  ├── intendedRequisition
+  ├── creator
+  └── approver
+
+ItemCategory
+  └── catalogItems
+
+ItemCatalogItem
+  └── category
+
+Supplier
+  └── deliverySubsidies
+```
+
+## Inventory Rules (CRITICAL — READ BEFORE CHANGING ANY QUANTITY)
 
 ### Stock Identity
-A stock record is uniquely identified by the combination of:
-- warehouse_id
-- description
-- unit
-- category
-- unit_cost
-- engas_unit_cost
-- expiration_date
-- source_subsidy_id
+A stock record (Item) is uniquely identified by ALL of these fields matching:
+- `warehouse_id`
+- `description`
+- `unit`
+- `category`
+- `unit_cost` (±0.001 tolerance)
+- `engas_unit_cost` (±0.001 tolerance, null-safe)
+- `expiration_date` (date match, null-safe)
+- `source_subsidy_id` (null-safe)
 
-**Two records with different values in ANY of these fields are DIFFERENT stock records.**
+**Two records with different values in ANY of these are DIFFERENT stock records. Never merge across different subsidy IDs, unit costs, ENGAS costs, expiration dates, or warehouses.**
 
-The `Item::findOrCreateByUnitCost()` method implements the correct matching logic.
+### Item::findOrCreateByUnitCost()
+This is the ONLY correct way to resolve or create a stock record during delivery. It:
+1. Searches for an existing active record matching all identity fields
+2. If found, returns it (possibly updating account_code)
+3. If not found, looks for an inactive placeholder (no stock_number) matching identity
+4. If placeholder found, assigns stock_number and activates it
+5. If nothing found, creates a new record with stock_number generated via advisory lock
 
-### Stock Merging Rules
-- DO NOT merge records with different subsidy IDs
-- DO NOT merge records with different unit costs
-- DO NOT merge records with different ENGAS costs
-- DO NOT merge records with different expiration dates
-- DO NOT merge records with different warehouses
-- Only merge when ALL identity fields match
+### Stock Number Generation
+Format: `{WAREHOUSE_CODE}-{CATEGORY_PREFIX}-{NNNN}` (e.g., `GAMC-FOO-0001`)
+- Uses MySQL `GET_LOCK()` / `RELEASE_LOCK()` advisory lock
+- Race-safe for concurrent deliveries
 
-### Warehouse Rules
-- Admin/Warehouse Manager sees all warehouses
-- Other roles see only assigned warehouses (via user_warehouse pivot)
-- Non-admin users with no warehouse assignments see nothing
-- Stock transfers require both source and destination warehouse access
-- Warehouse scoping is enforced via `ScopesWarehouse` trait
+### Quantity Rules
+- `items.quantity` — current physical stock level
+- Available quantity = `items.quantity` - reserved quantity (from active reservations)
+- Reserved quantity = sum of `reserved_quantity` across active reservations
+- `delivery_subsidy_items.qty_delivered` — cumulative dispatched against request
+- `requisition_items.quantity_requested` — requested quantity
+- `requisition_items.quantity_issued` — cached sum of dispatch quantities
+- `stock_transfer_items.quantity_requested` — planned transfer qty
+- `stock_transfer_items.quantity` — actually dispatched qty
 
-### Subsidy Rules
-- A subsidy represents a delivery from a supplier
-- Subsidies can have partial deliveries (status: pending → partial → fully_delivered)
-- Each delivery creates/updates stock records
-- DR numbers must be unique per delivery event
-- Deleting a subsidy reverses inventory and removes stock cards
-- Editing a subsidy with existing deliveries is restricted to header fields and requested quantities
+### Cost Rules
+- `unit_cost` — current unit cost on the item record
+- `engas_unit_cost` — ENGAS unit cost (can be null)
+- Cost data on requisition items was dropped; now lives ONLY on `requisition_dispatch_items`
+- When editing a delivery, cost changes cascade through `DeliverySubsidyCascadeService`
 
-### RIS Rules
-- RIS numbers are auto-generated (RIS-YYYYMM-NNNN format with advisory lock)
-- RIS statuses: pending, approved, partially_approved, cancelled
-- Dispatches lock exact stock records (by identity fields)
-- Deleting a RIS reverses all dispatches and stock cards
-- Editing a RIS with dispatches cannot reduce requested quantity below issued quantity
-- Correcting a RIS only changes header and requested quantities — never touches dispatches
+## Route Reference (Key Routes)
 
-### Dispatch Rules
-- A dispatch deducts stock from a warehouse
-- Creates a `requisition_dispatch_items` record linking to exact stock
-- Creates a `stock_card_entries` issue record
-- Deleting a dispatch reverses the deduction and deletes the stock card entry
-- Editing a dispatch reverses old deduction, applies new one, reconciles stock cards
+| URL | Method | Name | Controller | Auth |
+|-----|--------|------|------------|------|
+| /login | GET | login | AuthController | none |
+| /login | POST | login.post | AuthController | none |
+| /logout | POST | logout | AuthController | auth |
+| / | GET | dashboard | DashboardController | auth |
+| /items | GET | items.index | ItemController | auth |
+| /items/{item} | GET | items.show | ItemController | auth |
+| /delivery-subsidies | GET | delivery_subsidies.index | DeliverySubsidyController | auth |
+| /delivery-subsidies/create | GET | delivery_subsidies.create | DeliverySubsidyController | admin.create |
+| /delivery-subsidies | POST | delivery_subsidies.store | DeliverySubsidyController | admin.create |
+| /delivery-subsidies/{ds} | GET | delivery_subsidies.show | DeliverySubsidyController | auth |
+| /delivery-subsidies/{ds}/delivery | GET | delivery_subsidies.delivery | DeliverySubsidyController | auth |
+| /delivery-subsidies/{ds}/delivery | POST | delivery_subsidies.store_delivery | DeliverySubsidyController | admin.create |
+| /delivery-subsidies/{ds}/edit | GET | delivery_subsidies.edit | DeliverySubsidyController | admin.write |
+| /delivery-subsidies/{ds}/edit-data | GET | delivery_subsidies.edit_data | DeliverySubsidyController | admin.write |
+| /delivery-subsidies/{ds} | PUT | delivery_subsidies.update | DeliverySubsidyController | admin.write |
+| /delivery-subsidies/{ds} | DELETE | delivery_subsidies.destroy | DeliverySubsidyController | admin.write |
+| /delivery-subsidies/{ds}/deliveries/{d}/edit | GET | delivery_subsidies.edit_delivery | DeliverySubsidyController | admin |
+| /delivery-subsidies/{ds}/deliveries/{d} | PUT | delivery_subsidies.update_delivery | DeliverySubsidyController | admin |
+| /delivery-subsidies/{ds}/deliveries/{d} | DELETE | delivery_subsidies.destroy_delivery | DeliverySubsidyController | admin |
+| /delivery-subsidies/{ds}/audit-log | GET | delivery_subsidies.audit_log | DeliverySubsidyController | admin |
+| /requisitions | GET | requisitions.index | RequisitionController | auth |
+| /requisitions/create | GET | requisitions.create | RequisitionController | admin.create |
+| /requisitions | POST | requisitions.store | RequisitionController | admin.create |
+| /requisitions/{r} | GET | requisitions.show | RequisitionController | auth |
+| /requisitions/{r}/approve | GET | requisitions.approve | RequisitionController | auth |
+| /requisitions/{r}/approve | POST | requisitions.process_approval | RequisitionController | auth |
+| /requisitions/{r}/print | GET | requisitions.print | RequisitionController | auth |
+| /requisitions/{r}/edit | GET | requisitions.edit | RequisitionController | admin.write |
+| /requisitions/{r} | PUT | requisitions.update | RequisitionController | admin.write |
+| /requisitions/{r}/correct | PUT | requisitions.correct | RequisitionController | admin.write |
+| /requisitions/{r}/audit-log | GET | requisitions.audit_log | RequisitionController | admin.write |
+| /requisitions/{r} | DELETE | requisitions.destroy | RequisitionController | admin.write |
+| /requisitions/dispatch/{d}/edit-data | GET | requisitions.dispatch_edit_data | RequisitionController | admin.write |
+| /requisitions/dispatch/{d} | PUT | requisitions.dispatch_update | RequisitionController | admin.write |
+| /requisitions/dispatch/{d} | DELETE | requisitions.dispatch_destroy | RequisitionController | admin.write |
+| /api/requisition-items | GET | requisitions.items_by_warehouse | RequisitionController | auth |
+| /api/requisition-description-items | GET | requisitions.description_items | RequisitionController | auth |
+| /transfers | GET | transfers.index | StockTransferController | auth |
+| /transfers | POST | transfers.store | StockTransferController | admin.create |
+| /transfers/{t} | GET | transfers.show | StockTransferController | auth |
+| /transfers/{t}/print | GET | transfers.print | StockTransferController | auth |
+| /transfers/{t}/dispatch | GET | transfers.dispatch | StockTransferController | auth |
+| /transfers/{t}/dispatch | POST | transfers.process_dispatch | StockTransferController | admin.create |
+| /transfers/{t}/edit | GET | transfers.edit | StockTransferController | admin |
+| /transfers/{t} | PUT | transfers.update | StockTransferController | admin |
+| /transfers/{t} | DELETE | transfers.destroy | StockTransferController | admin |
+| /api/transfer-items | GET | transfers.items_for_warehouse | StockTransferController | auth |
+| /reservations | GET | reservations.index | ReservationController | auth |
+| /reservations/create | GET | reservations.create | ReservationController | admin.create |
+| /reservations | POST | reservations.store | ReservationController | admin.create |
+| /reservations/{r} | GET | reservations.show | ReservationController | auth |
+| /reservations/{r}/approve | POST | reservations.approve | ReservationController | admin.write |
+| /reservations/{r}/ready | POST | reservations.ready | ReservationController | admin.write |
+| /reservations/{r}/cancel | POST | reservations.cancel | ReservationController | admin.write |
+| /reservations/items-by-warehouse | GET | reservations.items_by_warehouse | ReservationController | auth |
+| /stock-cards | GET | stock_cards.home | StockCardController | auth |
+| /stock-cards/summary | GET | stock_cards.summary | StockCardController | auth |
+| /stock-cards/{category} | GET | stock_cards.index | StockCardController | auth |
+| /stock-cards/item/{item}/history | GET | stock_cards.item_history | StockCardController | auth |
+| /stock-cards/item/{item}/history-by-cost | GET | stock_cards.item_history_by_unit_cost | StockCardController | auth |
+| /stock-cards/item/{item}/print | GET | stock_cards.print | StockCardController | auth |
+| /reports/rpci | GET | rpci_report | ReportController | auth |
+| /reports/rpci/print | GET | rpci_report.print | ReportController | auth |
+| /reports/rpci/export | GET | rpci_report.export | ReportController | auth |
+| /reports/rsmi | GET | rsmi_report | ReportController | auth |
+| /reports/rsmi/print | GET | rsmi_report.print | ReportController | auth |
+| /reports/rsmi/export | GET | rsmi_report.export | ReportController | auth |
+| /reports/inventory-balance | GET | inventory_balance_report | ReportController | auth |
+| /reports/inventory-balance/export | GET | inventory_balance_report.export | ReportController | auth |
+| /suppliers | GET | suppliers.index | SupplierController | auth |
+| /warehouses | GET | warehouses.index | WarehouseController | auth |
+| /users | GET | users.index | UserController | admin.only.strict |
+| /item-categories | GET | item_categories.index | ItemCategoryController | admin.only.strict |
+| /notifications | GET | notifications.index | NotificationController | auth |
+| /api/check-username | GET | users.check_username | UserController | auth |
+| /api/check-dr | GET | ds.check_number | Closure | auth |
 
-### Stock Transfer Rules
-- Transfers move stock between warehouses
-- Snapshots source subsidy/DR/RIS lineage
-- Status: pending → partial → completed
-- Deleting a transfer reverses inventory on both warehouses
-- Updating a transfer handles partial dispatches and reconciles stock cards
+## Edit/Delete/Reversal Rules
 
-### Stock Card Rules
-- Every receipt and issue creates a stock card entry
-- Running balance is maintained chronologically
-- `recalculateBalancesForItem()` recomputes all balances
-- Deleting a transaction requires deleting its stock card entries
-- Stock cards are the audit trail for all inventory movements
+### Delivery Subsidy
+- **No deliveries yet**: Full edit (RIS#, supplier, lines, quantities)
+- **Deliveries exist**: Correction only — header fields (date, place, remarks) + per-line requested quantities. RIS#, supplier, DR# frozen. Lines with deliveries locked to their item.
+- **Delete**: Reverses all delivery quantities, deletes stock cards, marks related transfers as "deleted subsidy", rebuilds balances. Items with qty=0 and no other references are hard-deleted.
 
-### Account Code Rules
-- Auto-generated from item category
-- Food: 1040202000-01
-- Non-food: 1040202000-02
-- Used in RPCI and RSMI reports
+### Single Delivery (Shipment)
+- **Edit**: Adjusts quantities, costs, warehouse, DR# per line. Same-item delta applied directly. Cross-warehouse move reverses old receipt and adds to new item. Stock cards reconciled. `qty_delivered` on subsidy line updated.
+- **Delete**: Reverses quantities, decrements `qty_delivered`, deletes stock cards, recalculates subsidy status.
 
-## Security Rules
+### Requisition (RIS)
+- **Edit**: Header fields + line items. Dispatched lines cannot reduce below issued qty or change catalog item.
+- **Correct**: Same as edit but explicitly logged as "correction". Never touches dispatches.
+- **Delete**: Reverses all dispatch quantities to exact stock records, deletes stock cards and dispatch items, recalculates balances.
 
-- **NEVER** rely on hiding UI elements for security — verify authorization server-side
-- **NEVER** allow direct URL access after logout
-- **NEVER** weaken security to make functionality work
-- All route protection must use middleware
-- All POST/PUT/DELETE operations must have CSRF tokens
-- All user input must be validated
-- All database queries must use parameter binding
-- All output must be escaped in Blade views
+### Dispatch (RequisitionDispatchItem)
+- **Edit**: Reverse old deduction, apply new deduction. Can change warehouse, stock record, qty, cost, DR#. Stock cards moved/updated.
+- **Delete**: Restores quantity to exact stock record, deletes stock card entries, recalculates balances, recomputes RIS fulfilment status.
 
-## Database Safety Rules
+### Stock Transfer
+- **Edit**: Delta applied to source and destination quantities. Guards ensure source has stock and destination has units to return. Stock cards reconciled across all partial dispatches.
+- **Delete**: Only allowed if destination stock not consumed by later transactions. Reverses quantities, deletes stock cards.
 
-- **NEVER** run `migrate:fresh`, `db:wipe`, `truncate`, or `drop table` on production data
-- **NEVER** delete production data casually
-- **NEVER** modify existing migrations that have been used in production
-- **NEVER** create unnecessary migrations
-- **NEVER** modify existing data to make tests pass
-- Use database transactions for all multi-step inventory operations
-- Before any database change, explain: what will change, why, data impact, migration necessity, reversibility
+## Important Patterns
 
-## Coding Conventions
+### Warehouse Scoping
+All list/index queries use `ScopesWarehouse` trait:
+- Admin/warehouse_manager → sees all warehouses (`getUserWarehouseIds` returns null)
+- Others → limited to pivot + legacy `warehouse_id`
+- Empty assignment → sees nothing (`whereRaw('1 = 0')`)
 
-- **Controllers**: Keep methods focused. Extract complex logic to services.
-- **Models**: Use relationships, not raw queries. Define fillable arrays.
-- **Migrations**: Additive only. Never modify production tables without data migration.
-- **Blade**: Use components for repeated patterns. Escape all output.
-- **Validation**: Validate in controllers. No Form Request classes exist yet.
-- **Naming**: Use snake_case for database columns, camelCase for PHP variables.
-- **Comments**: No comments unless explicitly requested.
+### Stock Card Balance Recalculation
+`StockCardEntry::recalculateBalancesForItem($itemId)` recomputes all running balances for an item from scratch. Called after any operation that adds/removes/moves stock card entries.
 
-## Testing Requirements
+### Advisory Locks
+Used for generating unique numbers:
+- `Item::generateStockNumber()` — `GET_LOCK('stock_number_{PREFIX}')`
+- `Requisition::generateRisNumber()` — `GET_LOCK('ris_number_{YEAR}{MONTH}')`
+- `StockTransfer::generateTransferNumber()` — `GET_LOCK('trf_number_{YEAR}')`
 
-- Test from a real user's perspective
-- Verify cross-module impact before fixing bugs
-- Never modify data to make tests pass
-- Report reproduction steps, expected vs actual results
-- Test edge cases: partial deliveries, multiple dispatches, different costs, different warehouses
+### Database Transactions
+All multi-step inventory operations wrapped in `DB::transaction()`.
 
-## UI Consistency Rules
+### Row Locking
+`lockForUpdate()` used on exact stock records before read-modify-write to prevent race conditions.
 
-- Keep sidebar navigation intact
-- Use consistent modal designs across all pages
-- Use consistent delete confirmation dialogs
-- Dropdowns should be writable/searchable where appropriate
-- Large dropdowns must be scrollable without closing unexpectedly
-- Dropdowns should be wide enough for descriptions and codes
-- Tables must remain usable on laptop screens
-- Avoid unnecessary horizontal overflow
-- Fix skeleton/loading flashes on back navigation
-- Maintain consistent spacing, typography, borders, and colors
-- Do not change business logic while fixing UI
+## UI Conventions
 
-## File Paths Reference
+- **CSS**: Custom properties (no Bootstrap utility classes except for pagination)
+- **Tables**: Compact, 11px font, hover rows, sticky headers in modals
+- **Forms**: `.form-control`, `.form-row` grid, `.form-section-label`
+- **Buttons**: `.btn`, `.btn-sm`, color variants (primary, success, warning, danger, secondary, outline)
+- **Badges**: `.badge`, `.badge-success`, `.badge-warning`, `.badge-danger`, `.badge-info`, `.badge-secondary`
+- **Modals**: Full-screen overlay with `.modal-overlay`, `.modal-shell`, `.modal-body` scrollable
+- **Searchable Selects**: Custom `SearchableSelect` JS component enhances all `<select>` elements
+- **Notifications**: Bell icon with dropdown, AJAX-loaded, 30s polling
+- **Alerts**: `.alert`, `.alert-success`, `.alert-danger`, `.alert-warning`, `.alert-info`
+- **Print**: `@media print` hides sidebar/topbar
 
-| Component | Path |
-|-----------|------|
-| Routes | `routes/web.php` |
-| Controllers | `app/Http/Controllers/` |
-| Models | `app/Models/` |
-| Migrations | `database/migrations/` |
-| Middleware | `app/Http/Middleware/` |
-| Views | `resources/views/` |
-| Config | `config/` |
-| Tests | `tests/` |
+## What an AI Agent MUST NOT Do
 
-## Agent Collaboration
+1. **Never run destructive DB commands**: `migrate:fresh`, `db:wipe`, `truncate`, `drop table` on production
+2. **Never delete production data casually**
+3. **Never modify existing migrations** that have been used in production
+4. **Never merge stock records** with different subsidy IDs, unit costs, ENGAS costs, expiration dates, or warehouses
+5. **Never change quantities without understanding the downstream impact** on stock cards, reservations, dispatches, and transfers
+6. **Never assume a "small change" only affects one page** — inventory changes affect multiple modules
+7. **Never bypass server-side authorization** — UI hiding is not security
+8. **Never expose secrets or keys** in logs or responses
+9. **Never use `no-store` on authenticated GETs** — it breaks bfcache and causes skeleton flash (use `private, no-cache, must-revalidate`)
+10. **Never increment/decrement quantities directly without `lockForUpdate()`** on the exact stock record
+11. **Never forget to call `StockCardEntry::recalculateBalancesForItem()`** after modifying stock card entries
+12. **Never change `source_subsidy_id` without updating the snapshot columns** on the item
 
-For complex issues, agents should delegate in this order:
-1. `wgims-architect` — analyze the architecture first
-2. `wgims-inventory-integrity` — verify inventory correctness
-3. `wgims-bug-hunter` — find the root cause
-4. `wgims-security` — check for security implications
-5. `wgims-code-reviewer` — review the implementation
-6. `wgims-ui-ux` — verify UI consistency
-7. `wgims-optimizer` — optimize after implementation
-8. `wgims-qa-tester` — test the final result
+## Before Making Any Change
 
-## Assumptions
-
-This file is based on the actual WGIMS codebase as of the inspection date. If the codebase changes (new models, new routes, new business rules), update this file accordingly.
+1. Read `AGENTS.md`
+2. Read the relevant documentation in `docs/`
+3. Inspect the actual code involved
+4. Understand the impact on related modules
+5. Make the smallest safe change
+6. Test the change
+7. Report exactly what was changed

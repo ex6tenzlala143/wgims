@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'WGIMSv2') — Welfare Goods Inventory Management System</title>
+    <title>@yield('title', 'WGIMS') — WGIMS</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         /* ── Theme tokens ─────────────────────────────────────────────────── */
@@ -80,17 +80,16 @@
             overflow: hidden;
         }
         .sidebar-brand {
-            padding: 12px 14px 10px;
+            padding: 10px 12px 8px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 5px;
             flex-shrink: 0;
         }
-        .sidebar-brand img { height: 34px; width: auto; object-fit: contain; }
+        .sidebar-brand img { height: 40px; width: auto; object-fit: contain; }
         .sidebar-brand .brand-text { line-height: 1.25; min-width: 0; }
         .sidebar-brand .brand-text strong { display: block; font-size: 12px; font-weight: 700; color: var(--text); line-height: 1.3; }
-        .sidebar-brand .brand-text small { font-size: 10px; color: var(--text-muted); }
 
         .sidebar-nav {
             flex: 1 1 auto;
@@ -967,8 +966,7 @@
         <div class="sidebar-brand">
             <img src="{{ asset('images/logo.png') }}" alt="DSWD Logo" style="height:34px;width:auto;object-fit:contain;">
             <div class="brand-text">
-                <strong>Welfare Goods Inventory</strong>
-                <small>WGIMSv2 · DSWD</small>
+                <strong>W G I M S</strong>
             </div>
         </div>
 

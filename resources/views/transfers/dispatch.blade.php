@@ -90,10 +90,12 @@
                     <tbody>
                         @foreach($transfer->items as $sti)
                         @php
-                            $remaining   = max(0, $sti->quantity_requested - $sti->quantity);
-                            $available   = $sti->sourceItem->quantity ?? 0;
-                            $isDone      = $remaining <= 0;
-                            $canDispatch = min($remaining, $available);
+                            $remaining        = max(0, $sti->quantity_requested - $sti->quantity);
+                            $physicalQty      = $sti->sourceItem->quantity ?? 0;
+                            $reservedQty      = $sti->sourceItem ? \App\Models\ReservationItem::reservedQuantityForItem($sti->sourceItem->id) : 0;
+                            $available        = max(0, $physicalQty - $reservedQty);
+                            $isDone           = $remaining <= 0;
+                            $canDispatch      = min($remaining, $available);
                         @endphp
                         <tr style="{{ $isDone ? 'background:#f7fafc;opacity:.6' : '' }}">
                             <td>
@@ -119,6 +121,11 @@
                                 <span class="{{ $available >= $remaining ? 'badge badge-success' : 'badge badge-danger' }}">
                                     {{ number_format($available) }}
                                 </span>
+                                @if($reservedQty > 0)
+                                <div style="font-size:10px;color:var(--warning);margin-top:2px">
+                                    <i class="fas fa-lock"></i> {{ number_format($reservedQty) }} reserved
+                                </div>
+                                @endif
                             </td>
                             <td>
                                 <input type="number"

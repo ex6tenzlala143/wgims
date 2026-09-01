@@ -168,39 +168,47 @@ class RequisitionController extends Controller
                    'expiration_date', 'category', 'unit_cost', 'engas_unit_cost']);
 
         return response()->json($items->map(function ($i) {
+            $reserved        = \App\Models\ReservationItem::reservedQuantityForItem($i->id);
+            $availableQty    = max(0, $i->quantity - $reserved);
             $expiryFormatted = $i->expiration_date ? $i->expiration_date->format('M d, Y') : '—';
-            $engasDisplay = $i->engas_unit_cost !== null 
-                ? '₱' . number_format($i->engas_unit_cost, 2) 
+            $engasDisplay    = $i->engas_unit_cost !== null
+                ? '₱' . number_format($i->engas_unit_cost, 2)
                 : '—';
-            
-            // Build enhanced display text for dropdown option
+
+            // Build display text showing AVAILABLE quantity prominently so the
+            // dispatcher is never misled by the physical on-hand figure.
+            $reservedNote = $reserved > 0
+                ? ' · 🔒 ' . number_format($reserved) . ' reserved'
+                : '';
+
             $displayText = sprintf(
-                "%s\nQty: %s · ₱%s · ENGAS ₱%s · Exp: %s",
+                "%s\nAvail: %s%s · ₱%s · ENGAS %s · Exp: %s",
                 $i->description,
-                number_format($i->quantity, 0),
+                number_format($availableQty, 0),
+                $reservedNote,
                 number_format($i->unit_cost, 2),
                 $engasDisplay,
                 $expiryFormatted
             );
-            
+
             return [
-                'id'             => $i->id,
-                'description'    => $i->description,
-                'display_text'   => $displayText,
-                'unit'           => $i->unit,
-                'quantity'       => $i->quantity,
-                'available_qty'  => $i->available_quantity,
-                'reserved_qty'   => $i->reserved_quantity,
-                'stock_number'   => $i->stock_number,
-                'expiry_date'    => $i->expiration_date?->format('Y-m-d'),
-                'expiry_formatted' => $expiryFormatted,
-                'category'       => $i->category,
-                'unit_cost'      => $i->unit_cost,
+                'id'                  => $i->id,
+                'description'         => $i->description,
+                'display_text'        => $displayText,
+                'unit'                => $i->unit,
+                'quantity'            => $i->quantity,        // physical on-hand
+                'available_qty'       => $availableQty,       // what can actually be dispatched
+                'reserved_qty'        => $reserved,
+                'stock_number'        => $i->stock_number,
+                'expiry_date'         => $i->expiration_date?->format('Y-m-d'),
+                'expiry_formatted'    => $expiryFormatted,
+                'category'            => $i->category,
+                'unit_cost'           => $i->unit_cost,
                 'unit_cost_formatted' => '₱' . number_format($i->unit_cost, 2),
-                'engas_unit_cost' => $i->engas_unit_cost,
-                'engas_formatted' => $engasDisplay,
+                'engas_unit_cost'     => $i->engas_unit_cost,
+                'engas_formatted'     => $engasDisplay,
             ];
-        }));
+        })->filter(fn ($i) => $i['available_qty'] > 0)->values());
     }
 
     public function store(Request $request)
@@ -904,6 +912,7 @@ class RequisitionController extends Controller
             'items.*.dr_number' => 'nullable|string|max:100',
             'items.*.engas_unit_cost' => 'nullable|numeric|min:0',
             'items.*.expiration_date' => 'nullable|date',
+            'items.*.reservation_item_id' => 'nullable|integer|exists:reservation_items,id',
             'approved_by_name' => 'required|string',
             'issued_by_name' => 'required|string',
         ];
@@ -966,8 +975,29 @@ class RequisitionController extends Controller
                 // How much is still outstanding for this line
                 $stillNeeded = max(0, $riItem->quantity_requested - $riItem->quantity_issued);
 
-                // Check available quantity (physical - reserved)
-                $availableQty = $item->quantity - \App\Models\Reservation::reservedQuantityForItem($item->id);
+                // Check available quantity (physical - reserved).
+                // When this dispatch is linked to a specific reservation_item,
+                // that reservation's quantity counts as available for this RIS
+                // (it was reserved for exactly this purpose). Subtract all OTHER
+                // active reservations on this item but add back the reservation
+                // being consumed so it is not double-blocked.
+                $reservationItemId = ! empty($data['reservation_item_id'])
+                    ? (int) $data['reservation_item_id']
+                    : null;
+
+                $totalReserved = \App\Models\Reservation::reservedQuantityForItem($item->id);
+
+                if ($reservationItemId) {
+                    // Credit back the reserved quantity of the specific reservation
+                    // being consumed — it is available to this RIS.
+                    $thisReservation = \App\Models\ReservationItem::whereKey($reservationItemId)->first();
+                    $creditBack = $thisReservation ? (float) $thisReservation->reserved_quantity : 0;
+                    $availableQty = $item->quantity - max(0, $totalReserved - $creditBack);
+                } else {
+                    $availableQty = $item->quantity - $totalReserved;
+                }
+
+                $availableQty = max(0, $availableQty);
 
                 // Reject instead of silently capping or borrowing from another record
                 if ($wanted > $availableQty + 0.0001) {
@@ -976,7 +1006,7 @@ class RequisitionController extends Controller
                             'Insufficient available stock on the selected record "'.$item->description.'"'
                             .' ('.$item->stock_number.' · ₱'.number_format($item->unit_cost, 2).'): '
                             .'physical '.number_format($item->quantity).', '
-                            .'reserved '.number_format(\App\Models\Reservation::reservedQuantityForItem($item->id)).', '
+                            .'reserved '.number_format($totalReserved).', '
                             .'available '.number_format($availableQty).'. '
                             .'No other unit-cost record will be used.',
                     ]);
@@ -1004,9 +1034,34 @@ class RequisitionController extends Controller
                     'expiration_date'     => $data['expiration_date'] ?? $item->expiration_date,
                     'dr_number'           => $data['dr_number'] ?? null,
                     'created_by'          => $user->id,
+                    'reservation_item_id' => ! empty($data['reservation_item_id'])
+                                                ? (int) $data['reservation_item_id']
+                                                : null,
                 ]);
 
                 $item->update(['quantity' => $newItemQty]);
+
+                // If this dispatch is linked to a reservation item, update its
+                // deployed quantity and recompute the reservation's overall status.
+                if ($dispatch->reservation_item_id) {
+                    $resItem = \App\Models\ReservationItem::whereKey($dispatch->reservation_item_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($resItem) {
+                        $newDeployed = $resItem->deployed_quantity + $wanted;
+                        $newResItemStatus = $newDeployed >= $resItem->reserved_quantity - 0.0001
+                            ? \App\Models\ReservationItem::STATUS_DEPLOYED
+                            : \App\Models\ReservationItem::STATUS_PARTIALLY_DEPLOYED;
+
+                        $resItem->update([
+                            'deployed_quantity' => $newDeployed,
+                            'status'            => $newResItemStatus,
+                        ]);
+
+                        $resItem->reservation->updateOverallStatus();
+                    }
+                }
 
                 StockCardEntry::create([
                     'item_id'            => $item->id,
@@ -1156,16 +1211,26 @@ class RequisitionController extends Controller
                 'name' => $w->name,
                 'code' => $w->code,
             ])->values(),
-            'stock_records'       => $stockRecords->map(fn ($i) => [
-                'id'              => $i->id,
-                'description'     => $i->description,
-                'unit'            => $i->unit,
-                'quantity'        => $i->quantity,
-                'stock_number'    => $i->stock_number,
-                'expiry_date'     => $i->expiration_date?->format('Y-m-d'),
-                'unit_cost'       => $i->unit_cost,
-                'engas_unit_cost' => $i->engas_unit_cost,
-            ])->values(),
+            'stock_records'       => $stockRecords->map(function ($i) use ($dispatch) {
+                $reserved     = \App\Models\ReservationItem::reservedQuantityForItem($i->id);
+                // When editing an existing dispatch, the quantity already issued
+                // by THIS dispatch is temporarily "returned" before comparing —
+                // so the current record is always selectable at its current qty.
+                $creditBack   = ($i->id === $dispatch->item_id) ? (float) $dispatch->quantity_issued : 0;
+                $availableQty = max(0, $i->quantity - $reserved + $creditBack);
+                return [
+                    'id'              => $i->id,
+                    'description'     => $i->description,
+                    'unit'            => $i->unit,
+                    'quantity'        => $i->quantity,
+                    'available_qty'   => $availableQty,
+                    'reserved_qty'    => $reserved,
+                    'stock_number'    => $i->stock_number,
+                    'expiry_date'     => $i->expiration_date?->format('Y-m-d'),
+                    'unit_cost'       => $i->unit_cost,
+                    'engas_unit_cost' => $i->engas_unit_cost,
+                ];
+            })->values(),
         ]);
     }
 

@@ -11,7 +11,7 @@
         </div>
     </div>
     <div style="display:flex;gap:8px">
-        <a href="{{ route('rsmi_report.print', request()->query()) }}" target="_blank" class="btn btn-primary">
+        <a href="{{ route('rsmi_report.print', request()->except(['ris_number', 'date_from', 'date_to', 'warehouse_id'])) }}" target="_blank" class="btn btn-primary">
             <i class="fas fa-print"></i> Print All RSMI
         </a>
         <a href="{{ route('rsmi_report.export', request()->query()) }}" class="btn btn-success">
@@ -54,12 +54,12 @@
                     @endforeach
                 </select>
                 @endif
-                <div style="display:flex;flex-direction:column;gap:3px">
-                    <label style="font-size:12px;color:var(--text-muted);font-weight:600">Date From</label>
+                <div style="display:flex;align-items:center;gap:6px">
+                    <label style="font-size:12px;color:var(--text-muted);font-weight:600;white-space:nowrap">Date From</label>
                     <input type="date" name="date_from" class="form-control" value="{{ request('date_from') }}">
                 </div>
-                <div style="display:flex;flex-direction:column;gap:3px">
-                    <label style="font-size:12px;color:var(--text-muted);font-weight:600">Date To</label>
+                <div style="display:flex;align-items:center;gap:6px">
+                    <label style="font-size:12px;color:var(--text-muted);font-weight:600;white-space:nowrap">Date To</label>
                     <input type="date" name="date_to" class="form-control" value="{{ request('date_to') }}">
                 </div>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
@@ -81,7 +81,7 @@
         @endif
     </span>
     @if($risGroups->isNotEmpty())
-    <span>
+    <span style="padding-right:24px">
         Grand Total:&nbsp;
         <strong style="font-size:15px;color:var(--primary)">₱{{ number_format($grandTotal, 2) }}</strong>
     </span>
@@ -98,13 +98,12 @@
     $items    = $group['items'];
     $subtotal = $group['subtotal'];
 
-    // Build single-RIS print URL — pass existing filters + target RIS number
-    $printQuery = array_merge(request()->query(), [
-        'ris_number'  => $ris->ris_number,
-        'date_from'   => $ris->date_approved?->format('Y-m-d'),
-        'date_to'     => $ris->date_approved?->format('Y-m-d'),
-        'warehouse_id'=> $ris->warehouse_id,
-    ]);
+    // Build single-RIS print URL — only pass the exact RIS identifier.
+    // Never inherit date_from/date_to/warehouse_id from the list URL —
+    // those are list-scoping parameters that must not leak into single-print.
+    $printQuery = [
+        'ris_number' => $ris->ris_number,
+    ];
     $singlePrintUrl = route('rsmi_report.print', $printQuery);
 @endphp
 
@@ -197,14 +196,14 @@
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
                         @if(($ri->item?->engas_unit_cost ?? null) !== null)
-                            <span style="color:var(--primary);font-weight:600">{{ number_format($ri->item->engas_unit_cost, 2) }}</span>
+                            {{ number_format($ri->item->engas_unit_cost, 2) }}
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td style="text-align:right">
                         @if(($ri->item?->engas_unit_cost ?? null) !== null)
-                            <span style="color:var(--primary);font-weight:600">{{ number_format($ri->quantity_issued * $ri->item->engas_unit_cost, 2) }}</span>
+                            {{ number_format($ri->quantity_issued * $ri->item->engas_unit_cost, 2) }}
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
@@ -216,8 +215,8 @@
             </tbody>
             <tfoot>
                 <tr style="background:#f0f9ff;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 7 }}" style="text-align:right;padding:10px 14px">RIS Sub-Total:</td>
-                    <td style="text-align:right;padding:10px 14px;color:var(--primary)">₱{{ number_format($subtotal, 2) }}</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}" style="text-align:right;padding:10px 14px">RIS Sub-Total:</td>
+                    <td style="text-align:right;padding:10px 14px">₱{{ number_format($subtotal, 2) }}</td>
                 </tr>
             </tfoot>
         </table>
@@ -235,7 +234,7 @@
 
 {{-- Grand total footer --}}
 @if($risGroups->isNotEmpty())
-<div style="text-align:right;padding:12px 4px;font-size:15px;font-weight:700;border-top:2px solid var(--border)">
+<div style="text-align:right;padding:12px 24px 12px 4px;font-size:15px;font-weight:700;border-top:2px solid var(--border)">
     Grand Total: <span style="color:var(--primary);font-size:18px">₱{{ number_format($grandTotal, 2) }}</span>
 </div>
 @endif

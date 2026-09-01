@@ -96,7 +96,13 @@
                         @endif
                     </td>
                     <td>
-                        @php $drs = $ris->items->pluck('dr_number')->filter()->unique(); @endphp
+                        @php
+                            $drs = $ris->items
+                                ->flatMap(fn($ri) => $ri->dispatchItems->pluck('dr_number'))
+                                ->filter()
+                                ->unique()
+                                ->values();
+                        @endphp
                         @if($drs->isNotEmpty())
                             @foreach($drs as $dr)
                                 <code style="font-size:12px">{{ $dr }}</code>@if(!$loop->last)<br>@endif

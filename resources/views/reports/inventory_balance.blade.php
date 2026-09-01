@@ -155,7 +155,16 @@
                         @endif
                     </td>
                     <td>{{ $item->unit }}</td>
-                    <td style="text-align:right">{{ number_format($item->quantity) }}</td>
+                    <td style="text-align:right">
+                        @php $resQty = \App\Models\ReservationItem::reservedQuantityForItem($item->id); @endphp
+                        <div style="font-weight:600">{{ number_format($item->quantity) }}</div>
+                        @if($resQty > 0)
+                        <div style="font-size:10px;margin-top:2px;line-height:1.5">
+                            <span style="color:var(--warning)"><i class="fas fa-lock"></i> {{ number_format($resQty) }} reserved</span><br>
+                            <span style="color:var(--primary)"><i class="fas fa-check-circle"></i> {{ number_format(max(0, $item->quantity - $resQty)) }} available</span>
+                        </div>
+                        @endif
+                    </td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">

@@ -56,11 +56,32 @@
 <!-- RPCI Table -->
 <div class="card">
     <div class="card-header">
-        <h3>Physical Count of Inventories</h3>
-        <span style="font-size:13px;color:var(--text-muted)">As of {{ date('F d, Y') }}</span>
+        <h3>Physical Count of Inventories <span style="font-size:13px;font-weight:400;color:var(--text-muted);margin-left:8px">As of {{ date('F d, Y') }}</span></h3>
     </div>
     <div class="table-wrapper">
-        <table>
+        <table style="table-layout:fixed;width:100%">
+            <colgroup>
+                @if(auth()->user()->hasAdminAccess())
+                <col style="width:10%">
+                <col style="width:14%">
+                <col style="width:5%">
+                <col style="width:14%">
+                <col style="width:12%">
+                <col style="width:7%">
+                <col style="width:9%">
+                <col style="width:10%">
+                <col style="width:10%">
+                <col style="width:9%">
+                @else
+                <col style="width:13%">
+                <col style="width:25%">
+                <col style="width:7%">
+                <col style="width:22%">
+                <col style="width:10%">
+                <col style="width:11%">
+                <col style="width:12%">
+                @endif
+            </colgroup>
             <thead>
                 <tr>
                     <th>Stock No.</th>
@@ -78,33 +99,38 @@
                 </tr>
             </thead>
             <tbody>
-                @php $grandTotal = 0; $currentCat = ''; @endphp
+                @php $grandTotal = 0; $currentCat = ''; $colCount = auth()->user()->hasAdminAccess() ? 10 : 7; @endphp
                 @forelse($items as $item)
                 @if($currentCat != $item->category)
                 @php $currentCat = $item->category; @endphp
                 <tr style="background:#f0f4f8">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}" style="font-weight:700;color:var(--primary)">{{ App\Models\Item::getCategories()[$item->category]['label'] ?? $item->category }}</td>
+                    <td colspan="{{ $colCount }}" style="font-weight:700;color:#1e2a3a;padding:8px 14px">
+                        {{ App\Models\Item::getCategories()[$item->category]['label'] ?? $item->category }}
+                        — Account Code: {{ App\Models\Item::getCategories()[$item->category]['account_code'] ?? '' }}
+                    </td>
                 </tr>
                 @endif
                 <tr>
-                    <td><code style="font-size:11px">{{ $item->stock_number }}</code></td>
-                    <td>{{ $item->description }}</td>
+                    <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $item->stock_number }}</td>
+                    <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $item->description }}">{{ $item->description }}</td>
                     <td>{{ $item->unit }}</td>
-                    <td><span class="badge badge-info" style="font-size:10px">{{ $item->getCategoryLabel() }}</span></td>
-                    @if(auth()->user()->hasAdminAccess())<td>{{ $item->warehouse->name ?? '-' }}</td>@endif
+                    <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $item->getCategoryLabel() }}">{{ $item->getCategoryLabel() }}</td>
+                    @if(auth()->user()->hasAdminAccess())
+                    <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $item->warehouse->name ?? '-' }}">{{ $item->warehouse->name ?? '-' }}</td>
+                    @endif
                     <td style="text-align:right">{{ number_format($item->quantity) }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">
                         @if($item->engas_unit_cost !== null)
-                            <span style="color:var(--primary);font-weight:600">₱{{ number_format($item->engas_unit_cost, 2) }}</span>
+                            ₱{{ number_format($item->engas_unit_cost, 2) }}
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td style="text-align:right">
                         @if($item->engas_unit_cost !== null)
-                            <span style="color:var(--primary);font-weight:600">₱{{ number_format($item->quantity * $item->engas_unit_cost, 2) }}</span>
+                            ₱{{ number_format($item->quantity * $item->engas_unit_cost, 2) }}
                         @else
                             <span style="color:var(--text-muted)">—</span>
                         @endif
@@ -114,14 +140,14 @@
                 </tr>
                 @php $grandTotal += $item->quantity * $item->unit_cost; @endphp
                 @empty
-                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 7 }}" style="text-align:center;padding:40px;color:var(--text-muted)">No items found.</td></tr>
+                <tr><td colspan="{{ $colCount }}" style="text-align:center;padding:40px;color:var(--text-muted)">No items found.</td></tr>
                 @endforelse
             </tbody>
             @if($items->count() > 0)
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700;font-size:15px">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 6 }}" style="text-align:right">GRAND TOTAL:</td>
-                    <td style="text-align:right">₱{{ number_format($grandTotal, 2) }}</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 6 }}" style="text-align:right;padding-right:24px">GRAND TOTAL:</td>
+                    <td style="text-align:right;padding-right:24px">₱{{ number_format($grandTotal, 2) }}</td>
                 </tr>
             </tfoot>
             @endif

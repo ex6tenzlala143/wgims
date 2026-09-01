@@ -93,12 +93,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/reservations/create', [ReservationController::class, 'create'])->name('reservations.create');
         Route::post('/reservations', [ReservationController::class, 'store'])->name('reservations.store');
     });
-    // NOTE: items-by-warehouse MUST be before {reservation} to avoid wildcard capture
+    // NOTE: static sub-paths MUST be before {reservation} to avoid wildcard capture
     Route::get('/reservations/items-by-warehouse', [ReservationController::class, 'getItemsByWarehouse'])->name('reservations.items_by_warehouse');
     Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])->name('reservations.show');
     Route::post('/reservations/{reservation}/approve', [ReservationController::class, 'approve'])->name('reservations.approve');
     Route::post('/reservations/{reservation}/ready', [ReservationController::class, 'markReady'])->name('reservations.ready');
     Route::post('/reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])->name('reservations.cancel');
+    Route::middleware('admin.write')->group(function () {
+        Route::delete('/reservations/{reservation}', [ReservationController::class, 'destroy'])->name('reservations.destroy');
+        Route::delete('/reservations/{reservation}/items/{reservationItem}', [ReservationController::class, 'destroyItem'])->name('reservations.items.destroy');
+    });
     
     // Write routes — ADMIN ONLY (blocked for Warehouse Manager)
     Route::middleware('admin.write')->group(function () {
@@ -213,6 +217,10 @@ Route::middleware('auth')->group(function () {
 
     // ── API helpers (throttled: 120 requests/minute per user) ────────────────
     Route::middleware('throttle:120,1')->group(function () {
+
+    Route::get('/api/reservations/active', [ReservationController::class, 'getActiveReservations'])->name('reservations.api.active');
+    Route::get('/api/reservations/for-dispatch', [ReservationController::class, 'getItemsForDispatch'])->name('reservations.api.for_dispatch');
+    Route::get('/api/reservations/{reservation}/items', [ReservationController::class, 'getReservationItems'])->name('reservations.api.items');
 
     Route::get('/api/check-dr', function (Request $req) {
         return response()->json(['exists' => DeliverySubsidy::where('dr_number', $req->string('dr_number'))->exists()]);
