@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -46,7 +46,7 @@
 
         /* ── Title ── */
         .doc-title { text-align: center; margin-bottom: 8px; }
-        .doc-title h2 { font-size: 12pt; font-weight: bold; text-transform: uppercase; }
+        .doc-title h2 { font-size: 12pt; font-weight:700; text-transform: uppercase; }
 
         /* ── Header info table ── */
         table.header-table {
@@ -85,7 +85,7 @@
             padding: 2px 4px;
             vertical-align: middle;
         }
-        table.ris-table th { text-align: center; font-weight: bold; }
+        table.ris-table th { text-align: center; font-weight:700; }
         table.ris-table td { text-align: center; }
         table.ris-table td.left  { text-align: left; }
         table.ris-table td.right { text-align: right; }

@@ -530,19 +530,28 @@ class RequisitionController extends Controller
         abort_unless(Auth::user()->isAdmin(), 403, 'Only administrators can delete requisitions.');
 
         $risNumber = $requisition->ris_number;
-        $requisition->load('items.dispatchItems.item');
+        $requisition->load('items.dispatchItems.item', 'items.dispatchItems.reservationItem.reservation');
 
         try {
             DB::transaction(function () use ($requisition) {
-            $affectedItemIds = [];
+            $affectedItemIds       = [];
+            $affectedReservItemIds = []; // reservation_items that need deployed_qty reversed
 
             // Reverse each dispatch independently — each one may have come from a
             // different warehouse/stock record.
             foreach ($requisition->items as $ri) {
                 foreach ($ri->dispatchItems as $di) {
                     if ($di->quantity_issued > 0 && $di->item) {
-                        $di->item->increment('quantity', $di->quantity_issued);
+                        // Use update() not increment() so the Item::saving hook
+                        // can reactivate the record if quantity rises above 0.
+                        $di->item->update(['quantity' => (int) round((float) $di->item->quantity + $di->quantity_issued)]);
                         $affectedItemIds[$di->item->id] = true;
+                    }
+                    // Track reservation_item links so we can reverse deployed_quantity
+                    if ($di->reservation_item_id) {
+                        $affectedReservItemIds[$di->reservation_item_id] =
+                            ($affectedReservItemIds[$di->reservation_item_id] ?? 0)
+                            + (float) $di->quantity_issued;
                     }
                 }
             }
@@ -564,6 +573,32 @@ class RequisitionController extends Controller
             // consistent after their upstream issuance rows were removed.
             foreach (array_keys($affectedItemIds) as $itemId) {
                 StockCardEntry::recalculateBalancesForItem($itemId);
+            }
+
+            // Reverse deployed_quantity on any reservation_items that were
+            // consumed by dispatches in this RIS, then recompute the
+            // reservation's overall status so it no longer shows as DEPLOYED.
+            foreach ($affectedReservItemIds as $resItemId => $reversedQty) {
+                $resItem = \App\Models\ReservationItem::find($resItemId);
+                if (! $resItem) continue;
+
+                $newDeployed = max(0, (float) $resItem->deployed_quantity - $reversedQty);
+
+                // Revert status based on the corrected deployed quantity
+                $newStatus = match (true) {
+                    $newDeployed <= 0       => \App\Models\ReservationItem::STATUS_ACTIVE,
+                    $newDeployed < (float) $resItem->reserved_quantity - 0.0001
+                                            => \App\Models\ReservationItem::STATUS_PARTIALLY_DEPLOYED,
+                    default                 => \App\Models\ReservationItem::STATUS_DEPLOYED,
+                };
+
+                $resItem->update([
+                    'deployed_quantity' => $newDeployed,
+                    'status'            => $newStatus,
+                ]);
+
+                // Recompute the parent reservation's overall status
+                $resItem->reservation?->updateOverallStatus();
             }
             });
         } catch (ValidationException $e) {
@@ -1412,6 +1447,33 @@ class RequisitionController extends Controller
                 'stock_available' => (float) $newItem->quantity >= $ri->quantity_requested,
             ]);
 
+            // ── Reverse/adjust deployed_quantity on any linked reservation_item ─
+            // If the quantity changed or the item record changed, the reservation's
+            // deployed_quantity must reflect the new dispatched amount.
+            if ($dispatch->reservation_item_id) {
+                $resItem = \App\Models\ReservationItem::whereKey($dispatch->reservation_item_id)
+                    ->lockForUpdate()->first();
+
+                if ($resItem) {
+                    // delta = newQty - oldQty: positive means more deployed, negative means less
+                    $delta       = $newQty - $oldQty;
+                    $newDeployed = max(0, (float) $resItem->deployed_quantity + $delta);
+
+                    $newResStatus = match (true) {
+                        $newDeployed <= 0                                                 => \App\Models\ReservationItem::STATUS_ACTIVE,
+                        $newDeployed < (float) $resItem->reserved_quantity - 0.0001      => \App\Models\ReservationItem::STATUS_PARTIALLY_DEPLOYED,
+                        default                                                           => \App\Models\ReservationItem::STATUS_DEPLOYED,
+                    };
+
+                    $resItem->update([
+                        'deployed_quantity' => $newDeployed,
+                        'status'            => $newResStatus,
+                    ]);
+
+                    $resItem->reservation?->updateOverallStatus();
+                }
+            }
+
             $requisition->load('items');
             $requisition->updateFulfilmentStatus();
             });
@@ -1507,7 +1569,31 @@ class RequisitionController extends Controller
                 // 4) Delete the dispatched item itself.
                 $dispatch->delete();
 
-                // 5) Recompute the line caches + fulfilment status from the
+                // 5) If this dispatch was linked to a reservation item, reverse
+                //    the deployed_quantity and recompute the reservation status
+                //    so it no longer incorrectly shows as DEPLOYED.
+                if ($dispatch->reservation_item_id) {
+                    $resItem = \App\Models\ReservationItem::find($dispatch->reservation_item_id);
+                    if ($resItem) {
+                        $newDeployed = max(0, (float) $resItem->deployed_quantity - $qty);
+
+                        $newStatus = match (true) {
+                            $newDeployed <= 0 => \App\Models\ReservationItem::STATUS_ACTIVE,
+                            $newDeployed < (float) $resItem->reserved_quantity - 0.0001
+                                              => \App\Models\ReservationItem::STATUS_PARTIALLY_DEPLOYED,
+                            default           => \App\Models\ReservationItem::STATUS_DEPLOYED,
+                        };
+
+                        $resItem->update([
+                            'deployed_quantity' => $newDeployed,
+                            'status'            => $newStatus,
+                        ]);
+
+                        $resItem->reservation?->updateOverallStatus();
+                    }
+                }
+
+                // 6) Recompute the line caches + fulfilment status from the
                 //    REMAINING dispatch sums only. Requested quantities and
                 //    every other stock record stay untouched.
                 $requisition->load('items');

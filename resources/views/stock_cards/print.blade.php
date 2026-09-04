@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -48,7 +48,7 @@
 
         /* ── Document header ── */
         .doc-header { text-align: center; margin-bottom: 6px; }
-        .doc-header h2 { font-size: 13pt; font-weight: bold; text-transform: uppercase; letter-spacing: .5px; }
+        .doc-header h2 { font-size: 13pt; font-weight:700; text-transform: uppercase; letter-spacing: .5px; }
         .doc-header .agency-line {
             border-bottom: 1px solid #000;
             width: 55%; margin: 3px auto 1px;
@@ -82,7 +82,7 @@
         }
         table.sc-table th {
             text-align: center;
-            font-weight: bold;
+            font-weight:700;
             font-style: italic;
             background: #fff;
             line-height: 1.3;

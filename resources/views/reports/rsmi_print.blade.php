@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -65,7 +65,7 @@
 
         /* ── Title ── */
         .doc-title { text-align: center; margin: 6px 0 2px; }
-        .doc-title h2 { font-size: 12.5pt; font-weight: bold; text-transform: uppercase; }
+        .doc-title h2 { font-size: 12.5pt; font-weight:700; text-transform: uppercase; }
         .doc-title .period-line {
             border-bottom: 1px solid #000;
             width: 55%; margin: 3px auto 0;
@@ -98,7 +98,7 @@
             vertical-align: middle;
         }
         table.rsmi-table th {
-            text-align: center; font-weight: bold;
+            text-align: center; font-weight:700;
             background: #fff; line-height: 1.3;
         }
         table.rsmi-table td      { text-align: center; }
@@ -107,7 +107,7 @@
         tr.data-row  td { height: 15px; }
         tr.empty-row td { height: 14px; }
         .col-divider { border-right: 2px solid #000 !important; }
-        .recap-header { font-weight: bold; font-size: 9pt; }
+        .recap-header { font-weight:700; font-size: 9pt; }
 
         /* ── Signature block ── */
         .sig-block {
@@ -230,16 +230,16 @@
         <div class="meta-left">
             <div>
                 <span style="font-size:8.5pt">Entity:&nbsp;</span>
-                <span class="field-line">{{ $ris->entity_name ?? '&nbsp;' }}</span>
+                <span class="field-line">{{ $ris->entity_name ?? '' }}</span>
             </div>
             <div>
                 <span style="font-size:8.5pt">Fund Cluster:&nbsp;</span>
-                <span class="field-line">{{ $ris->fund_cluster ?? '&nbsp;' }}</span>
+                <span class="field-line">{{ $ris->fund_cluster ?? '' }}</span>
             </div>
         </div>
         <div class="meta-right">
             <div>Serial No. :&nbsp;
-                <span class="field-line sm">{{ $serialNumber ?: '&nbsp;' }}</span>
+                <span class="field-line sm">{{ $serialNumber ?: '' }}</span>
             </div>
             <div style="margin-top:3px">Date :&nbsp;
                 <span class="field-line sm">
@@ -338,10 +338,10 @@
 
             {{-- RIS subtotal --}}
             <tr>
-                <td colspan="5" style="text-align:right;font-weight:bold;border-top:2px solid #000">TOTAL:</td>
+                <td colspan="5" style="text-align:right;font-weight:700;border-top:2px solid #000">TOTAL:</td>
                 <td class="col-divider" style="border-top:2px solid #000"></td>
                 <td style="border-top:2px solid #000"></td>
-                <td class="right" style="font-weight:bold;border-top:2px solid #000">{{ number_format($subtotal, 2) }}</td>
+                <td class="right" style="font-weight:700;border-top:2px solid #000">{{ number_format($subtotal, 2) }}</td>
             </tr>
 
         </tbody>

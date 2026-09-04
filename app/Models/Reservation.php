@@ -250,20 +250,18 @@ class Reservation extends Model
             return;
         }
 
-        $allDeployed = $items->every(
-            fn ($i) => $i->status === ReservationItem::STATUS_DEPLOYED
-        );
-        $anyDeployed = $items->some(
-            fn ($i) => in_array($i->status, [
-                ReservationItem::STATUS_DEPLOYED,
-                ReservationItem::STATUS_PARTIALLY_DEPLOYED,
-            ])
-        );
+        $allDeployed   = $items->every(fn ($i) => $i->status === ReservationItem::STATUS_DEPLOYED);
+        $allCancelled  = $items->every(fn ($i) => $i->status === ReservationItem::STATUS_CANCELLED);
+        $anyDeployed   = $items->some(fn ($i) => in_array($i->status, [
+            ReservationItem::STATUS_DEPLOYED,
+            ReservationItem::STATUS_PARTIALLY_DEPLOYED,
+        ]));
 
         $newStatus = match (true) {
-            $allDeployed => self::STATUS_DEPLOYED,
-            $anyDeployed => self::STATUS_PARTIALLY_DEPLOYED,
-            default      => $this->status, // keep current (RESERVED / READY / etc.)
+            $allDeployed  => self::STATUS_DEPLOYED,
+            $allCancelled => self::STATUS_CANCELLED,
+            $anyDeployed  => self::STATUS_PARTIALLY_DEPLOYED,
+            default       => $this->status, // keep current (RESERVED / READY / etc.)
         };
 
         if ($newStatus !== $this->status) {

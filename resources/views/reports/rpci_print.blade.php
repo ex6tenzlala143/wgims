@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -47,7 +47,7 @@
             margin-bottom: 6px;
         }
         .coa-header .republic { font-size: 9pt; }
-        .coa-header .agency   { font-size: 9.5pt; font-weight: bold; text-transform: uppercase; }
+        .coa-header .agency   { font-size: 9.5pt; font-weight:700; text-transform: uppercase; }
         .coa-header .office   { font-size: 9pt; }
 
         .report-title {
@@ -59,7 +59,7 @@
         }
         .report-title h2 {
             font-size: 12pt;
-            font-weight: bold;
+            font-weight:700;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -99,7 +99,7 @@
         }
         table.rpci-table th {
             text-align: center;
-            font-weight: bold;
+            font-weight:700;
             background: #fff;
             line-height: 1.4;
         }
@@ -110,7 +110,7 @@
         /* Category group header row */
         tr.cat-header td {
             background: #f0f0f0;
-            font-weight: bold;
+            font-weight:700;
             font-size: 8.5pt;
             text-align: left;
             padding: 3px 5px;
@@ -122,13 +122,13 @@
 
         /* subtotal row */
         tr.subtotal-row td {
-            font-weight: bold;
+            font-weight:700;
             border-top: 1px solid #000;
         }
 
         /* grand total */
         tr.grand-total td {
-            font-weight: bold;
+            font-weight:700;
             font-size: 9pt;
             border-top: 2px solid #000;
         }
@@ -154,7 +154,7 @@
             font-size: 8.5pt;
         }
         .cert-col .sig-name {
-            font-weight: bold;
+            font-weight:700;
             font-size: 9pt;
         }
         .cert-col .sig-desig {

@@ -944,9 +944,11 @@ class StockTransferController extends Controller
                     $sourceItem = Item::whereKey($sti->item_id)->lockForUpdate()->first();
                     $destItem   = Item::whereKey($sti->destination_item_id)->lockForUpdate()->first();
 
-                    // Dispatch deducted stock at the source → add it back on delete
+                    // Dispatch deducted stock at the source → add it back on delete.
+                    // Use update() not increment() so the Item::saving hook
+                    // can reactivate the record if quantity rises above 0.
                     if ($sourceItem) {
-                        $sourceItem->increment('quantity', $dispatched);
+                        $sourceItem->update(['quantity' => (int) round((float) $sourceItem->quantity + $dispatched)]);
                     }
 
                     // Dispatch added stock at the destination → remove it on delete

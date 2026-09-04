@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'WGIMS') — WGIMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         /* ── Theme tokens ─────────────────────────────────────────────────── */
@@ -52,7 +55,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html { overflow-x: auto; }
         body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
@@ -695,7 +698,7 @@
         .balance-table .total-row { background: var(--success-bg); font-weight: 700; }
 
         /* ── Stock card print ─────────────────────────────────────────────── */
-        .stock-card-print { font-family: Arial, sans-serif; font-size: 10px; }
+        .stock-card-print { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 10px; }
         .stock-card-print table { border-collapse: collapse; width: 100%; }
         .stock-card-print th, .stock-card-print td { border: 1px solid #000; padding: 3px 5px; }
 

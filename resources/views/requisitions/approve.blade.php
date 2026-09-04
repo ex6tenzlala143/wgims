@@ -177,9 +177,9 @@
                         </div>
 
                         {{-- Hidden fields populated when a reservation is selected --}}
-                        <input type="hidden" name="items[{{ $ri->id }}][reservation_item_id]" id="res-item-id-{{ $ri->id }}">
-                        <input type="hidden" name="items[{{ $ri->id }}][item_id]" id="res-item-stock-id-{{ $ri->id }}">
-                        <input type="hidden" name="items[{{ $ri->id }}][warehouse_id]" id="res-item-wh-id-{{ $ri->id }}">
+                        <input type="hidden" name="items[{{ $ri->id }}][reservation_item_id]" id="res-item-id-{{ $ri->id }}" disabled>
+                        <input type="hidden" name="items[{{ $ri->id }}][item_id]" id="res-item-stock-id-{{ $ri->id }}" disabled>
+                        <input type="hidden" name="items[{{ $ri->id }}][warehouse_id]" id="res-item-wh-id-{{ $ri->id }}" disabled>
                         @error("items.{$ri->id}.reservation_item_id")
                         <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
                             <i class="fas fa-exclamation-triangle"></i> {{ $message }}
@@ -340,16 +340,30 @@ window.onSourceChange = function (idx, source) {
         // Disable normal fields so they don't submit
         if (whSel)   { whSel.disabled = true; }
         if (itemSel) { itemSel.disabled = true; }
+        // Re-enable the reservation hidden fields so they DO submit
+        ['res-item-id', 'res-item-stock-id', 'res-item-wh-id'].forEach(function (id) {
+            const el = document.getElementById(id + '-' + idx);
+            if (el) el.disabled = false;
+        });
         // Load reservations for this item description
         loadReservationsForItem(idx);
     }
 };
 
 function clearReservationFields(idx) {
-    ['res-item-id', 'res-item-stock-id', 'res-item-wh-id', 'unit-cost', 'engas-cost', 'expiry-date'].forEach(function (id) {
+    // Disable ONLY the reservation-specific hidden fields (not the shared cost fields)
+    ['res-item-id', 'res-item-stock-id', 'res-item-wh-id'].forEach(function (id) {
         const el = document.getElementById(id + '-' + idx);
-        if (el) el.value = '';
+        if (el) { el.value = ''; el.disabled = true; }
     });
+    // Clear the shared cost/expiry fields (but keep them enabled — filled by normal stock selection)
+    ['unit-cost', 'engas-cost', 'expiry-date'].forEach(function (id) {
+        const el = document.getElementById(id + '-' + idx);
+        if (el) { el.value = ''; el.disabled = false; }
+    });
+    // Also clear reservation_item_id
+    const riEl = document.getElementById('res-item-id-' + idx);
+    if (riEl) { riEl.value = ''; riEl.disabled = true; }
     const detail = document.getElementById('res-detail-' + idx);
     if (detail) detail.style.display = 'none';
     const qtyInput = document.getElementById('qty-' + idx);

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -12,17 +12,17 @@
         .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
         .meta-box { border: 1px solid #ccc; padding: 10px; border-radius: 4px; }
         .meta-box .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; margin-bottom: 4px; }
-        .meta-box .value { font-size: 13px; font-weight: bold; }
+        .meta-box .value { font-size: 13px; font-weight:700; }
         .warehouse-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; border: 1px solid #ccc; padding: 12px; border-radius: 4px; }
         .warehouse-box { flex: 1; text-align: center; }
         .warehouse-box .wh-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
-        .warehouse-box .wh-name { font-size: 14px; font-weight: bold; margin-top: 4px; }
+        .warehouse-box .wh-name { font-size: 14px; font-weight:700; margin-top: 4px; }
         .arrow { font-size: 20px; color: #333; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
         th { background: #1e2a3a; color: white; padding: 7px 10px; text-align: left; font-size: 11px; }
         td { padding: 7px 10px; border-bottom: 1px solid #ddd; font-size: 12px; }
         tr:last-child td { border-bottom: none; }
-        .total-row td { font-weight: bold; background: #f5f5f5; border-top: 2px solid #333; }
+        .total-row td { font-weight:700; background: #f5f5f5; border-top: 2px solid #333; }
         .text-right { text-align: right; }
         .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; }
         .sig-line { border-top: 1px solid #000; padding-top: 6px; text-align: center; font-size: 11px; }
