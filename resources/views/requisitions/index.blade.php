@@ -52,17 +52,18 @@
     @endif
     <div class="table-wrapper">
         <table>
-            <thead>
+             <thead>
                  <tr>
-                    <th>RIS No. / RIS ID</th>
-                    <th>DR No.</th>
-                    <th>Date</th>
-                    <th>Warehouse</th>
-                    <th>Purpose</th>
-                    <th style="min-width:150px">Fulfilment</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
+                     <th>RIS ID</th>
+                     <th>RIS No.</th>
+                     <th>Date</th>
+                     <th>Days Elapsed</th>
+                     <th>Warehouse</th>
+                     <th>Purpose</th>
+                     <th style="min-width:150px">Fulfilment</th>
+                     <th>Status</th>
+                     <th>Actions</th>
+                 </tr>
             </thead>
             <tbody>
                 @forelse($requisitions as $ris)
@@ -77,13 +78,7 @@
                 @endphp
                  <tr>
                     <td>
-                        <div style="line-height:1.6">
-                            <div style="font-weight:600">{{ $ris->ris_number }}</div>
-                            <div style="display:flex;align-items:baseline;gap:6px">
-                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">RIS ID:</span>
-                                <strong style="color:var(--primary);font-family:monospace">{{ $ris->ris_code ?? $ris->ris_id }}</strong>
-                            </div>
-                        </div>
+                        <strong style="color:var(--primary);font-family:monospace">{{ $ris->ris_code ?? $ris->ris_id }}</strong>
                         @if($subSnapshot)
                         <div style="margin-top:5px">
                             @include('partials.subsidy-source-badge', [
@@ -96,23 +91,26 @@
                         @endif
                     </td>
                     <td>
-                        @php
-                            $drs = $ris->items
-                                ->flatMap(fn($ri) => $ri->dispatchItems->pluck('dr_number'))
-                                ->filter()
-                                ->unique()
-                                ->values();
-                        @endphp
-                        @if($drs->isNotEmpty())
-                            @foreach($drs as $dr)
-                                <code style="font-size:12px">{{ $dr }}</code>@if(!$loop->last)<br>@endif
-                            @endforeach
-                        @else
-                            <span style="color:var(--text-muted);font-size:12px">—</span>
-                        @endif
+                        <div style="font-weight:600">{{ $ris->ris_number }}</div>
                     </td>
-                    <td>{{ $ris->date_requested->format('M d, Y') }}</td>
-                    <td>{{ $ris->warehouse_names ?? ($ris->warehouse->name ?? '-') }}</td>
+                     <td>
+                         @if($ris->status === 'approved' && $ris->date_approved)
+                             {{ $ris->date_approved->format('M d, Y') }}
+                         @else
+                             {{ $ris->date_requested->format('M d, Y') }}
+                         @endif
+                     </td>
+                      <td>
+                          @if($ris->status === 'approved' && $ris->date_approved)
+                              @php
+                                  $daysElapsed = max(0, (int) $ris->date_requested->startOfDay()->diffInDays($ris->date_approved->startOfDay()));
+                              @endphp
+                              {{ $daysElapsed }} day{{ $daysElapsed === 1 ? '' : 's' }}
+                          @else
+                              <span style="color:var(--text-muted)">—</span>
+                          @endif
+                      </td>
+                     <td>{{ $ris->warehouse_names ?? ($ris->warehouse->name ?? '-') }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($ris->purpose, 40) }}</td>
                     <td>
                         @if($risReq > 0)
@@ -149,7 +147,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-clipboard" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No requisitions found.
                 </td></tr>
