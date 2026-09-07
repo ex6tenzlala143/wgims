@@ -56,6 +56,10 @@ class ItemCategoryController extends Controller
             'sort_order'   => $maxSort + 1,
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => "Category \"{$request->label}\" created successfully."]);
+        }
+
         return redirect()->route('item_categories.index')
             ->with('success', "Category \"{$request->label}\" created successfully.");
     }
