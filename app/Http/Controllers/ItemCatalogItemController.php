@@ -25,12 +25,16 @@ class ItemCatalogItemController extends Controller
         ], ['name.unique' => 'That item name already exists under this category.']);
 
         // Automatically inherit account code from the parent category
-        ItemCatalogItem::create([
+        $catalogItem = ItemCatalogItem::create([
             'item_category_id' => $category->id,
             'name'             => $request->name,
             'account_code'     => $category->account_code,
             'is_active'        => true,
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => "Item name \"{$request->name}\" added to \"{$category->label}\"."]);
+        }
 
         return back()->with('success', "Item name \"{$request->name}\" added to \"{$category->label}\".");
     }
@@ -55,18 +59,29 @@ class ItemCatalogItemController extends Controller
             'is_active'    => $request->boolean('is_active', $catalogItem->is_active),
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => "Item name \"{$catalogItem->name}\" updated."]);
+        }
+
         return back()->with('success', "Item name \"{$catalogItem->name}\" updated.");
     }
 
-    public function destroy(ItemCatalogItem $catalogItem)
+    public function destroy(Request $request, ItemCatalogItem $catalogItem)
     {
         // Prevent deleting an item name that is referenced by subsidy/delivery lines
         if ($catalogItem->deliverySubsidyItems()->exists()) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => "Cannot delete \"{$catalogItem->name}\" — it is already used by delivery/subsidy records. Deactivate it instead."], 422);
+            }
             return back()->with('error', "Cannot delete \"{$catalogItem->name}\" — it is already used by delivery/subsidy records. Deactivate it instead.");
         }
 
         $name = $catalogItem->name;
         $catalogItem->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => "Item name \"{$name}\" deleted."]);
+        }
 
         return back()->with('success', "Item name \"{$name}\" deleted.");
     }

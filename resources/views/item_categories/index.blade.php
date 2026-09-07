@@ -69,14 +69,12 @@
                     </td>
                     <td>
                         <div style="display:flex;gap:4px">
-                            {{-- Manage item names --}}
                             <button type="button" class="btn btn-sm btn-outline btn-icon"
-                                    title="Manage Item Names"
-                                    onclick="toggleCatalog({{ $cat->id }})">
-                                <i class="fas fa-cubes"></i>
+                                    title="View Items"
+                                    onclick="openViewItemsModal({{ $cat->id }})">
+                                <i class="fas fa-list"></i>
                             </button>
 
-                            {{-- Edit --}}
                             <button type="button" class="btn btn-sm btn-outline btn-icon"
                                     title="Edit"
                                     onclick="openEdit(
@@ -89,7 +87,6 @@
                                 <i class="fas fa-edit"></i>
                             </button>
 
-                            {{-- Toggle active --}}
                             <form action="{{ route('item_categories.toggle', $cat->id) }}" method="POST" style="display:inline">
                                 @csrf @method('PATCH')
                                 <button type="submit" class="btn btn-sm btn-icon {{ $cat->is_active ? 'btn-warning' : 'btn-success' }}"
@@ -98,7 +95,6 @@
                                 </button>
                             </form>
 
-                            {{-- Delete --}}
                             @if($cat->items_count === 0)
                             <form action="{{ route('item_categories.destroy', $cat->id) }}" method="POST" style="display:inline"
                                   onsubmit="return confirm('Delete category &quot;{{ $cat->label }}&quot;? This cannot be undone.')">
@@ -112,115 +108,6 @@
                                 <i class="fas fa-trash"></i>
                             </button>
                             @endif
-                        </div>
-                    </td>
-                </tr>
-
-                {{-- ── Item names panel (expandable) ─────────────────────────────── --}}
-                <tr class="catalog-row" id="catalog-row-{{ $cat->id }}" style="display:none">
-                    <td colspan="8" style="padding:0;background:#fbfdff">
-                        <div style="padding:16px 20px">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                                <strong style="font-size:13px">
-                                    <i class="fas fa-cubes" style="color:var(--primary)"></i>
-                                    Item Names — {{ $cat->label }}
-                                    <span style="font-weight:400;color:var(--text-muted)">({{ $cat->catalogItems->count() }} total)</span>
-                                </strong>
-                                <button type="button" class="btn btn-sm btn-outline" onclick="toggleCatalog({{ $cat->id }})">
-                                    <i class="fas fa-chevron-up"></i> Close
-                                </button>
-                            </div>
-
-                            {{-- Add item name --}}
-                            <form action="{{ route('item_catalog_items.store') }}" method="POST" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">
-                                @csrf
-                                <input type="hidden" name="item_category_id" value="{{ $cat->id }}">
-                                <div style="flex:1;min-width:300px">
-                                    <label class="form-label" style="font-size:12px">Item Name / Description <span class="req">*</span></label>
-                                    <input type="text" name="name" class="form-control" placeholder="e.g. Bond Paper A4 (Account Code: {{ $cat->account_code }})" value="{{ old('item_category_id') == $cat->id ? old('name') : '' }}" required>
-                                    <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                                        <i class="fas fa-info-circle"></i> Account Code will automatically inherit from category: <strong>{{ $cat->account_code }}</strong>
-                                    </div>
-                                </div>
-                                <button type="submit" class="btn btn-sm btn-primary" style="margin-bottom:2px"><i class="fas fa-plus"></i> Add Item Name</button>
-                            </form>
-                            @if(old('item_category_id') == $cat->id')
-                                @error('name')<div style="color:var(--danger);font-size:12px;margin-bottom:6px">{{ $errors->first('name') }}</div>@enderror
-                            @endif
-
-                            {{-- Item name list --}}
-                            @if($cat->catalogItems->isEmpty())
-                            <div style="font-size:12px;color:var(--text-muted);padding:8px 0">
-                                No item names yet. Add one above — these become selectable descriptions in the New Delivery/Subsidy form.
-                            </div>
-                            @else
-                            <div class="table-wrapper">
-                                <table class="line-items-table" style="font-size:13px">
-                                    <thead>
-                                        <tr>
-                                            <th>Item Name / Description</th>
-                                            <th style="width:180px">Account Code</th>
-                                            <th style="width:90px">Status</th>
-                                            <th style="width:110px">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($cat->catalogItems as $ci)
-                                        <tr>
-                                            <td>{{ $ci->name }}</td>
-                                            <td>
-                                                <code style="font-size:12px;background:#f0f4f8;padding:2px 6px;border-radius:4px">{{ $ci->account_code }}</code>
-                                            </td>
-                                            <td>
-                                                @if($ci->is_active)
-                                                    <span class="badge badge-success">Active</span>
-                                                @else
-                                                    <span class="badge badge-secondary">Inactive</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                <div style="display:flex;gap:4px">
-                                                    <button type="button" class="btn btn-sm btn-outline btn-icon" title="Edit"
-                                                            onclick="openCatalogEdit({{ $ci->id }}, {{ $cat->id }}, {{ json_encode($ci->name) }}, {{ $ci->is_active ? 'true' : 'false' }})">
-                                                        <i class="fas fa-edit"></i>
-                                                    </button>
-                                                    <form action="{{ route('item_catalog_items.destroy', $ci->id) }}" method="POST" style="display:inline"
-                                                          onsubmit="return confirm('Delete item name &quot;{{ $ci->name }}&quot;? This cannot be undone.')">
-                                                        @csrf @method('DELETE')
-                                                        <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                            @endif
-
-                            {{-- Edit item name form (hidden, filled via JS) --}}
-                            <form action="" method="POST" id="catalog-edit-form-{{ $cat->id }}" style="display:none;margin-top:14px;padding:14px;border:1px solid var(--primary);border-radius:8px;background:#f0f9ff">
-                                @csrf @method('PUT')
-                                <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--primary)"><i class="fas fa-edit"></i> Edit Item Name</div>
-                                <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-                                    <div style="flex:1;min-width:280px">
-                                        <label class="form-label" style="font-size:12px">Item Name / Description</label>
-                                        <input type="text" name="name" class="form-control catalog-edit-name" required>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                                            <i class="fas fa-info-circle"></i> Account Code: <strong>{{ $cat->account_code }}</strong> (automatically inherited from category)
-                                        </div>
-                                    </div>
-                                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-bottom:8px">
-                                        <input type="checkbox" name="is_active" value="1" class="catalog-edit-active" style="width:15px;height:15px"> Active
-                                    </label>
-                                    <div style="display:flex;gap:6px;padding-bottom:2px">
-                                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> Save</button>
-                                        <button type="button" class="btn btn-sm btn-secondary" onclick="closeCatalogEdit({{ $cat->id }})">Cancel</button>
-                                    </div>
-                                </div>
-                            </form>
                         </div>
                     </td>
                 </tr>
@@ -309,9 +196,83 @@
     </div>
 </div>
 
+{{-- ── View Items Modal ───────────────────────────────────────────────── --}}
+<div class="modal-overlay" id="viewItemsModal" aria-hidden="true">
+    <div class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="viewItemsTitle" style="max-width:640px;height:auto;max-height:min(85vh,620px)">
+        <div class="modal-header">
+            <h2 id="viewItemsTitle"><i class="fas fa-cubes"></i> Item Names</h2>
+            <button type="button" class="modal-close" onclick="closeViewItemsModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="overflow-y:auto">
+            <div id="viewItemsContent"></div>
+        </div>
+    </div>
+</div>
+
+{{-- ── Add Item Name Modal ─────────────────────────────────────────────── --}}
+<div class="modal-overlay" id="addItemModal" aria-hidden="true">
+    <div class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="addItemTitle" style="max-width:520px;height:auto;max-height:min(80vh,520px)">
+        <div class="modal-header">
+            <h2 id="addItemTitle"><i class="fas fa-plus"></i> Add Item Name</h2>
+            <button type="button" class="modal-close" onclick="closeAddItemModal()">&times;</button>
+        </div>
+        <form id="addItemForm" method="POST" action="{{ route('item_catalog_items.store') }}">
+            @csrf
+            <input type="hidden" name="item_category_id" id="addItemCategoryId">
+            <div class="modal-body">
+                <div id="addItemErrors" class="alert alert-danger" style="display:none"></div>
+                <div class="form-group">
+                    <label class="form-label">Item Name / Description <span class="req">*</span></label>
+                    <input type="text" name="name" id="addItemName" class="form-control" placeholder="e.g. Bond Paper A4" required>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                        <i class="fas fa-info-circle"></i> Account Code will automatically inherit from the selected category.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeAddItemModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Item Name</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- ── Edit Item Name Modal ─────────────────────────────────────────────── --}}
+<div class="modal-overlay" id="editItemModal" aria-hidden="true">
+    <div class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="editItemTitle" style="max-width:520px;height:auto;max-height:min(80vh,520px)">
+        <div class="modal-header">
+            <h2 id="editItemTitle"><i class="fas fa-edit"></i> Edit Item Name</h2>
+            <button type="button" class="modal-close" onclick="closeEditItemModal()">&times;</button>
+        </div>
+        <form id="editItemForm" method="POST">
+            @csrf @method('PUT')
+            <div class="modal-body">
+                <div id="editItemErrors" class="alert alert-danger" style="display:none"></div>
+                <div class="form-group">
+                    <label class="form-label">Item Name / Description <span class="req">*</span></label>
+                    <input type="text" name="name" id="editItemName" class="form-control" required>
+                </div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-top:8px">
+                    <input type="checkbox" name="is_active" value="1" id="editItemActive" style="width:15px;height:15px"> Active
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEditItemModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 const editRouteBase = '{{ url("/item-categories") }}';
+const catalogItemsByCategory = @json($categories->mapWithKeys(fn($cat) => [$cat->id => $cat->catalogItems->map(fn($ci) => [
+    'id' => $ci->id,
+    'name' => $ci->name,
+    'account_code' => $ci->account_code,
+    'is_active' => $ci->is_active,
+])]));
 
 function openAddCategoryModal() {
     const modal = document.getElementById('addCategoryModal');
@@ -380,6 +341,116 @@ document.getElementById('addCategoryForm').addEventListener('submit', function(e
     });
 });
 
+function openViewItemsModal(catId) {
+    const items = catalogItemsByCategory[catId] || [];
+    const content = document.getElementById('viewItemsContent');
+    const modal = document.getElementById('viewItemsModal');
+
+    if (items.length === 0) {
+        content.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px">No item names yet. Click <strong>Add Item Name</strong> to create one.</p>';
+    } else {
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+        html += '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Item Name</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Account Code</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Status</th><th style="text-align:right;padding:8px;border-bottom:1px solid #ddd">Actions</th></tr></thead>';
+        html += '<tbody>';
+        items.forEach(item => {
+            html += '<tr>';
+            html += '<td style="padding:8px;border-bottom:1px solid #eee">' + item.name + '</td>';
+            html += '<td style="padding:8px;border-bottom:1px solid #eee"><code style="background:#f0f4f8;padding:2px 6px;border-radius:4px">' + (item.account_code || '—') + '</code></td>';
+            html += '<td style="padding:8px;border-bottom:1px solid #eee"><span class="badge ' + (item.is_active ? 'badge-success' : 'badge-secondary') + '">' + (item.is_active ? 'Active' : 'Inactive') + '</span></td>';
+            html += '<td style="padding:8px;border-bottom:1px solid #eee;text-align:right">';
+            html += '<button class="btn btn-sm btn-outline" onclick="openEditItemModal(' + catId + ', ' + item.id + ', \'' + item.name.replace(/'/g, "\\'") + '\', ' + item.is_active + ')"><i class="fas fa-edit"></i></button> ';
+            html += '<button class="btn btn-sm btn-danger" onclick="deleteItem(' + item.id + ', \'' + item.name.replace(/'/g, "\\'").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '\')"><i class="fas fa-trash"></i></button>';
+            html += '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        content.innerHTML = html;
+    }
+
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+}
+
+function closeViewItemsModal() {
+    const modal = document.getElementById('viewItemsModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+}
+
+document.getElementById('viewItemsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeViewItemsModal();
+});
+
+function openAddItemModal(catId) {
+    const modal = document.getElementById('addItemModal');
+    document.getElementById('addItemCategoryId').value = catId;
+    document.getElementById('addItemName').value = '';
+    const errorsEl = document.getElementById('addItemErrors');
+    errorsEl.style.display = 'none';
+    errorsEl.innerHTML = '';
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+}
+
+function closeAddItemModal() {
+    const modal = document.getElementById('addItemModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+}
+
+document.getElementById('addItemModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAddItemModal();
+});
+
+document.getElementById('addItemForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const form = this;
+    const formData = new FormData(form);
+    const errorsEl = document.getElementById('addItemErrors');
+    errorsEl.style.display = 'none';
+    errorsEl.innerHTML = '';
+
+    fetch(form.action, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json',
+        },
+        body: formData,
+    })
+    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(({ status, body }) => {
+        if (status === 200 && body.success) {
+            closeAddItemModal();
+            window.location.reload();
+        } else {
+            if (body.errors) {
+                let html = '<ul style="margin:0;padding-left:20px">';
+                for (const [field, messages] of Object.entries(body.errors)) {
+                    messages.forEach(msg => {
+                        html += '<li>' + msg + '</li>';
+                    });
+                }
+                html += '</ul>';
+                errorsEl.innerHTML = html;
+                errorsEl.style.display = 'block';
+            } else {
+                errorsEl.innerHTML = body.message || 'An error occurred. Please try again.';
+                errorsEl.style.display = 'block';
+            }
+        }
+    })
+    .catch(() => {
+        errorsEl.innerHTML = 'Network error. Please try again.';
+        errorsEl.style.display = 'block';
+    });
+});
+
 function openEdit(id, label, accountCode, sortOrder, isActive) {
     const form = document.getElementById('edit-form');
     form.action = editRouteBase + '/' + id;
@@ -397,33 +468,107 @@ function cancelEdit() {
     document.getElementById('edit-card').style.display = 'none';
 }
 
-function toggleCatalog(id) {
-    const row = document.getElementById('catalog-row-' + id);
-    if (!row) return;
-    row.style.display = row.style.display === 'none' ? '' : 'none';
+function openEditItemModal(catId, itemId, name, isActive) {
+    const modal = document.getElementById('editItemModal');
+    document.getElementById('editItemForm').action = '/item-categories/catalog-items/' + itemId;
+    document.getElementById('editItemName').value = name;
+    document.getElementById('editItemActive').checked = isActive;
+    const errorsEl = document.getElementById('editItemErrors');
+    errorsEl.style.display = 'none';
+    errorsEl.innerHTML = '';
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
 }
 
-function openCatalogEdit(id, catId, name, isActive) {
-    const form = document.getElementById('catalog-edit-form-' + catId);
-    if (!form) return;
-    form.action = '{{ url("/item-categories/catalog-items") }}/' + id;
-    form.querySelector('.catalog-edit-name').value = name;
-    form.querySelector('.catalog-edit-active').checked = isActive;
-    form.style.display = '';
-    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+function closeEditItemModal() {
+    const modal = document.getElementById('editItemModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
 }
 
-function closeCatalogEdit(catId) {
-    const form = document.getElementById('catalog-edit-form-' + catId);
-    if (form) form.style.display = 'none';
+document.getElementById('editItemModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditItemModal();
+});
+
+document.getElementById('editItemForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const form = this;
+    const formData = new FormData(form);
+    const errorsEl = document.getElementById('editItemErrors');
+    errorsEl.style.display = 'none';
+    errorsEl.innerHTML = '';
+
+    fetch(form.action, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json',
+        },
+        body: formData,
+    })
+    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(({ status, body }) => {
+        if (status === 200 && body.success) {
+            closeEditItemModal();
+            window.location.reload();
+        } else {
+            if (body.errors) {
+                let html = '<ul style="margin:0;padding-left:20px">';
+                for (const [field, messages] of Object.entries(body.errors)) {
+                    messages.forEach(msg => {
+                        html += '<li>' + msg + '</li>';
+                    });
+                }
+                html += '</ul>';
+                errorsEl.innerHTML = html;
+                errorsEl.style.display = 'block';
+            } else {
+                errorsEl.innerHTML = body.message || 'An error occurred. Please try again.';
+                errorsEl.style.display = 'block';
+            }
+        }
+    })
+    .catch(() => {
+        errorsEl.innerHTML = 'Network error. Please try again.';
+        errorsEl.style.display = 'block';
+    });
+});
+
+function deleteItem(itemId, itemName) {
+    if (!confirm('Delete item name "' + itemName + '"? This cannot be undone.')) {
+        return;
+    }
+
+    fetch('/item-categories/catalog-items/' + itemId, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json',
+        },
+        body: new URLSearchParams({_method: 'DELETE'}),
+    })
+    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(({ status, body }) => {
+        if (status === 200 && body.success) {
+            window.location.reload();
+        } else {
+            alert(body.message || 'Failed to delete item. Please try again.');
+        }
+    })
+    .catch(() => {
+        alert('Network error. Please try again.');
+    });
 }
 
 @if($errors->has('name') || $errors->has('account_code'))
 (function() {
     const catId = Number('{{ old('item_category_id', '') }}');
     if (catId) {
-        const row = document.getElementById('catalog-row-' + catId);
-        if (row) row.style.display = '';
+        openViewItemsModal(catId);
     }
 })();
 @endif
