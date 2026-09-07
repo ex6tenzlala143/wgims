@@ -265,14 +265,20 @@
 </div>
 
 @push('scripts')
+@php
+    $catalogItemsByCategory = [];
+    foreach ($categories as $cat) {
+        $catalogItemsByCategory[$cat->id] = $cat->catalogItems->map(fn($ci) => [
+            'id' => $ci->id,
+            'name' => $ci->name,
+            'account_code' => $ci->account_code,
+            'is_active' => $ci->is_active,
+        ]);
+    }
+@endphp
 <script>
 const editRouteBase = '{{ url("/item-categories") }}';
-const catalogItemsByCategory = @json($categories->mapWithKeys(fn($cat) => [$cat->id => $cat->catalogItems->map(fn($ci) => [
-    'id' => $ci->id,
-    'name' => $ci->name,
-    'account_code' => $ci->account_code,
-    'is_active' => $ci->is_active,
-])]));
+const catalogItemsByCategory = @json($catalogItemsByCategory);
 
 function openAddCategoryModal() {
     const modal = document.getElementById('addCategoryModal');
