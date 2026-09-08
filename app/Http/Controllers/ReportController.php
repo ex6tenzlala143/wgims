@@ -216,6 +216,14 @@ class ReportController extends Controller
                 return $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
             });
 
+            // ENGAS subtotal using per-dispatch engas_unit_cost or item engas_unit_cost as fallback
+            $engasSubtotal = $issuedItems->sum(function ($ri) {
+                if ($ri->dispatchItems->isNotEmpty()) {
+                    return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->engas_unit_cost ?? 0));
+                }
+                return $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
+            });
+
             // Recapitulation: group items by stock number within this RIS.
             // For dispatch-aware rows, also sum dispatch costs per stock number.
             $recap = $issuedItems->groupBy(fn ($ri) => $ri->item->stock_number ?? '')
@@ -230,23 +238,36 @@ class ReportController extends Controller
                     });
                     $totalQty = $group->sum('quantity_issued');
                     $unitCost = $totalQty > 0 ? $totalCost / $totalQty : ($first->item->unit_cost ?? 0);
+
+                    $engasTotalCost = $group->sum(function ($ri) {
+                        if ($ri->dispatchItems->isNotEmpty()) {
+                            return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->engas_unit_cost ?? 0));
+                        }
+                        return $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
+                    });
+                    $engasUnitCost = $totalQty > 0 ? $engasTotalCost / $totalQty : ($first->item->engas_unit_cost ?? 0);
+
                     return [
-                        'stock_no'   => $first->item->stock_number ?? '',
-                        'qty'        => $totalQty,
-                        'unit_cost'  => $unitCost,
-                        'total_cost' => $totalCost,
+                        'stock_no'        => $first->item->stock_number ?? '',
+                        'qty'             => $totalQty,
+                        'unit_cost'       => $unitCost,
+                        'total_cost'      => $totalCost,
+                        'engas_unit_cost' => $engasUnitCost,
+                        'engas_total_cost'=> $engasTotalCost,
                     ];
                 })->values();
 
             return [
-                'ris'        => $ris,
-                'items'      => $issuedItems,
-                'subtotal'   => $subtotal,
-                'recap'      => $recap,
+                'ris'            => $ris,
+                'items'          => $issuedItems,
+                'subtotal'       => $subtotal,
+                'engas_subtotal' => $engasSubtotal,
+                'recap'          => $recap,
             ];
         })->filter(fn ($g) => $g['items']->isNotEmpty())->values();
 
         $grandTotal = $risGroups->sum('subtotal');
+        $engasGrandTotal = $risGroups->sum('engas_subtotal');
 
         $serialNumber = $request->serial_number ?? '';
         $dateLabel = $request->date_from
@@ -254,7 +275,7 @@ class ReportController extends Controller
               .($request->date_to ? ' – '.date('F d, Y', strtotime($request->date_to)) : '')
             : date('F d, Y');
 
-        return view('reports.rsmi_print', compact('risGroups', 'grandTotal', 'serialNumber', 'dateLabel'));
+        return view('reports.rsmi_print', compact('risGroups', 'grandTotal', 'engasGrandTotal', 'serialNumber', 'dateLabel'));
     }
 
     public function saveRsmiSnapshot(Request $request)

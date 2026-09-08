@@ -267,14 +267,25 @@
                 <th style="width:28%">Item</th>
                 <th style="width:7%">Unit</th>
                 <th style="width:9%" class="col-divider">Quantity<br>Issued</th>
-                <th style="width:12%">Unit Cost</th>
-                <th style="width:12%">Amount</th>
+                <th style="width:12%">ENGAS Unit Cost</th>
+                <th style="width:12%">ENGAS Total Value</th>
             </tr>
         </thead>
         <tbody>
 
             {{-- ── Data rows for this RIS ── --}}
             @foreach($items as $ri)
+            @php
+                $engasUnitCost = null;
+                if ($ri->dispatchItems->isNotEmpty()) {
+                    $engasUnitCost = $ri->dispatchItems->first()->engas_unit_cost;
+                }
+                if ($engasUnitCost === null && $ri->item) {
+                    $engasUnitCost = $ri->item->engas_unit_cost;
+                }
+                $engasUnitCost = $engasUnitCost ?? 0;
+                $engasAmount = $ri->quantity_issued * $engasUnitCost;
+            @endphp
             <tr class="data-row">
                 <td>{{ $ris->ris_number }}</td>
                 <td>{{ $ri->warehouse?->code ?? $ris->warehouse?->code ?? '' }}</td>
@@ -282,8 +293,8 @@
                 <td class="left">{{ $ri->description ?? $ri->item?->description ?? '' }}</td>
                 <td>{{ $ri->unit ?? $ri->item?->unit ?? '' }}</td>
                 <td class="right col-divider">{{ number_format($ri->quantity_issued) }}</td>
-                <td class="right">{{ number_format($ri->unit_cost ?? $ri->item?->unit_cost ?? 0, 2) }}</td>
-                <td class="right">{{ number_format($ri->quantity_issued * ($ri->unit_cost ?? $ri->item?->unit_cost ?? 0), 2) }}</td>
+                <td class="right">{{ number_format($engasUnitCost, 2) }}</td>
+                <td class="right">{{ number_format($engasAmount, 2) }}</td>
             </tr>
             @endforeach
 
@@ -313,8 +324,8 @@
                 <th style="text-align:center">Quantity</th>
                 <td></td><td></td>
                 <td class="col-divider"></td>
-                <th style="text-align:center">Unit Cost</th>
-                <th style="text-align:center">Total Cost</th>
+                <th style="text-align:center">ENGAS Unit Cost</th>
+                <th style="text-align:center">ENGAS Total Cost</th>
             </tr>
 
             @foreach($recap as $r)
@@ -323,8 +334,8 @@
                 <td class="right">{{ number_format($r['qty']) }}</td>
                 <td></td><td></td>
                 <td class="col-divider"></td>
-                <td class="right">{{ number_format($r['unit_cost'], 2) }}</td>
-                <td class="right">{{ number_format($r['total_cost'], 2) }}</td>
+                <td class="right">{{ number_format($r['engas_unit_cost'], 2) }}</td>
+                <td class="right">{{ number_format($r['engas_total_cost'], 2) }}</td>
             </tr>
             @endforeach
 
@@ -341,7 +352,7 @@
                 <td colspan="5" style="text-align:right;font-weight:700;border-top:2px solid #000">TOTAL:</td>
                 <td class="col-divider" style="border-top:2px solid #000"></td>
                 <td style="border-top:2px solid #000"></td>
-                <td class="right" style="font-weight:700;border-top:2px solid #000">{{ number_format($subtotal, 2) }}</td>
+                <td class="right" style="font-weight:700;border-top:2px solid #000">{{ number_format($engasSubtotal, 2) }}</td>
             </tr>
 
         </tbody>
