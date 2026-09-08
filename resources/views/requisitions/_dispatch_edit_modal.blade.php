@@ -141,10 +141,6 @@
         <div class="de-modal-header">
             <div style="min-width:0">
                 <h2 id="dispatchEditTitle"><i class="fas fa-edit"></i> Edit Issued Item <span id="dispatch-edit-ref" style="color:var(--text-muted);font-weight:600"></span></h2>
-                <div class="de-modal-subtitle">
-                    Stock is reversed from the old record and re-applied to the exact new record —
-                    never double-counted or lost.
-                </div>
             </div>
             <button type="button" class="de-modal-close" onclick="closeDispatchEditModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>

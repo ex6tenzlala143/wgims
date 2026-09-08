@@ -136,9 +136,6 @@
         <div class="subsidy-modal-header">
             <div style="min-width:0">
                 <h2 id="subsidyDetailsTitle"><i class="fas fa-exclamation-triangle"></i> Deleted Subsidy</h2>
-                <div class="subsidy-modal-subtitle">
-                    This record was created from a Subsidy that no longer exists in its original state.
-                </div>
             </div>
             <button type="button" class="subsidy-modal-close" onclick="closeSubsidyDetailsModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>

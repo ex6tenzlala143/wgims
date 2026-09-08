@@ -11,6 +11,7 @@ use App\Models\Requisition;
 use App\Models\Warehouse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
@@ -80,13 +81,56 @@ class DashboardController extends Controller
                 'total_warehouses' => Warehouse::where('is_active', true)->count(),
             ];
 
+            // ── NEW: Calculate Requisition/Augmentation totals (actual dispatched) ──
+            $rdiTotals = DB::table('requisition_dispatch_items')
+                ->join('requisition_items', 'requisition_items.id', '=', 'requisition_dispatch_items.requisition_item_id')
+                ->join('requisitions', 'requisitions.id', '=', 'requisition_items.requisition_id')
+                ->where('requisitions.status', '!=', 'cancelled')
+                ->selectRaw('SUM(requisition_dispatch_items.quantity_issued) as total_qty, SUM(requisition_dispatch_items.quantity_issued * requisition_dispatch_items.unit_cost) as total_amt')
+                ->first();
+
+            $totalRequisitionQty = (float) ($rdiTotals->total_qty ?? 0);
+            $totalRequisitionAmt = (float) ($rdiTotals->total_amt ?? 0);
+
+            // ── NEW: Calculate Subsidy totals (actual delivered) ──
+            $subsidyTotals = DB::table('delivery_items')
+                ->selectRaw('SUM(quantity_delivered) as total_qty, SUM(quantity_delivered * unit_cost) as total_amt')
+                ->first();
+
+            $totalSubsidyQty = (float) ($subsidyTotals->total_qty ?? 0);
+            $totalSubsidyAmt = (float) ($subsidyTotals->total_amt ?? 0);
+
+            // ── NEW: Calculate Reservation totals (active only) ──
+            // Active reservations: ACTIVE and PARTIALLY_DEPLOYED
+            // Remaining = reserved - deployed
+            $riTotals = DB::table('reservation_items')
+                ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+                ->selectRaw('COALESCE(SUM(reserved_quantity), 0) as total_reserved, COALESCE(SUM(deployed_quantity), 0) as total_deployed')
+                ->first();
+            $totalReservedQty = (float) ($riTotals->total_reserved ?? 0) - (float) ($riTotals->total_deployed ?? 0);
+
+            // Reservation amount: sum of (remaining_qty * unit_cost) per stock record
+            $reservationAmtQuery = DB::table('reservation_items')
+                ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+                ->selectRaw('SUM((reserved_quantity - deployed_quantity) * unit_cost) as total')
+                ->first();
+            $totalReservedAmt = (float) ($reservationAmtQuery->total ?? 0);
+
+            // ── Chart data: Monthly activity comparison ──
+            // Compare monthly: requisition dispatched, subsidy delivered, reservation deployed
+            $chartData = $this->getMonthlyActivityChart();
+
             $reservationStats   = $this->getReservationStats(null);
             $recentReservations = $this->getRecentReservations(null);
             $reservedItems      = $this->getReservedItemsSummary(null);
 
             return view('dashboard.admin', compact(
                 'balances', 'unliquidated', 'stats',
-                'reservationStats', 'recentReservations', 'reservedItems'
+                'reservationStats', 'recentReservations', 'reservedItems',
+                'totalRequisitionQty', 'totalRequisitionAmt',
+                'totalSubsidyQty', 'totalSubsidyAmt',
+                'totalReservedQty', 'totalReservedAmt',
+                'chartData'
             ));
         }
 
@@ -136,6 +180,45 @@ class DashboardController extends Controller
                 ->count(),
         ];
 
+        // ── NEW: Calculate Requisition/Augmentation totals (warehouse-scoped) ──
+        $rdiTotals = DB::table('requisition_dispatch_items')
+            ->join('requisition_items', 'requisition_items.id', '=', 'requisition_dispatch_items.requisition_item_id')
+            ->join('requisitions', 'requisitions.id', '=', 'requisition_items.requisition_id')
+            ->join('items', 'items.id', '=', 'requisition_dispatch_items.item_id')
+            ->where('requisitions.status', '!=', 'cancelled')
+            ->whereIn('items.warehouse_id', $warehouseIds)
+            ->selectRaw('SUM(requisition_dispatch_items.quantity_issued) as total_qty, SUM(requisition_dispatch_items.quantity_issued * requisition_dispatch_items.unit_cost) as total_amt')
+            ->first();
+        $totalRequisitionQty = (float) ($rdiTotals->total_qty ?? 0);
+        $totalRequisitionAmt = (float) ($rdiTotals->total_amt ?? 0);
+
+        // ── NEW: Calculate Subsidy totals (warehouse-scoped) ──
+        $subsidyTotals = DB::table('delivery_items')
+            ->whereIn('delivery_items.warehouse_id', $warehouseIds)
+            ->selectRaw('SUM(delivery_items.quantity_delivered) as total_qty, SUM(delivery_items.quantity_delivered * delivery_items.unit_cost) as total_amt')
+            ->first();
+        $totalSubsidyQty = (float) ($subsidyTotals->total_qty ?? 0);
+        $totalSubsidyAmt = (float) ($subsidyTotals->total_amt ?? 0);
+
+        // ── NEW: Calculate Reservation totals (warehouse-scoped) ──
+        $riTotals = DB::table('reservation_items')
+            ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+            ->whereIn('warehouse_id', $warehouseIds)
+            ->selectRaw('COALESCE(SUM(reserved_quantity), 0) as total_reserved, COALESCE(SUM(deployed_quantity), 0) as total_deployed')
+            ->first();
+        $totalReservedQty = (float) ($riTotals->total_reserved ?? 0) - (float) ($riTotals->total_deployed ?? 0);
+        
+        // Reservation amount: sum of (remaining_qty * unit_cost) per stock record
+        $reservationAmtQuery = DB::table('reservation_items')
+            ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+            ->whereIn('warehouse_id', $warehouseIds)
+            ->selectRaw('SUM((reserved_quantity - deployed_quantity) * unit_cost) as total')
+            ->first();
+        $totalReservedAmt = (float) ($reservationAmtQuery->total ?? 0);
+
+        // ── Chart data (warehouse-scoped) ──
+        $chartData = $this->getMonthlyActivityChart($warehouseIds);
+
         $warehouse = $user->warehouse ?? $assignedWarehouses->first();
         if (! $warehouse) {
             return view('dashboard.no_warehouse');
@@ -147,7 +230,11 @@ class DashboardController extends Controller
 
         return view('dashboard.warehouse', compact(
             'warehouse', 'assignedWarehouses', 'accountBalances', 'stats',
-            'reservationStats', 'recentReservations', 'reservedItems'
+            'reservationStats', 'recentReservations', 'reservedItems',
+            'totalRequisitionQty', 'totalRequisitionAmt',
+            'totalSubsidyQty', 'totalSubsidyAmt',
+            'totalReservedQty', 'totalReservedAmt',
+            'chartData'
         ));
     }
 
@@ -162,23 +249,21 @@ class DashboardController extends Controller
      */
     private function getReservationStats(?array $warehouseIds): array
     {
-        // Status counts — one query using conditional SUM
-        $query = DB::table('reservations');
+        // ── Get counts ───────────────────────────────────────────────
+        $countQuery = DB::table('reservations');
 
-        if ($warehouseIds !== null) {
-            if (empty($warehouseIds)) {
-                return $this->emptyReservationStats();
-            }
-            // Scope: reservation has at least one item in these warehouses
-            $query->whereExists(function ($q) use ($warehouseIds) {
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
+            $countQuery->whereExists(function ($q) use ($warehouseIds) {
                 $q->select(DB::raw(1))
                   ->from('reservation_items')
                   ->whereColumn('reservation_items.reservation_id', 'reservations.id')
                   ->whereIn('reservation_items.warehouse_id', $warehouseIds);
             });
+        } elseif ($warehouseIds !== null && empty($warehouseIds)) {
+            return $this->emptyReservationStats();
         }
 
-        $counts = (clone $query)->select(
+        $counts = $countQuery->select(
             DB::raw("COUNT(*) as total"),
             DB::raw("SUM(CASE WHEN status IN ('PENDING','RESERVED','READY_FOR_REQUISITION','PARTIALLY_DEPLOYED') THEN 1 ELSE 0 END) as active"),
             DB::raw("SUM(CASE WHEN status = 'PARTIALLY_DEPLOYED' THEN 1 ELSE 0 END) as partially_deployed"),
@@ -187,28 +272,48 @@ class DashboardController extends Controller
             DB::raw("SUM(CASE WHEN status = 'EXPIRED' THEN 1 ELSE 0 END) as expired")
         )->first();
 
-        // Total reserved quantity across active reservation_items
+        // ── Total reserved quantity across active reservation_items ──
         $riQuery = DB::table('reservation_items')
             ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED']);
-
-        if ($warehouseIds !== null) {
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
             $riQuery->whereIn('warehouse_id', $warehouseIds);
         }
-
         $totalReserved = (float) $riQuery->sum('reserved_quantity');
-        $totalDeployed = (float) (clone $riQuery)->sum('deployed_quantity');
+
+        // ── Total deployed across active reservation_items ────────────
+        $deployedQuery = DB::table('reservation_items')
+            ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED']);
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
+            $deployedQuery->whereIn('warehouse_id', $warehouseIds);
+        }
+        $totalDeployed = (float) $deployedQuery->sum('deployed_quantity');
 
         // Nearing expiry (within 7 days, still active)
-        $nearExpiry = (clone $query)
+        $nearExpiryQuery = DB::table('reservations')
             ->whereIn('status', ['PENDING', 'RESERVED', 'READY_FOR_REQUISITION', 'PARTIALLY_DEPLOYED'])
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now()->addDays(7))
-            ->where('expires_at', '>', now())
-            ->count();
+            ->where('expires_at', '>', now());
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
+            $nearExpiryQuery->whereExists(function ($q) use ($warehouseIds) {
+                $q->select(DB::raw(1))
+                  ->from('reservation_items')
+                  ->whereColumn('reservation_items.reservation_id', 'reservations.id')
+                  ->whereIn('reservation_items.warehouse_id', $warehouseIds);
+            });
+        }
+        $nearExpiry = $nearExpiryQuery->count();
 
-        $expired = (clone $query)
-            ->where('status', 'EXPIRED')
-            ->count();
+        $expiredQuery = DB::table('reservations')->where('status', 'EXPIRED');
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
+            $expiredQuery->whereExists(function ($q) use ($warehouseIds) {
+                $q->select(DB::raw(1))
+                  ->from('reservation_items')
+                  ->whereColumn('reservation_items.reservation_id', 'reservations.id')
+                  ->whereIn('reservation_items.warehouse_id', $warehouseIds);
+            });
+        }
+        $expired = $expiredQuery->count();
 
         return [
             'total'              => (int) ($counts->total             ?? 0),
@@ -328,5 +433,119 @@ class DashboardController extends Controller
                 'available_qty'=> $availQty,
             ];
         });
+    }
+
+    /**
+     * Get monthly activity chart data for dashboard visualization.
+     * Compares requisition dispatched, subsidy delivered, and reservation deployed quantities.
+     *
+     * @param  int[]|null  $warehouseIds  Null means no restriction (admin), empty means no access
+     */
+    private function getMonthlyActivityChart(?array $warehouseIds = null): array
+    {
+        // Determine date range: last 12 months
+        $endDate = now()->endOfMonth();
+        $startDate = $endDate->copy()->subMonths(11)->startOfMonth();
+
+        // Build base query for date range
+        $dateRange = [];
+        $current = $startDate->copy();
+        while ($current <= $endDate) {
+            $dateRange[] = $current->format('Y-m');
+            $current->addMonth();
+        }
+
+        // ── Requisition dispatched data ──────────────────────────────────────
+        $reqQuery = DB::table('requisition_dispatch_items')
+            ->join('requisition_items', 'requisition_items.id', '=', 'requisition_dispatch_items.requisition_item_id')
+            ->join('requisitions', 'requisitions.id', '=', 'requisition_items.requisition_id')
+            ->where('requisitions.status', '!=', 'cancelled')
+            ->whereBetween(DB::raw('DATE(requisition_dispatch_items.created_at)'), [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ]);
+
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
+            $reqQuery->join('items', 'items.id', '=', 'requisition_dispatch_items.item_id')
+                ->whereIn('items.warehouse_id', $warehouseIds);
+        }
+
+        $reqData = $reqQuery->selectRaw(
+            "DATE_FORMAT(DATE(requisition_dispatch_items.created_at), '%Y-%m') as month,
+             SUM(requisition_dispatch_items.quantity_issued) as qty"
+        )->groupBy('month')->get()->keyBy('month');
+
+        // ── Subsidy delivered data ──────────────────────────────────────────
+        $subQuery = DB::table('delivery_items')
+            ->join('deliveries', 'deliveries.id', '=', 'delivery_items.delivery_id')
+            ->whereBetween(DB::raw('DATE(deliveries.delivery_date)'), [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ]);
+
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
+            $subQuery->whereIn('delivery_items.warehouse_id', $warehouseIds);
+        }
+
+        $subData = $subQuery->selectRaw(
+            "DATE_FORMAT(DATE(deliveries.delivery_date), '%Y-%m') as month,
+             SUM(delivery_items.quantity_delivered) as qty"
+        )->groupBy('month')->get()->keyBy('month');
+
+        // ── Reservation deployed data ───────────────────────────────────────
+        $resQuery = DB::table('reservation_items')
+            ->whereBetween(DB::raw('DATE(reservation_items.created_at)'), [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ]);
+
+        if ($warehouseIds !== null && !empty($warehouseIds)) {
+            $resQuery->whereIn('reservation_items.warehouse_id', $warehouseIds);
+        }
+
+        $resData = $resQuery->selectRaw(
+            "DATE_FORMAT(DATE(reservation_items.created_at), '%Y-%m') as month,
+             SUM(reservation_items.deployed_quantity) as qty"
+        )->groupBy('month')->get()->keyBy('month');
+
+        // Build chart series aligned to date range
+        $labels = [];
+        $reqSeries = [];
+        $subSeries = [];
+        $resSeries = [];
+
+        foreach ($dateRange as $month) {
+            $labels[] = \Carbon\Carbon::parse($month . '-01')->format('M Y');
+            $reqSeries[] = (float) ($reqData->get($month)->qty ?? 0);
+            $subSeries[] = (float) ($subData->get($month)->qty ?? 0);
+            $resSeries[] = (float) ($resData->get($month)->qty ?? 0);
+        }
+
+        return [
+            'labels' => $labels,
+            'datasets' => [
+                [
+                    'label' => 'Requisition Dispatched',
+                    'data' => $reqSeries,
+                    'borderColor' => '#3b82f6',
+                    'backgroundColor' => 'rgba(59, 130, 246, 0.1)',
+                    'fill' => true,
+                ],
+                [
+                    'label' => 'Subsidy Delivered',
+                    'data' => $subSeries,
+                    'borderColor' => '#10b981',
+                    'backgroundColor' => 'rgba(16, 185, 129, 0.1)',
+                    'fill' => true,
+                ],
+                [
+                    'label' => 'Reservation Deployed',
+                    'data' => $resSeries,
+                    'borderColor' => '#f59e0b',
+                    'backgroundColor' => 'rgba(245, 158, 11, 0.1)',
+                    'fill' => true,
+                ],
+            ],
+        ];
     }
 }

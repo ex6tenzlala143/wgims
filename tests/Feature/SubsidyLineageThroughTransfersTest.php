@@ -184,39 +184,6 @@ class SubsidyLineageThroughTransfersTest extends TestCase
             ->assertSee('FROM DELETED SUBSIDY');
     }
 
-    public function test_archiving_subsidy_marks_transferred_stock_until_restored(): void
-    {
-        $whA = $this->makeWarehouse('GAMC 1', 'GAMC1');
-        $whB = $this->makeWarehouse('GAMC 2', 'GAMC2');
-
-        $ds = $this->createSubsidy('RIS-LIN-ARC', 120);
-        $this->dispatch($ds, 'DR-LIN-ARC', $whA, 120, 150);
-
-        $sourceItem = $this->itemAt($whA);
-        $transfer   = $this->createTransfer($whA, $whB, $sourceItem, 40, 150);
-        $this->dispatchTransfer($transfer, $sourceItem, 40);
-        $destItem = $this->itemAt($whB);
-
-        $this->actingAs($this->admin())
-            ->patch(route('delivery_subsidies.archive', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'));
-
-        $this->assertEquals('archived', $sourceItem->fresh()->source_subsidy_status);
-        $this->assertEquals('archived', $destItem->fresh()->source_subsidy_status);
-        $this->assertTrue($destItem->fresh()->isRelatedToDeletedSubsidy());
-        $this->assertEquals(80, (float) $sourceItem->fresh()->quantity);
-        $this->assertEquals(40, (float) $destItem->fresh()->quantity);
-
-        $this->actingAs($this->admin())
-            ->patch(route('delivery_subsidies.restore', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'));
-
-        // Restore clears the 'archived' warning — status goes back to null (no warning).
-        $this->assertNull($sourceItem->fresh()->source_subsidy_status);
-        $this->assertNull($destItem->fresh()->source_subsidy_status);
-        $this->assertFalse($destItem->fresh()->isRelatedToDeletedSubsidy());
-    }
-
     public function test_multi_hop_transfers_mark_every_warehouse_in_the_chain(): void
     {
         $whA = $this->makeWarehouse('GAMC 1', 'GAMC1');

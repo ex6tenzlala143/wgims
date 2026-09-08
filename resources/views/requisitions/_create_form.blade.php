@@ -8,7 +8,6 @@
         <div class="modal-header">
             <div style="min-width:0">
                 <h2 id="createModalTitle"><i class="fas fa-clipboard-list"></i> New Requisition (RIS)</h2>
-                <div class="modal-subtitle">Complete the requisition details below. The warehouse, unit cost, expiry and DR number are set later, when the items are dispatched.</div>
             </div>
             <button type="button" class="modal-close" onclick="closeCreateModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>

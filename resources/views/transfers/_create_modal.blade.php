@@ -7,7 +7,6 @@
         <div class="modal-header">
             <div style="min-width:0">
                 <h2 id="createTransferModalTitle"><i class="fas fa-exchange-alt"></i> New Stock Transfer</h2>
-                <div class="modal-subtitle">Pre-position inventory by transferring stock between warehouses</div>
             </div>
             <button type="button" class="modal-close" onclick="closeTransferModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>
@@ -97,14 +96,6 @@
                         </div>
                     </div>
                 </section>
-
-                {{-- Info Panel --}}
-                <div class="alert alert-info" style="margin-bottom:0">
-                    <i class="fas fa-lightbulb"></i>
-                    <div>
-                        <strong>Pre-Positioning:</strong> Stock is deducted from source and added to destination. Stock cards and inventory balances update automatically. Quantities cannot exceed available stock.
-                    </div>
-                </div>
             </div>
 
             <div class="modal-footer">

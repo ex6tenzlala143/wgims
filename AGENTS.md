@@ -1,5 +1,10 @@
 # WGIMS — AI Agent Instructions
 
+> Deep-audit context: read `WGIMS_AI_CONTEXT.md` (v2, audited 2026-09-08 at HEAD `d4edc9e`)
+> before any major change. It contains the full route map, schema, flows, and known gaps.
+> Existing `docs/` (ARCHITECTURE, DATABASE_SCHEMA, BUSINESS_RULES, WORKFLOWS, SECURITY,
+> KNOWN_ISSUES, TESTING_GUIDE) are secondary references.
+
 ## Technology Stack
 
 - **PHP**: 8.2+
@@ -26,6 +31,16 @@ Middleware:
 - `admin.write` — admin only (mutating actions)
 - `admin.create` — admin + warehouse_manager (create actions)
 - `admin.only.strict` — admin only (no warehouse_manager)
+
+Nuances (verified in code — do not assume the middleware tells the whole story):
+- Reservation approve/ready/cancel routes are `auth`-only but controllers require
+  `canWrite()` = **admin-only**, even though `User::canApprove()` lists WM/head/custodian.
+  Only RIS dispatch actually honors `canApprove()`.
+- Transfers edit/update/delete routes use `admin` (allows WM) but controllers enforce
+  `canWrite()` (admin-only). Treat them as admin-only; prefer tightening the route.
+- `POST /reports/*/snapshot` are `auth`-only with no role check (any role can write).
+- `POST /logout` sits outside the `auth` group. `welcome.blade.php` references a
+  nonexistent `register` route (latent 500 if rendered).
 
 ## Critical Models & Relationships
 
@@ -253,6 +268,10 @@ Format: `{WAREHOUSE_CODE}-{CATEGORY_PREFIX}-{NNNN}` (e.g., `GAMC-FOO-0001`)
 | /api/check-username | GET | users.check_username | UserController | auth |
 | /api/check-dr | GET | ds.check_number | Closure | auth |
 
+> Full map (~106 routes) + deltas: see `WGIMS_AI_CONTEXT.md` §8. Notable gaps:
+> `/api/transfer-items` and `/api/item-stock-card` perform no warehouse-access check;
+> `/api/requisition-description-items` aggregates global stock; snapshot POSTs lack role checks.
+
 ## Edit/Delete/Reversal Rules
 
 ### Delivery Subsidy
@@ -327,13 +346,16 @@ All multi-step inventory operations wrapped in `DB::transaction()`.
 10. **Never increment/decrement quantities directly without `lockForUpdate()`** on the exact stock record
 11. **Never forget to call `StockCardEntry::recalculateBalancesForItem()`** after modifying stock card entries
 12. **Never change `source_subsidy_id` without updating the snapshot columns** on the item
+13. **Never write to dropped columns** (`requisition_items.unit_cost/engas/dr/expiry`) or call stale
+    `DeliverySubsidyCascadeService::cascadeUnitCost()` — use `cascadeItemCost()`
+14. **Never resolve merge conflicts in inventory views by blindly picking ours/theirs** — merge semantically
+15. **Never change Inventory Balance logic** unless explicitly instructed (Dashboard ≠ Balance)
 
 ## Before Making Any Change
 
-1. Read `AGENTS.md`
-2. Read the relevant documentation in `docs/`
-3. Inspect the actual code involved
-4. Understand the impact on related modules
-5. Make the smallest safe change
-6. Test the change
-7. Report exactly what was changed
+1. Read `WGIMS_AI_CONTEXT.md` first, then `AGENTS.md` rules and relevant `docs/`
+2. Inspect the actual code involved
+3. Understand the impact on related modules
+4. Make the smallest safe change
+5. Test the change
+6. Report exactly what was changed

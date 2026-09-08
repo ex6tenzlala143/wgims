@@ -40,46 +40,110 @@
     </div>
 </div>
 
-{{-- ── Reservation Summary ──────────────────────────────────────────────── --}}
-@include('dashboard._reservation_summary', ['reservationStats' => $reservationStats, 'recentReservations' => $recentReservations, 'reservedItems' => $reservedItems])
-
-<div class="card">
-    <div class="card-header">
-        <h3><i class="fas fa-balance-scale" style="color:var(--primary)"></i> {{ $warehouseLabel }} — Inventory Balance</h3>
+{{-- ── NEW: Requisitions/Augmentations Summary ──────────────────────────────── --}}
+<div class="stats-grid" style="margin-bottom:12px">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-clipboard-list"></i></div>
+        <div>
+            <div class="stat-value">{{ number_format($totalRequisitionQty) }}</div>
+            <div class="stat-label">Requisitions Qty</div>
+        </div>
     </div>
-    <div class="card-body" style="padding:0">
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Account Code</th>
-                        <th>Category</th>
-                        <th style="text-align:right">Total Qty</th>
-                        <th style="text-align:right">Total Value (₱)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @php $total = 0; @endphp
-                    @forelse($accountBalances as $ab)
-                    <tr>
-                        <td><span class="badge badge-primary">{{ $ab['account_code'] }}</span></td>
-                        <td>{{ $ab['label'] }}</td>
-                        <td style="text-align:right">{{ number_format($ab['total_qty']) }}</td>
-                        <td style="text-align:right">₱{{ number_format($ab['total_value'], 2) }}</td>
-                    </tr>
-                    @php $total += $ab['total_value']; @endphp
-                    @empty
-                    <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted)">No inventory data yet.</td></tr>
-                    @endforelse
-                    @if(count($accountBalances) > 0)
-                    <tr style="background:#f0fff4;font-weight:700">
-                        <td colspan="3" style="text-align:right">TOTAL:</td>
-                        <td style="text-align:right">₱{{ number_format($total, 2) }}</td>
-                    </tr>
-                    @endif
-                </tbody>
-            </table>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-coins"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($totalRequisitionAmt, 0) }}</div>
+            <div class="stat-label">Requisitions Amount</div>
         </div>
     </div>
 </div>
+
+{{-- ── NEW: Subsidies Summary ──────────────────────────────────────────────── --}}
+<div class="stats-grid" style="margin-bottom:12px">
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-truck"></i></div>
+        <div>
+            <div class="stat-value">{{ number_format($totalSubsidyQty) }}</div>
+            <div class="stat-label">Subsidies Qty</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-money-bill-wave"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($totalSubsidyAmt, 0) }}</div>
+            <div class="stat-label">Subsidies Amount</div>
+        </div>
+    </div>
+</div>
+
+{{-- ── NEW: Reservations Summary ────────────────────────────────────────────── --}}
+<div class="stats-grid" style="margin-bottom:12px">
+    <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fas fa-lock"></i></div>
+        <div>
+            <div class="stat-value">{{ number_format($totalReservedQty) }}</div>
+            <div class="stat-label">Reservations Qty</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fas fa-tag"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($totalReservedAmt, 0) }}</div>
+            <div class="stat-label">Reservations Amount</div>
+        </div>
+    </div>
+</div>
+
+{{-- ── NEW: Activity Chart ──────────────────────────────────────────────────── --}}
+<div class="card" style="margin-bottom:24px">
+    <div class="card-header">
+        <h3><i class="fas fa-chart-line" style="color:var(--primary)"></i> Monthly Activity Comparison</h3>
+        <span style="font-size:11px;color:var(--text-muted)">Last 12 months - comparing requisitions, subsidies, and reservations</span>
+    </div>
+    <div class="card-body" style="padding:12px">
+        <div style="position:relative;height:180px">
+            <canvas id="activityChart"></canvas>
+        </div>
+    </div>
+</div>
+
+{{-- ── Reservation Summary ──────────────────────────────────────────────── --}}
+@include('dashboard._reservation_summary', ['reservationStats' => $reservationStats, 'recentReservations' => $recentReservations, 'reservedItems' => $reservedItems])
+
+@section('scripts')
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var ctx = document.getElementById('activityChart');
+    if (!ctx) return;
+    var chartData = @json($chartData);
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: chartData.datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { usePointStyle: true, padding: 20 }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: function(value) { return Number(value).toLocaleString(); } }
+                }
+            },
+            interaction: { intersect: false, mode: 'index' }
+        }
+    });
+});
+</script>
+@endpush
+@endpush
 @endsection

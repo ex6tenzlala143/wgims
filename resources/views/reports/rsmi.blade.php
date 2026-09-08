@@ -94,9 +94,11 @@
 @forelse($risGroups as $group)
 @php
     /** @var \App\Models\Requisition $ris */
-    $ris      = $group['ris'];
-    $items    = $group['items'];
-    $subtotal = $group['subtotal'];
+    $ris          = $group['ris'];
+    $items        = $group['items'];
+    $dispatchRows = $group['dispatch_rows'] ?? collect(); // One row per dispatch item
+    $subtotal     = $group['subtotal'];
+    $engasSubtotal = $group['engas_subtotal'] ?? 0;
 
     // Build single-RIS print URL — only pass the exact RIS identifier.
     // Never inherit date_from/date_to/warehouse_id from the list URL —
@@ -167,59 +169,36 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($items as $ri)
+                {{-- Use dispatch_rows for accurate stock-level data (one row per dispatch item) --}}
                 @php
-                    $unitCost   = $ri->unit_cost ?? $ri->item?->unit_cost ?? 0;
-                    $amount     = $ri->quantity_issued * $unitCost;
-                    $outstanding = max(0, $ri->quantity_requested - $ri->quantity_issued);
+                    $dispatchData = $dispatchRows->map(function($row) use ($items) {
+                        // Find the matching requisition item to get requested quantity
+                        $matchingItem = $items->firstWhere('id', function($ri) use ($row) {
+                            foreach ($ri->dispatchItems as $di) {
+                                if ($di->item_id === $row['stock_no'] || $di->item_id) {
+                                    // Check if this dispatch item belongs to this RI
+                                }
+                            }
+                            return false;
+                        });
+                        return $row;
+                    });
                 @endphp
+
+                @foreach($dispatchRows as $row)
                 <tr>
-                    <td>
-                        @php
-                            $dispatchedStockNos = $ri->dispatchItems
-                                ->pluck('item.stock_number')
-                                ->filter()
-                                ->unique()
-                                ->values();
-                            $stockNoDisplay = $dispatchedStockNos->isNotEmpty()
-                                ? $dispatchedStockNos->implode(', ')
-                                : ($ri->item?->stock_number ?? '—');
-                        @endphp
-                        <code style="font-size:11px">{{ $stockNoDisplay }}</code>
-                    </td>
-                    <td>{{ $ri->description ?? $ri->item?->description ?? '—' }}</td>
-                    <td>{{ $ri->unit ?? $ri->item?->unit ?? '—' }}</td>
-                    <td style="text-align:right">{{ number_format($ri->quantity_requested) }}</td>
-                    <td style="text-align:right;color:var(--success);font-weight:600">
-                        {{ number_format($ri->quantity_issued) }}
-                    </td>
-                    <td style="text-align:right">
-                        @if($outstanding > 0)
-                            <span style="color:var(--warning);font-weight:600">{{ number_format($outstanding, 2) }}</span>
-                        @else
-                            <span class="badge badge-success" style="font-size:10px">
-                                <i class="fas fa-check"></i> Fulfilled
-                            </span>
-                        @endif
-                    </td>
-                    <td style="text-align:right">{{ number_format($unitCost, 2) }}</td>
+                    <td style="font-family:monospace;font-size:11px">{{ $row['stock_no'] ?? '—' }}</td>
+                    <td class="left">{{ $row['description'] ?? '—' }}</td>
+                    <td class="center">{{ $row['unit'] ?? '—' }}</td>
+                    <td style="text-align:right">{{ number_format($row['qty_issued'] ?? 0) }}</td>
+                    <td style="text-align:right;color:var(--success);font-weight:600">{{ number_format($row['qty_issued'] ?? 0) }}</td>
+                    <td style="text-align:right"><span class="badge badge-success" style="font-size:10px"><i class="fas fa-check"></i> Fulfilled</span></td>
+                    <td style="text-align:right">{{ number_format($row['unit_cost'] ?? 0, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
-                    <td style="text-align:right">
-                        @if(($ri->item?->engas_unit_cost ?? null) !== null)
-                            {{ number_format($ri->item->engas_unit_cost, 2) }}
-                        @else
-                            <span style="color:var(--text-muted)">—</span>
-                        @endif
-                    </td>
-                    <td style="text-align:right">
-                        @if(($ri->item?->engas_unit_cost ?? null) !== null)
-                            {{ number_format($ri->quantity_issued * $ri->item->engas_unit_cost, 2) }}
-                        @else
-                            <span style="color:var(--text-muted)">—</span>
-                        @endif
-                    </td>
+                    <td style="text-align:right">{{ number_format($row['engas_unit_cost'] ?? 0, 2) }}</td>
+                    <td style="text-align:right">{{ number_format(($row['qty_issued'] ?? 0) * ($row['engas_unit_cost'] ?? 0), 2) }}</td>
                     @endif
-                    <td style="text-align:right;font-weight:600">{{ number_format($amount, 2) }}</td>
+                    <td style="text-align:right;font-weight:600">{{ number_format(($row['qty_issued'] ?? 0) * ($row['unit_cost'] ?? 0), 2) }}</td>
                 </tr>
                 @endforeach
             </tbody>

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -184,16 +184,16 @@
 
 {{-- ═══════════════════════════════════════════════════════════════════
      LOOP: one block per RIS number — each block prints on its own page
-════════════════════════════════════════════════════════════════════ --}}
+ ════════════════════════════════════════════════════════════════════ --}}
 @foreach($risGroups as $groupIndex => $group)
 @php
     /** @var \App\Models\Requisition $ris */
     $ris        = $group['ris'];
-    $items      = $group['items'];   // Collection of RequisitionItem (qty_issued > 0)
+    $dispatchRows = $group['dispatch_rows'] ?? collect(); // One row per dispatch item
     $recap      = $group['recap'];   // Collection of recap rows for this RIS
-    $subtotal   = $group['subtotal'];
+    $engasSubtotal = $group['engas_subtotal'] ?? 0;
 
-    $dataCount    = $items->count();
+    $dataCount    = $dispatchRows->count();
     $minDataRows  = 17;
     $recapCount   = $recap->count();
     $minRecapRows = 7;
@@ -273,25 +273,17 @@
         </thead>
         <tbody>
 
-            {{-- ── Data rows for this RIS ── --}}
-            @foreach($items as $ri)
-            @php
-                $engasAmount = $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->engas_unit_cost ?? 0));
-                $engasUnitCost = $ri->quantity_issued > 0 ? $engasAmount / $ri->quantity_issued : 0;
-                if ($engasAmount === 0 && $ri->item) {
-                    $engasAmount   = $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
-                    $engasUnitCost = $ri->item->engas_unit_cost ?? 0;
-                }
-            @endphp
+            {{-- ── Data rows for this RIS - one row per dispatch item ── --}}
+            @foreach($dispatchRows as $row)
             <tr class="data-row">
-                <td style="white-space:nowrap">{{ $ris->ris_number }}</td>
-                <td style="white-space:wrap">{{ $ris->municipality}}, {{ $ris->province }}</td>
-                <td style="white-space:nowrap">{!! $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode('<br>') ?: ($ri->item?->stock_number ?? '') !!}
-                <td class="center">{{ $ri->description ?? $ri->item?->description ?? '' }}</td>
-                <td>{{ $ri->unit ?? $ri->item?->unit ?? '' }}</td>
-                <td class="center col-divider">{{ number_format($ri->quantity_issued) }}</td>
-                <td class="center">{{ number_format($engasUnitCost, 2) }}</td>
-                <td class="center">{{ number_format($engasAmount, 2) }}</td>
+                <td style="white-space:nowrap">{{ $row['ris_number'] }}</td>
+                <td style="white-space:wrap">{{ $row['warehouse'] }}</td>
+                <td style="white-space:nowrap">{{ $row['stock_no'] }}</td>
+                <td class="left">{{ $row['description'] }}</td>
+                <td class="center">{{ $row['unit'] }}</td>
+                <td class="center col-divider">{{ number_format($row['qty_issued']) }}</td>
+                <td class="center">{{ number_format($row['engas_unit_cost'], 2) }}</td>
+                <td class="center">{{ number_format($row['engas_amount'], 2) }}</td>
             </tr>
             @endforeach
 
@@ -308,9 +300,9 @@
                 <td colspan="2" class="recap-header" style="border-top:2px solid #000;text-align:center">
                     Recapitulation:
                 </td>
-                <td style="border-top:2px solid #000"></td>
-                <td style="border-top:2px solid #000"></td>
-                <td style="border-top:2px solid #000"></td>
+                <td style="border-top:2px solid #000;border-right:1px solid #000"></td>
+                <td style="border-top:2px solid #000;border-right:1px solid #000"></td>
+                <td style="border-top:2px solid #000;border-right:1px solid #000"></td>
                 <td class="col-divider" style="border-top:2px solid #000"></td>
                 <td colspan="2" class="recap-header" style="border-top:2px solid #000;text-align:center">
                     Recapitulation:
@@ -319,8 +311,8 @@
             <tr>
                 <th colspan="2" style="text-align:center">Stock No.</th>
                 <th style="text-align:center">Quantity</th>
-                <td></td><td></td>
-                <td class="col-divider"></td>
+                <th></th><th></th>
+                <th class="col-divider"></th>
                 <th style="text-align:center">ENGAS Unit Cost</th>
                 <th style="text-align:center">ENGAS Total Cost</th>
             </tr>
@@ -329,7 +321,7 @@
             <tr class="data-row">
                 <td colspan="2" style="white-space:nowrap">{{ $r['stock_no'] }}</td>
                 <td class="center">{{ number_format($r['qty']) }}</td>
-                <td></td><td></td>
+                <td style="border:1px solid #000"></td><td style="border:1px solid #000"></td>
                 <td class="col-divider"></td>
                 <td class="center">{{ number_format($r['engas_unit_cost'], 2) }}</td>
                 <td class="center">{{ number_format($r['engas_total_cost'], 2) }}</td>
@@ -339,8 +331,8 @@
             {{-- Recap filler --}}
             @for($i = $recapCount; $i < $minRecapRows; $i++)
             <tr class="empty-row">
-                <td colspan="2"></td><td></td><td></td><td></td>
-                <td class="col-divider"></td><td></td><td></td>
+                <td colspan="2"></td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td>
+                <td class="col-divider"></td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td>
             </tr>
             @endfor
 
@@ -349,7 +341,7 @@
                 <td colspan="5" style="text-align:right;font-weight:700;border-top:2px solid #000">TOTAL:</td>
                 <td class="col-divider" style="border-top:2px solid #000"></td>
                 <td style="border-top:2px solid #000"></td>
-                <td class="right" style="font-weight:700;border-top:2px solid #000">{{ number_format($group['engas_subtotal'] ?? 0, 2) }}</td>
+                <td class="right" style="font-weight:700;border-top:2px solid #000">{{ number_format($engasSubtotal, 2) }}</td>
             </tr>
 
         </tbody>

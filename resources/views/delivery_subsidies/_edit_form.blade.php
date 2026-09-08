@@ -47,7 +47,6 @@
         <div class="modal-header">
             <div style="min-width:0">
                 <h2 id="editModalTitle"><i class="fas fa-edit"></i> Edit Subsidy <span id="edit-ris-ref" style="color:var(--text-muted);font-weight:600"></span></h2>
-                <div class="modal-subtitle" id="edit-modal-subtitle">Editing the subsidy header and its line items. Unit cost and warehouse are assigned at dispatch.</div>
             </div>
             <button type="button" class="modal-close" onclick="closeEditModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>
@@ -488,12 +487,6 @@
         if (risNote) risNote.style.display = locked ? 'block' : 'none';
         var supplierNote = document.getElementById('edit-supplier-note');
         if (supplierNote) supplierNote.style.display = locked ? 'block' : 'none';
-        var sub = document.getElementById('edit-modal-subtitle');
-        if (sub) {
-            sub.textContent = locked
-                ? 'Only the request details can be edited: date, place of delivery, remarks and requested quantities. Delivered stock and inventory are never changed.'
-                : 'Editing the subsidy header and its line items. Unit cost and warehouse are assigned at dispatch.';
-        }
 
         (data.items || []).forEach(function (item) { editAddRow(item); });
 

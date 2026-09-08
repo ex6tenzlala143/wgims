@@ -110,11 +110,6 @@
         <div class="card">
             <div class="card-header">
                 <h3>Requested Items</h3>
-                <span style="font-size:12px;color:var(--text-muted);font-weight:400">
-                    The warehouse and exact stock record are chosen by the warehouse when items are issued.
-                    Lines that have already been dispatched are locked — their quantity cannot go below what
-                    was issued, and their item cannot be changed.
-                </span>
                 <button type="button" class="btn btn-sm btn-primary" onclick="addRisRow()"><i class="fas fa-plus"></i> Add Item</button>
             </div>
 

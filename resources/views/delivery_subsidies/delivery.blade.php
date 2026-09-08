@@ -48,19 +48,6 @@
     </div>
 </div>
 
-<div class="alert alert-info" style="font-size:13px">
-    <i class="fas fa-info-circle"></i>
-    <strong>Multiple batches supported.</strong>
-    If the same item arrives in different lots with different expiry dates or unit costs,
-    click <strong>+ Add Batch</strong> on that item's row to add a second (or third) batch entry.
-    Each batch gets its own stock card.
-    <br>
-    <i class="fas fa-warehouse" style="margin-top:6px"></i>
-    For each batch, choose the <strong>destination warehouse</strong>, the <strong>unit cost</strong>,
-    and its own <strong>DR No.</strong>. Stock is recorded in the selected warehouse's inventory
-    and stock card, and each item keeps its own Delivery Receipt number.
-</div>
-
 <form action="{{ route('delivery_subsidies.store_delivery', $deliverySubsidy->id) }}" method="POST" id="delivery-form">
 @csrf
 <input type="hidden" name="delivery_date"      value="{{ $deliveryDate }}">

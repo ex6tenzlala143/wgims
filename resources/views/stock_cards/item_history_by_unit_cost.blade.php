@@ -56,7 +56,7 @@
     </div>
     @if(count($batch['movements']) > 0)
     <div class="table-wrapper">
-        <table>
+        <table style="white-space:nowrap">
             <thead>
                 <tr>
                     <th>Date</th>

@@ -11,7 +11,6 @@
         <div class="modal-header">
             <div style="min-width:0">
                 <h2 id="resModalTitle"><i class="fas fa-clipboard-list"></i> New Reservation</h2>
-                <div class="modal-subtitle">Reserve inventory items for an upcoming requisition. Each item keeps its exact stock record, warehouse, and cost identity.</div>
             </div>
             <button type="button" class="modal-close" onclick="closeResModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>

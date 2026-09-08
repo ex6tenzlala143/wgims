@@ -470,8 +470,8 @@
                             @endif
                         </td>
                         <td style="padding:10px 14px;text-align:right">
-                            @if($row['di']->engas_total_cost !== null)
-                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($row['di']->engas_total_cost, 2) }}</span>
+                            @if($row['di']->engas_total_value !== null)
+                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($row['di']->engas_total_value, 2) }}</span>
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
@@ -532,7 +532,7 @@
                         <td></td>
                         <td style="padding:10px 14px;text-align:right;color:var(--primary)">
                             {{-- Cumulative ENGAS = Σ (each shipment's qty × that shipment's own ENGAS unit cost) --}}
-                            @php $engasLineTotal = $allDiForItem->sum(fn($r) => $r['di']->engas_total_cost); @endphp
+                            @php $engasLineTotal = $allDiForItem->sum(fn($r) => $r['di']->engas_total_value); @endphp
                             {{ $engasLineTotal > 0 ? '₱'.number_format($engasLineTotal, 2) : '—' }}
                         </td>
                         @endif
@@ -661,8 +661,8 @@
                             @endif
                         </td>
                         <td style="text-align:right">
-                            @if($di->engas_total_cost !== null)
-                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($di->engas_total_cost, 2) }}</span>
+                            @if($di->engas_total_value !== null)
+                                <span style="color:var(--primary);font-weight:600">₱{{ number_format($di->engas_total_value, 2) }}</span>
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
@@ -684,7 +684,7 @@
                         </td>
                         @if(auth()->user()->hasAdminAccess())
                         <td colspan="2" style="text-align:right;color:var(--primary)">
-                            @php $engasShipTotal = $delivery->items->sum(fn($di) => $di->engas_total_cost); @endphp
+                            @php $engasShipTotal = $delivery->items->sum(fn($di) => $di->engas_total_value); @endphp
                             {{ $engasShipTotal > 0 ? '₱'.number_format($engasShipTotal, 2) : '—' }}
                         </td>
                         @endif

@@ -206,10 +206,6 @@
         <div class="cr-modal-header">
             <div style="min-width:0">
                 <h2 id="correctRisTitle"><i class="fas fa-edit"></i> Edit RIS <span id="cr-ris-ref" style="color:var(--text-muted);font-weight:600"></span></h2>
-                <div class="cr-modal-subtitle">
-                    Fix the request itself — header and requested quantities. Existing
-                    dispatches, DR numbers and stock deductions stay untouched.
-                </div>
             </div>
             <button type="button" class="cr-modal-close" onclick="closeCorrectRisModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>

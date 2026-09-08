@@ -36,7 +36,7 @@
         <span style="font-size:13px;color:var(--text-muted)">{{ $items->count() }} item(s)</span>
     </div>
     <div class="table-wrapper">
-        <table>
+        <table style="white-space:nowrap">
             <thead>
                 <tr>
                     <th>Stock No.</th>

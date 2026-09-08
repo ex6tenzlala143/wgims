@@ -10,21 +10,6 @@
     </div>
 </div>
 
-@if($deliverySubsidy->deliveries()->count() > 0)
-<div class="alert alert-warning" style="margin-bottom:20px">
-    <i class="fas fa-exclamation-triangle"></i>
-    <div>
-        <strong>This record has existing deliveries — changes will cascade automatically:</strong>
-        <ul style="margin:8px 0 0 18px;padding:0;font-size:13px">
-            <li><strong>RIS No.</strong> — updates the RIS number on all linked item records</li>
-            <li><strong>Unit Cost</strong> — cascades to the item's cost, stock card entries, requisition items, and stock transfer items</li>
-            <li><strong>Quantity / Item</strong> — updates the ordered quantity on existing line items; line items that already have deliveries recorded cannot be deleted</li>
-            <li><strong>Supplier / Warehouse / Date / Remarks</strong> — updated on the header only</li>
-        </ul>
-    </div>
-</div>
-@endif
-
 <form action="{{ route('delivery_subsidies.update', $deliverySubsidy->id) }}" method="POST" id="subsidy-form">
 @csrf @method('PUT')
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">

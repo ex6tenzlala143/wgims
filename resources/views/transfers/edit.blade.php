@@ -30,16 +30,6 @@
         </div>
     </div>
 </div>
-@else
-<div class="alert alert-warning" style="margin-bottom:20px">
-    <i class="fas fa-exclamation-triangle"></i>
-    <div>
-        <strong>Admin Edit Mode.</strong>
-        You can edit both the <strong>requested quantity</strong> (original demand) and <strong>dispatched quantity</strong> (actual transferred).
-        Dispatched quantity cannot exceed requested quantity.
-        Changes adjust stock at both warehouses.
-    </div>
-</div>
 @endif
 
 <form action="{{ route('transfers.update', $transfer) }}" method="POST" id="edit-transfer-form">

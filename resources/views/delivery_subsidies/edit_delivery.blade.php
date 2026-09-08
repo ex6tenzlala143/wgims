@@ -15,15 +15,6 @@
     </div>
 </div>
 
-<div class="alert alert-warning" style="margin-bottom:20px">
-    <i class="fas fa-exclamation-triangle"></i>
-    <div>
-        <strong>Admin Edit Mode.</strong>
-        Changing quantities will automatically adjust item stock levels, stock card entries,
-        RIS (requisition items), and stock transfer records.
-    </div>
-</div>
-
 <form action="{{ route('delivery_subsidies.update_delivery', [$deliverySubsidy->id, $delivery->id]) }}" method="POST" id="edit-delivery-form">
     @csrf @method('PUT')
 

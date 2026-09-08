@@ -51,13 +51,6 @@
     </div>
 </div>
 
-<div class="alert alert-info" style="font-size:13px">
-    <i class="fas fa-info-circle"></i>
-    <strong>Partial dispatch supported.</strong>
-    Enter how many of each item you are sending in this shipment.
-    Leave at 0 to skip an item. You can dispatch again later for any remaining quantities.
-</div>
-
 <form action="{{ route('transfers.process_dispatch', $transfer) }}" method="POST" id="dispatch-form">
 @csrf
 

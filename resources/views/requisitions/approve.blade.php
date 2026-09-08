@@ -10,18 +10,6 @@
     </div>
 </div>
 
-<div class="alert alert-info">
-    <i class="fas fa-info-circle"></i>
-    @if($requisition->status === 'partially_approved')
-        <strong>Partially fulfilled.</strong>
-        Some items were previously issued. For each line below, choose the source and exact stock record.
-    @else
-        <strong>Review the requested quantities.</strong>
-        For each item, choose whether to issue from normal available stock or from a reservation.
-        Each dispatch keeps its own warehouse, stock record, DR Number and costs.
-    @endif
-</div>
-
 <form action="{{ route('requisitions.process_approval', $requisition->id) }}" method="POST" id="approval-form">
 @csrf
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">

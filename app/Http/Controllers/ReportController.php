@@ -147,10 +147,68 @@ class ReportController extends Controller
                 return $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
             });
 
+            // Build dispatch rows: one row per dispatch item for accurate stock-level display.
+            // This ensures each distinct stock record with its own ENGAS cost appears separately.
+            // Fallback to the RequisitionItem's representative item when no dispatch exists.
+            $dispatchRows = $issuedItems->flatMap(function ($ri) use ($ris) {
+                if ($ri->dispatchItems->isNotEmpty()) {
+                    // Each dispatch item becomes its own row with its own stock number and costs
+                    return $ri->dispatchItems->map(fn ($di) => [
+                        'ris_number'      => $ris->ris_number,
+                        'warehouse'       => $ris->warehouse->name ?? '',
+                        'stock_no'        => $di->item?->stock_number ?? $ri->item?->stock_number ?? '',
+                        'description'     => $ri->description ?? $ri->item?->description ?? '',
+                        'unit'            => $ri->unit ?? $ri->item?->unit ?? '',
+                        'qty_issued'      => (float) $di->quantity_issued,
+                        'unit_cost'       => (float) ($di->unit_cost ?? $di->item?->unit_cost ?? 0),
+                        'engas_unit_cost' => (float) ($di->engas_unit_cost ?? $di->item?->engas_unit_cost ?? 0),
+                        'engas_amount'    => (float) ($di->quantity_issued * ($di->engas_unit_cost ?? $di->item?->engas_unit_cost ?? 0)),
+                    ]);
+                }
+                // Fallback: no dispatch items — use representative item (one row per RI)
+                return [[
+                    'ris_number'      => $ris->ris_number,
+                    'warehouse'       => $ris->warehouse->name ?? '',
+                    'stock_no'        => $ri->item?->stock_number ?? '',
+                    'description'     => $ri->description ?? $ri->item?->description ?? '',
+                    'unit'            => $ri->unit ?? $ri->item?->unit ?? '',
+                    'qty_issued'      => (float) $ri->quantity_issued,
+                    'unit_cost'       => (float) ($ri->item?->unit_cost ?? 0),
+                    'engas_unit_cost' => (float) ($ri->item?->engas_unit_cost ?? 0),
+                    'engas_amount'    => (float) ($ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0)),
+                ]];
+            })->values();
+
+            // Recapitulation: group by stock number for the summary section.
+            $recap = $dispatchRows->groupBy('stock_no')
+                ->map(function ($rows) {
+                    $totalQty = $rows->sum('qty_issued');
+                    $engasUnitCost  = $rows->first()['engas_unit_cost'];
+                    $engasTotalCost = $totalQty * $engasUnitCost;
+
+                    return [
+                        'stock_no'        => $rows->first()['stock_no'],
+                        'qty'             => $totalQty,
+                        'engas_unit_cost' => $engasUnitCost,
+                        'engas_total_cost'=> $engasTotalCost,
+                    ];
+                })->values();
+
+            // ENGAS subtotal using per-dispatch engas_unit_cost
+            $engasSubtotal = $issuedItems->sum(function ($ri) {
+                if ($ri->dispatchItems->isNotEmpty()) {
+                    return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->engas_unit_cost ?? 0));
+                }
+                return $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
+            });
+
             return [
-                'ris'      => $ris,
-                'items'    => $issuedItems,
-                'subtotal' => $subtotal,
+                'ris'             => $ris,
+                'items'           => $issuedItems,
+                'dispatch_rows'   => $dispatchRows,
+                'subtotal'        => $subtotal,
+                'engas_subtotal'  => $engasSubtotal,
+                'recap'           => $recap,
             ];
         })->filter(fn ($g) => $g['items']->isNotEmpty())->values();
 
@@ -224,49 +282,61 @@ class ReportController extends Controller
                 return $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
             });
 
-            // Recapitulation: group items by the DISPATCHED stock number within this RIS.
-            // Use dispatch items as the source of truth for stock numbers — the
-            // RequisitionItem.item_id is a representative placeholder that may not
-            // match the exact stock record actually issued (different cost/warehouse).
-            $recap = $issuedItems->flatMap(function ($ri) {
-                // If dispatch items exist, use each dispatch's actual stock record.
+            // Build dispatch rows: one row per dispatch item for accurate stock-level display.
+            // This ensures each distinct stock record with its own ENGAS cost appears separately.
+            // Fallback to the RequisitionItem's representative item when no dispatch exists.
+            $dispatchRows = $issuedItems->flatMap(function ($ri) use ($ris) {
                 if ($ri->dispatchItems->isNotEmpty()) {
+                    // Each dispatch item becomes its own row with its own stock number and costs
                     return $ri->dispatchItems->map(fn ($di) => [
-                        'stock_no'    => $di->item?->stock_number ?? $ri->item?->stock_number ?? '',
-                        'qty'         => (float) $di->quantity_issued,
-                        'unit_cost'   => (float) ($di->unit_cost ?? $di->item?->unit_cost ?? 0),
-                        'engas_cost'  => (float) ($di->engas_unit_cost ?? $di->item?->engas_unit_cost ?? 0),
+                        'ris_number'   => $ris->ris_number,
+                        'warehouse'    => $ris->municipality . ', ' . $ris->province,
+                        'stock_no'     => $di->item?->stock_number ?? $ri->item?->stock_number ?? '',
+                        'description'  => $ri->description ?? $ri->item?->description ?? '',
+                        'unit'         => $ri->unit ?? $ri->item?->unit ?? '',
+                        'qty_issued'   => (float) $di->quantity_issued,
+                        'unit_cost'    => (float) ($di->unit_cost ?? $di->item?->unit_cost ?? 0),
+                        'engas_unit_cost' => (float) ($di->engas_unit_cost ?? $di->item?->engas_unit_cost ?? 0),
+                        'engas_amount' => (float) ($di->quantity_issued * ($di->engas_unit_cost ?? $di->item?->engas_unit_cost ?? 0)),
+                        'ri'           => $ri, // Keep reference for potential compatibility
                     ]);
                 }
-                // Fallback: no dispatch items — use representative item
+                // Fallback: no dispatch items — use representative item (one row per RI)
                 return [[
-                    'stock_no'   => $ri->item?->stock_number ?? '',
-                    'qty'        => (float) $ri->quantity_issued,
-                    'unit_cost'  => (float) ($ri->item?->unit_cost ?? 0),
-                    'engas_cost' => (float) ($ri->item?->engas_unit_cost ?? 0),
+                    'ris_number'   => $ris->ris_number,
+                    'warehouse'    => $ris->municipality . ', ' . $ris->province,
+                    'stock_no'     => $ri->item?->stock_number ?? '',
+                    'description'  => $ri->description ?? $ri->item?->description ?? '',
+                    'unit'         => $ri->unit ?? $ri->item?->unit ?? '',
+                    'qty_issued'   => (float) $ri->quantity_issued,
+                    'unit_cost'    => (float) ($ri->item?->unit_cost ?? 0),
+                    'engas_unit_cost' => (float) ($ri->item?->engas_unit_cost ?? 0),
+                    'engas_amount' => (float) ($ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0)),
+                    'ri'           => $ri,
                 ]];
-            })
-            ->groupBy('stock_no')
-            ->map(function ($rows) {
-                $totalQty       = $rows->sum('qty');
-                $totalCost      = $rows->sum(fn ($r) => $r['qty'] * $r['unit_cost']);
-                $engasTotalCost = $rows->sum(fn ($r) => $r['qty'] * $r['engas_cost']);
-                $unitCost       = $totalQty > 0 ? $totalCost      / $totalQty : 0;
-                $engasUnitCost  = $totalQty > 0 ? $engasTotalCost / $totalQty : 0;
-
-                return [
-                    'stock_no'        => $rows->first()['stock_no'],
-                    'qty'             => $totalQty,
-                    'unit_cost'       => $unitCost,
-                    'total_cost'      => $totalCost,
-                    'engas_unit_cost' => $engasUnitCost,
-                    'engas_total_cost'=> $engasTotalCost,
-                ];
             })->values();
+
+            // Recapitulation: group by stock number for the summary section.
+            // This shows consolidated quantities per stock number within the RIS.
+            $recap = $dispatchRows->groupBy('stock_no')
+                ->map(function ($rows) {
+                    $totalQty = $rows->sum('qty_issued');
+                    // Use the first row's engas_unit_cost for recap (all rows with same stock_no have same cost)
+                    $engasUnitCost = $rows->first()['engas_unit_cost'];
+                    $engasTotalCost = $totalQty * $engasUnitCost;
+
+                    return [
+                        'stock_no'        => $rows->first()['stock_no'],
+                        'qty'             => $totalQty,
+                        'engas_unit_cost' => $engasUnitCost,
+                        'engas_total_cost'=> $engasTotalCost,
+                    ];
+                })->values();
 
             return [
                 'ris'            => $ris,
                 'items'          => $issuedItems,
+                'dispatch_rows'  => $dispatchRows,
                 'subtotal'       => $subtotal,
                 'engas_subtotal' => $engasSubtotal,
                 'recap'          => $recap,

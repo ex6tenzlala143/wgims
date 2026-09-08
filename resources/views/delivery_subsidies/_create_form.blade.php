@@ -47,7 +47,6 @@
         <div class="modal-header">
             <div style="min-width:0">
                 <h2 id="createModalTitle"><i class="fas fa-truck-loading"></i> New Delivery/Subsidy</h2>
-                <div class="modal-subtitle">Complete the subsidy details below. Unit cost and destination warehouse are chosen later, when the delivery is dispatched.</div>
             </div>
             <button type="button" class="modal-close" onclick="closeCreateModal()" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>

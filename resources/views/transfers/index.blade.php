@@ -96,7 +96,7 @@
                 @endphp
                 <tr>
                     <td>
-                        <strong>{{ $transfer->transfer_number }}</strong>
+                        <strong style="white-space:nowrap">{{ $transfer->transfer_number }}</strong>
                         @if($transfer->isRelatedToDeletedSubsidy())
                         <div style="margin-top:5px">
                             <span class="badge badge-danger" style="white-space:normal;text-align:left">
@@ -104,19 +104,18 @@
                             </span>
                         </div>
                         @endif
-                        @if($transfer->source_subsidy_code || $transfer->source_ris_number)
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                            @if($transfer->sourceSubsidyCode())
-                            <code style="font-weight:700;color:var(--primary)">{{ $transfer->sourceSubsidyCode() }}</code>
-                            @endif
-                            @if($transfer->source_ris_number)
-                            @if($transfer->sourceSubsidyCode()) · @endif
+                        @if($transfer->source_ris_number)
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap">
                             RIS: {{ $transfer->sourceSubsidyReference() }}
-                            @endif
+                        </div>
+                        @endif
+                        @if($transfer->source_subsidy_code)
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap">
+                            <code style="font-weight:700;color:var(--primary)">{{ $transfer->sourceSubsidyCode() }}</code>
                         </div>
                         @endif
                     </td>
-                    <td>{{ $transfer->transfer_date->format('M d, Y') }}</td>
+                    <td style="white-space:nowrap">{{ $transfer->transfer_date->format('M d, Y') }}</td>
                     <td><span style="font-size:12px">{{ $transfer->fromWarehouse->name }}</span></td>
                     <td><span style="font-size:12px">{{ $transfer->toWarehouse->name }}</span></td>
                     <td style="text-align:right;font-weight:600">

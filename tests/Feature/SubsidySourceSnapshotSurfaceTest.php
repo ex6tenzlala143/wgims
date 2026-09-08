@@ -70,7 +70,6 @@ class SubsidySourceSnapshotSurfaceTest extends TestCase
         $wh = $this->makeWarehouse('Warehouse A', 'WHA');
 
         $this->makeItem($wh, 'Deleted Pack',  50, 100, 'deleted',  'RIS-DEL', 'DR-DEL');
-        $this->makeItem($wh, 'Archived Pack', 60, 200, 'archived', 'RIS-ARC', 'DR-ARC');
         $this->makeItem($wh, 'Active Pack',   70, 300);
 
         $this->actingAs($this->admin())
@@ -78,15 +77,7 @@ class SubsidySourceSnapshotSurfaceTest extends TestCase
             ->assertOk()
             ->assertSee('Deleted Pack')
             ->assertSee('FROM DELETED SUBSIDY')
-            ->assertDontSee('Archived Pack')
             ->assertDontSee('Active Pack');
-
-        $this->actingAs($this->admin())
-            ->get(route('items.index', ['source_subsidy_status' => 'archived']))
-            ->assertOk()
-            ->assertSee('Archived Pack')
-            ->assertSee('FROM ARCHIVED SUBSIDY')
-            ->assertDontSee('Deleted Pack');
 
         // Default (no filter) shows every item; only flagged ones carry a badge.
         $html = $this->actingAs($this->admin())
@@ -96,7 +87,6 @@ class SubsidySourceSnapshotSurfaceTest extends TestCase
         $this->assertStringContainsString('Deleted Pack', $html);
         $this->assertStringContainsString('Active Pack', $html);
         $this->assertStringContainsString('FROM DELETED SUBSIDY', $html);
-        $this->assertStringContainsString('FROM ARCHIVED SUBSIDY', $html);
     }
 
     public function test_items_show_renders_source_subsidy_row(): void

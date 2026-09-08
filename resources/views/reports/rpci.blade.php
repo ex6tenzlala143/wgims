@@ -59,29 +59,7 @@
         <h3>Physical Count of Inventories <span style="font-size:13px;font-weight:400;color:var(--text-muted);margin-left:8px">As of {{ date('F d, Y') }}</span></h3>
     </div>
     <div class="table-wrapper">
-        <table style="table-layout:fixed;width:100%">
-            <colgroup>
-                @if(auth()->user()->hasAdminAccess())
-                <col style="width:10%">
-                <col style="width:14%">
-                <col style="width:5%">
-                <col style="width:14%">
-                <col style="width:12%">
-                <col style="width:7%">
-                <col style="width:9%">
-                <col style="width:10%">
-                <col style="width:10%">
-                <col style="width:9%">
-                @else
-                <col style="width:13%">
-                <col style="width:25%">
-                <col style="width:7%">
-                <col style="width:22%">
-                <col style="width:10%">
-                <col style="width:11%">
-                <col style="width:12%">
-                @endif
-            </colgroup>
+        <table style="white-space:nowrap">
             <thead>
                 <tr>
                     <th>Stock No.</th>
@@ -111,12 +89,12 @@
                 </tr>
                 @endif
                 <tr>
-                    <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $item->stock_number }}</td>
-                    <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $item->description }}">{{ $item->description }}</td>
+                    <td style="font-size:12px">{{ $item->stock_number }}</td>
+                    <td>{{ $item->description }}</td>
                     <td>{{ $item->unit }}</td>
-                    <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $item->getCategoryLabel() }}">{{ $item->getCategoryLabel() }}</td>
+                    <td style="font-size:12px">{{ $item->getCategoryLabel() }}</td>
                     @if(auth()->user()->hasAdminAccess())
-                    <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $item->warehouse->name ?? '-' }}">{{ $item->warehouse->name ?? '-' }}</td>
+                    <td>{{ $item->warehouse->name ?? '-' }}</td>
                     @endif
                     <td style="text-align:right">{{ number_format($item->quantity) }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>

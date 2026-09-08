@@ -137,7 +137,7 @@ class AuthSecurityAuditTest extends TestCase
         // route-model binding, so a guest is redirected before any lookup runs.
         $protectedUris = [
             '/',                                             // dashboard
-            '/items', '/items/1', '/items/1/edit',
+            '/items', '/items/1',
             '/delivery-subsidies', '/delivery-subsidies/create', '/delivery-subsidies/1',
             '/delivery-subsidies/1/delivery', '/delivery-subsidies/1/edit',
             '/delivery-subsidies/1/edit-data', '/delivery-subsidies/1/audit-log', '/delivery-subsidies/1/deliveries/1/edit',
@@ -249,7 +249,7 @@ class AuthSecurityAuditTest extends TestCase
 
         // A bookmark points straight at a protected deep link.
         $this->get('/requisitions/approve')->assertRedirect(route('login'));
-        $this->get('/items/1/edit')->assertRedirect(route('login'));
+        $this->get('/items/1')->assertRedirect(route('login'));
         $this->get('/transfers/1/edit')->assertRedirect(route('login'));
         $this->get('/delivery-subsidies/1/edit')->assertRedirect(route('login'));
         $this->assertGuest();
@@ -300,7 +300,6 @@ class AuthSecurityAuditTest extends TestCase
         $this->post('/reports/rpci/snapshot', [])->assertRedirect(route('login'));
         $this->post('/reports/rsmi/snapshot', [])->assertRedirect(route('login'));
 
-        $this->put('/items/1', [])->assertRedirect(route('login'));
         $this->put('/delivery-subsidies/1', [])->assertRedirect(route('login'));
         $this->put('/delivery-subsidies/1/deliveries/1', [])->assertRedirect(route('login'));
         $this->put('/requisitions/1', [])->assertRedirect(route('login'));
@@ -313,12 +312,9 @@ class AuthSecurityAuditTest extends TestCase
         $this->put('/users/1', [])->assertRedirect(route('login'));
         $this->put('/item-categories/1', [])->assertRedirect(route('login'));
 
-        $this->patch('/delivery-subsidies/1/archive', [])->assertRedirect(route('login'));
-        $this->patch('/delivery-subsidies/1/restore', [])->assertRedirect(route('login'));
         $this->patch('/suppliers/1/toggle', [])->assertRedirect(route('login'));
         $this->patch('/item-categories/1/toggle', [])->assertRedirect(route('login'));
 
-        $this->delete('/items/1')->assertRedirect(route('login'));
         $this->delete('/delivery-subsidies/1')->assertRedirect(route('login'));
         $this->delete('/requisitions/1')->assertRedirect(route('login'));
         $this->delete('/transfers/1')->assertRedirect(route('login'));
@@ -381,7 +377,6 @@ class AuthSecurityAuditTest extends TestCase
 
         // Admin-only write actions → 403.
         $this->delete('/requisitions/'.$requisition->id)->assertForbidden();
-        $this->put('/items/'.$item->id, [])->assertForbidden();
         $this->delete('/delivery-subsidies/'.$subsidy->id)->assertForbidden();
         $this->delete('/transfers/'.$transfer->id)->assertForbidden();
         $this->put('/warehouses/'.$warehouse->id, [])->assertForbidden();
