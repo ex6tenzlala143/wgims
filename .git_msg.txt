@@ -1,0 +1,13 @@
+fix: RSMI stock number display, print layout, font consistency, and dispatch audit fixes
+
+- RSMI list view: show dispatched item stock_number instead of placeholder RequisitionItem.item_id
+- RSMI print recapitulation: group by dispatched stock_number using dispatchItems.item chain
+- ReportController rsmi(): eager load items.dispatchItems.item to prevent N+1 and null stock_no
+- rsmi_print: white-space:nowrap on RIS No. and Stock No. cells to prevent wrapping
+- rsmi_print: page-break-inside:avoid on sig-block; reduce filler rows so sig block fits on page
+- rsmi_print: fix &nbsp; literal rendering (Blade {{ }} escapes entities) in Serial No / Fund Cluster
+- Font consistency: import Inter from Google Fonts as primary font; replace font-weight:bold with 700 in all print views
+- Audit fixes: updateDispatch() now adjusts reservation_items.deployed_quantity on qty change
+- StockTransferController destroy(): use update() not increment() so Item::saving hook reactivates item
+- Reservation updateOverallStatus(): correctly transition to CANCELLED when all items are cancelled
+- approve.blade.php: fix duplicate name collision for item_id/warehouse_id hidden vs select fields
