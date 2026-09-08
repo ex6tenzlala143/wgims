@@ -106,6 +106,7 @@ class Item extends Model
         'pouch' => 'Pouch',
         'strip' => 'Strip',
         'sheet' => 'Sheet',
+        'kits' => 'Kit (kit)'
     ];
 
     public function warehouse()
@@ -321,12 +322,6 @@ class Item extends Model
             $query->whereNull('source_subsidy_id');
         }
 
-        // ENGAS unit cost is part of the identity too (all 6 values must match).
-        if ($engasUnitCost !== null) {
-            $query->whereBetween('engas_unit_cost', [$engasUnitCost - 0.001, $engasUnitCost + 0.001]);
-        } else {
-            $query->whereNull('engas_unit_cost');
-        }
 
         $existing = $query->first();
 

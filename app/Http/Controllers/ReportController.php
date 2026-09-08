@@ -102,7 +102,7 @@ class ReportController extends Controller
     public function rsmi(Request $request)
     {
         $user = Auth::user();
-        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems'])
+        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems.item'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
         // Since warehouse_id is now null on all requisitions (multi-warehouse dispatch
@@ -175,7 +175,7 @@ class ReportController extends Controller
     public function printRsmi(Request $request)
     {
         $user = Auth::user();
-        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems'])
+        $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems.item'])
             ->whereIn('status', ['approved', 'partially_approved']);
 
         // Use dispatch-based warehouse scoping (warehouse_id is null on requisitions)
@@ -224,38 +224,45 @@ class ReportController extends Controller
                 return $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
             });
 
-            // Recapitulation: group items by stock number within this RIS.
-            // For dispatch-aware rows, also sum dispatch costs per stock number.
-            $recap = $issuedItems->groupBy(fn ($ri) => $ri->item->stock_number ?? '')
-                ->map(function ($group) {
-                    $first = $group->first();
-                    // Use dispatch-level costs for recap totals too
-                    $totalCost = $group->sum(function ($ri) {
-                        if ($ri->dispatchItems->isNotEmpty()) {
-                            return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->unit_cost ?? 0));
-                        }
-                        return $ri->quantity_issued * ($ri->item->unit_cost ?? 0);
-                    });
-                    $totalQty = $group->sum('quantity_issued');
-                    $unitCost = $totalQty > 0 ? $totalCost / $totalQty : ($first->item->unit_cost ?? 0);
+            // Recapitulation: group items by the DISPATCHED stock number within this RIS.
+            // Use dispatch items as the source of truth for stock numbers — the
+            // RequisitionItem.item_id is a representative placeholder that may not
+            // match the exact stock record actually issued (different cost/warehouse).
+            $recap = $issuedItems->flatMap(function ($ri) {
+                // If dispatch items exist, use each dispatch's actual stock record.
+                if ($ri->dispatchItems->isNotEmpty()) {
+                    return $ri->dispatchItems->map(fn ($di) => [
+                        'stock_no'    => $di->item?->stock_number ?? $ri->item?->stock_number ?? '',
+                        'qty'         => (float) $di->quantity_issued,
+                        'unit_cost'   => (float) ($di->unit_cost ?? $di->item?->unit_cost ?? 0),
+                        'engas_cost'  => (float) ($di->engas_unit_cost ?? $di->item?->engas_unit_cost ?? 0),
+                    ]);
+                }
+                // Fallback: no dispatch items — use representative item
+                return [[
+                    'stock_no'   => $ri->item?->stock_number ?? '',
+                    'qty'        => (float) $ri->quantity_issued,
+                    'unit_cost'  => (float) ($ri->item?->unit_cost ?? 0),
+                    'engas_cost' => (float) ($ri->item?->engas_unit_cost ?? 0),
+                ]];
+            })
+            ->groupBy('stock_no')
+            ->map(function ($rows) {
+                $totalQty       = $rows->sum('qty');
+                $totalCost      = $rows->sum(fn ($r) => $r['qty'] * $r['unit_cost']);
+                $engasTotalCost = $rows->sum(fn ($r) => $r['qty'] * $r['engas_cost']);
+                $unitCost       = $totalQty > 0 ? $totalCost      / $totalQty : 0;
+                $engasUnitCost  = $totalQty > 0 ? $engasTotalCost / $totalQty : 0;
 
-                    $engasTotalCost = $group->sum(function ($ri) {
-                        if ($ri->dispatchItems->isNotEmpty()) {
-                            return $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->engas_unit_cost ?? 0));
-                        }
-                        return $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
-                    });
-                    $engasUnitCost = $totalQty > 0 ? $engasTotalCost / $totalQty : ($first->item->engas_unit_cost ?? 0);
-
-                    return [
-                        'stock_no'        => $first->item->stock_number ?? '',
-                        'qty'             => $totalQty,
-                        'unit_cost'       => $unitCost,
-                        'total_cost'      => $totalCost,
-                        'engas_unit_cost' => $engasUnitCost,
-                        'engas_total_cost'=> $engasTotalCost,
-                    ];
-                })->values();
+                return [
+                    'stock_no'        => $rows->first()['stock_no'],
+                    'qty'             => $totalQty,
+                    'unit_cost'       => $unitCost,
+                    'total_cost'      => $totalCost,
+                    'engas_unit_cost' => $engasUnitCost,
+                    'engas_total_cost'=> $engasTotalCost,
+                ];
+            })->values();
 
             return [
                 'ris'            => $ris,

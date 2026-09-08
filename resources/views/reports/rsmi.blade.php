@@ -175,7 +175,17 @@
                 @endphp
                 <tr>
                     <td>
-                        <code style="font-size:11px">{{ $ri->item?->stock_number ?? '—' }}</code>
+                        @php
+                            $dispatchedStockNos = $ri->dispatchItems
+                                ->pluck('item.stock_number')
+                                ->filter()
+                                ->unique()
+                                ->values();
+                            $stockNoDisplay = $dispatchedStockNos->isNotEmpty()
+                                ? $dispatchedStockNos->implode(', ')
+                                : ($ri->item?->stock_number ?? '—');
+                        @endphp
+                        <code style="font-size:11px">{{ $stockNoDisplay }}</code>
                     </td>
                     <td>{{ $ri->description ?? $ri->item?->description ?? '—' }}</td>
                     <td>{{ $ri->unit ?? $ri->item?->unit ?? '—' }}</td>

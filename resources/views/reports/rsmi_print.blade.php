@@ -115,6 +115,8 @@
             border: 1px solid #000;
             border-top: none;
             font-size: 9pt;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
         .sig-left  { flex: 1; padding: 6px 10px; border-right: 1px solid #000; }
         .sig-right { flex: 1; padding: 6px 10px; }
@@ -192,9 +194,9 @@
     $subtotal   = $group['subtotal'];
 
     $dataCount    = $items->count();
-    $minDataRows  = 20;
+    $minDataRows  = 17;
     $recapCount   = $recap->count();
-    $minRecapRows = 8;
+    $minRecapRows = 7;
 
     $isLast = $loop->last;
 @endphp
@@ -222,7 +224,7 @@
     {{-- Title --}}
     <div class="doc-title">
         <h2>Report of Supplies and Materials Issued</h2>
-        <div class="period-line">{{ $dateLabel }}</div>
+        <div class="period-line">{{ $ris->date_approved ? $ris->date_approved->format('F d, Y') : date('F d, Y') }}</div>
     </div>
 
     {{-- Meta --}}
@@ -242,9 +244,7 @@
                 <span class="field-line sm">{{ $serialNumber ?: '' }}</span>
             </div>
             <div style="margin-top:3px">Date :&nbsp;
-                <span class="field-line sm">
-                    {{ $ris->date_approved ? $ris->date_approved->format('F d, Y') : date('F d, Y') }}
-                </span>
+                <span class="field-line sm"><center>{{ $dateLabel }}</center></span>
             </div>
         </div>
     </div>
@@ -276,25 +276,22 @@
             {{-- ── Data rows for this RIS ── --}}
             @foreach($items as $ri)
             @php
-                $engasUnitCost = null;
-                if ($ri->dispatchItems->isNotEmpty()) {
-                    $engasUnitCost = $ri->dispatchItems->first()->engas_unit_cost;
+                $engasAmount = $ri->dispatchItems->sum(fn ($di) => $di->quantity_issued * ($di->engas_unit_cost ?? 0));
+                $engasUnitCost = $ri->quantity_issued > 0 ? $engasAmount / $ri->quantity_issued : 0;
+                if ($engasAmount === 0 && $ri->item) {
+                    $engasAmount   = $ri->quantity_issued * ($ri->item->engas_unit_cost ?? 0);
+                    $engasUnitCost = $ri->item->engas_unit_cost ?? 0;
                 }
-                if ($engasUnitCost === null && $ri->item) {
-                    $engasUnitCost = $ri->item->engas_unit_cost;
-                }
-                $engasUnitCost = $engasUnitCost ?? 0;
-                $engasAmount = $ri->quantity_issued * $engasUnitCost;
             @endphp
             <tr class="data-row">
-                <td>{{ $ris->ris_number }}</td>
-                <td>{{ $ri->warehouse?->code ?? $ris->warehouse?->code ?? '' }}</td>
-                <td>{{ $ri->item?->stock_number ?? '' }}</td>
-                <td class="left">{{ $ri->description ?? $ri->item?->description ?? '' }}</td>
+                <td style="white-space:nowrap">{{ $ris->ris_number }}</td>
+                <td style="white-space:wrap">{{ $ris->municipality}}, {{ $ris->province }}</td>
+                <td style="white-space:nowrap">{!! $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode('<br>') ?: ($ri->item?->stock_number ?? '') !!}
+                <td class="center">{{ $ri->description ?? $ri->item?->description ?? '' }}</td>
                 <td>{{ $ri->unit ?? $ri->item?->unit ?? '' }}</td>
-                <td class="right col-divider">{{ number_format($ri->quantity_issued) }}</td>
-                <td class="right">{{ number_format($engasUnitCost, 2) }}</td>
-                <td class="right">{{ number_format($engasAmount, 2) }}</td>
+                <td class="center col-divider">{{ number_format($ri->quantity_issued) }}</td>
+                <td class="center">{{ number_format($engasUnitCost, 2) }}</td>
+                <td class="center">{{ number_format($engasAmount, 2) }}</td>
             </tr>
             @endforeach
 
@@ -330,12 +327,12 @@
 
             @foreach($recap as $r)
             <tr class="data-row">
-                <td colspan="2">{{ $r['stock_no'] }}</td>
-                <td class="right">{{ number_format($r['qty']) }}</td>
+                <td colspan="2" style="white-space:nowrap">{{ $r['stock_no'] }}</td>
+                <td class="center">{{ number_format($r['qty']) }}</td>
                 <td></td><td></td>
                 <td class="col-divider"></td>
-                <td class="right">{{ number_format($r['engas_unit_cost'], 2) }}</td>
-                <td class="right">{{ number_format($r['engas_total_cost'], 2) }}</td>
+                <td class="center">{{ number_format($r['engas_unit_cost'], 2) }}</td>
+                <td class="center">{{ number_format($r['engas_total_cost'], 2) }}</td>
             </tr>
             @endforeach
 
@@ -362,12 +359,12 @@
     <div class="sig-block">
         <div class="sig-left">
             <div>I hereby certify to the correctness of the above information.</div>
-            <div class="sig-name-line">Signature over Printed Name of Supply and/or Property</div>
+            <div class="sig-name-line">Signature over Printed Name of Supply and/or Property Custodian</div>
         </div>
         <div class="sig-right">
             <div>Posted by:</div>
             <div class="sig-date-row" style="margin-top:22px">
-                <span>Signature over Printed Name of</span>
+                <span>Signature over Printed Name of Designated Accounting Staff</span>
                 <span style="max-width:70px">Date</span>
             </div>
         </div>

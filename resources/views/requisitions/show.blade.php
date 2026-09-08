@@ -168,7 +168,6 @@
                     <th style="text-align:right">Engas Unit Cost</th>
                     <th style="text-align:right">Engas Total Value</th>
                     @endif
-                    <th style="text-align:right">Qty Requested</th>
                     <th style="text-align:right">Total Cost</th>
                     <th>Stock Available</th>
                     <th style="text-align:right">Qty Issued</th>
@@ -244,7 +243,7 @@
                         $today    = \Carbon\Carbon::today();
                         $diffDays = $today->diffInDays($expiryDate, false);
                         if ($diffDays < 0) {
-                            $expiryStyle = 'color:var(--danger);font-weight:700;text-decoration:line-through';
+                            $expiryStyle = 'color:var(--danger);font-weight:700';
                             $expiryLabel = ' <span style="font-size:10px;background:var(--danger);color:#fff;border-radius:4px;padding:1px 5px;vertical-align:middle">Expired</span>';
                         } elseif ($diffDays <= 30) {
                             $expiryStyle = 'color:var(--danger);font-weight:600';
@@ -335,15 +334,6 @@
                     </td>
                     @endif
 
-                    {{-- Qty Requested - only show on first row of group --}}
-                    <td style="text-align:right">
-                        @if(!$showAsSubRow)
-                            {{ number_format($ri->quantity_requested) }}
-                        @else
-                            <span style="color:var(--text-muted);font-size:12px">—</span>
-                        @endif
-                    </td>
-
                     {{-- Total Cost --}}
                     <td style="text-align:right;white-space:nowrap;font-weight:600">
                         @if($totalCost !== null && !$showAsSubRow)
@@ -357,18 +347,13 @@
                         @endif
                     </td>
 
-                    <td>
-                        @if(!$showAsSubRow)
-                            @if($ri->dispatchItems->isEmpty() && !$ri->quantity_issued)
-                                {{-- Availability is only known once stock is allocated at issuance --}}
-                                <span style="color:var(--text-muted);font-size:12px">—</span>
-                            @elseif($ri->stock_available)
-                            <span class="badge badge-success"><i class="fas fa-check"></i> Yes</span>
-                            @else
-                            <span class="badge badge-danger"><i class="fas fa-times"></i> No</span>
-                            @endif
-                        @else
+                    <td style="text-align:center">
+                        @if($ri->dispatchItems->isEmpty() && !$ri->quantity_issued)
                             <span style="color:var(--text-muted);font-size:12px">—</span>
+                        @elseif($ri->stock_available)
+                            <span class="badge badge-success"><i class="fas fa-check"></i> Yes</span>
+                        @else
+                            <span>No</span>
                         @endif
                     </td>
                     
@@ -437,7 +422,7 @@
                     // the requisition item itself.  Pending lines contribute 0.
                     return $ri->dispatchItems->sum(fn($di) => $di->quantity_issued * $di->unit_cost);
                 });
-                $labelColspan = 7 + (auth()->user()->hasAdminAccess() ? 2 : 0);
+                $labelColspan = 6 + (auth()->user()->hasAdminAccess() ? 2 : 0);
             @endphp
             @if($grandTotal > 0)
             <tfoot>
@@ -459,9 +444,6 @@
 <div class="card" style="margin-bottom:24px">
     <div class="card-header">
         <h3><i class="fas fa-layer-group"></i> Partial Delivery Breakdown</h3>
-        <span style="font-size:12px;color:var(--text-muted)">
-            Detailed issuance history per item — each dispatch keeps its own warehouse, DR Number and costs
-        </span>
     </div>
 
     @foreach($requisition->items as $ri)
@@ -479,16 +461,6 @@
             <div>
                 <strong style="font-size:14px">{{ $ri->description ?? ($ri->item?->description ?? '—') }}</strong>
                 <span style="font-size:12px;color:var(--text-muted);margin-left:6px">{{ $ri->unit ?? '' }}</span>
-                @if($ri->dispatchItems->pluck('item.warehouse.name')->filter()->unique()->isNotEmpty())
-                    <span style="font-size:11px;background:#f0fff4;padding:1px 6px;border-radius:4px;color:var(--success);margin-left:6px">
-                        <i class="fas fa-warehouse"></i> {{ $ri->dispatchItems->pluck('item.warehouse.name')->filter()->unique()->implode(', ') }}
-                    </span>
-                @endif
-                @if($ri->dispatchItems->pluck('dr_number')->filter()->isNotEmpty())
-                    <span style="font-size:11px;background:#eef2ff;padding:1px 6px;border-radius:4px;color:#4f46e5;margin-left:6px">
-                        <i class="fas fa-file-alt"></i> DR {{ $ri->dispatchItems->pluck('dr_number')->filter()->unique()->implode(', ') }}
-                    </span>
-                @endif
             </div>
             <div style="display:flex;gap:16px;font-size:12px;text-align:right">
                 <div>

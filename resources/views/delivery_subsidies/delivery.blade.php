@@ -224,7 +224,6 @@
                                    class="form-control"
                                    min="0.01" step="0.01"
                                    value="{{ old("items.{$poiIdx}_0.unit_cost", $poi->unit_cost > 0 ? number_format($poi->unit_cost, 2, '.', '') : '') }}"
-                                   placeholder="0.00"
                                    {{ $isDone ? 'disabled' : 'required' }}>
                         </div>
 
@@ -235,7 +234,6 @@
                                    class="form-control batch-engas"
                                    min="0" step="0.01"
                                    value="{{ old("items.{$poiIdx}_0.engas_unit_cost", $poi->item?->engas_unit_cost ? number_format($poi->item->engas_unit_cost, 2, '.', '') : '') }}"
-                                   placeholder="0.00"
                                    {{ $isDone ? 'disabled' : 'required' }}
                                    oninput="recalcBatch(this)">
                             <div class="hint" style="margin-top:4px">
