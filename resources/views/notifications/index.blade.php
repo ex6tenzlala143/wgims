@@ -23,9 +23,9 @@
             <i class="fas {{ $notif->type == 'success' ? 'fa-check-circle' : ($notif->type == 'warning' ? 'fa-exclamation-triangle' : ($notif->type == 'danger' ? 'fa-times-circle' : 'fa-info-circle')) }}"></i>
         </div>
         <div style="flex:1">
-            <div style="font-weight:600;font-size:14px">{{ $notif->title }}</div>
-            <div style="font-size:13px;color:var(--text-muted);margin-top:2px">{{ $notif->message }}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">{{ $notif->created_at->diffForHumans() }}</div>
+            <div style="font-weight:600;font-size:13px">{{ $notif->title }}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{{ $notif->message }}</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px">{{ $notif->created_at->diffForHumans() }}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
             @if(!$notif->is_read)
@@ -44,7 +44,7 @@
     </div>
     @empty
     <div style="padding:60px;text-align:center;color:var(--text-muted)">
-        <i class="fas fa-bell-slash" style="font-size:40px;margin-bottom:12px;display:block"></i>
+        <i class="fas fa-bell-slash" style="font-size:32px;margin-bottom:12px;display:block"></i>
         No notifications yet.
     </div>
     @endforelse

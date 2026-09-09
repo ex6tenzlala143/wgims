@@ -9,6 +9,7 @@ use App\Models\Requisition;
 use App\Models\RequisitionAuditLog;
 use App\Models\RequisitionDispatchItem;
 use App\Models\RequisitionItem;
+use App\Models\ReservationItem;
 use App\Models\StockCardEntry;
 use App\Models\SystemNotification;
 use App\Models\User;
@@ -350,7 +351,30 @@ class RequisitionController extends Controller
         abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
         $requisition->load(['warehouse', 'creator', 'approver', 'items.item', 'items.warehouse', 'items.dispatchItems.item.warehouse']);
 
-        return view('requisitions.show', compact('requisition'));
+        // Available stock per dispatched stock record, in ONE grouped query
+        // (avoids N+1 from the per-item reserved_quantity accessor). Used by
+        // the Partial Delivery Breakdown table's "Available Stocks" column:
+        // available = on-hand quantity − active reservation lock.
+        $dispatchItemIds = $requisition->items
+            ->flatMap(fn ($ri) => $ri->dispatchItems->pluck('item_id'))
+            ->filter()->unique()->values();
+        $reservedMap = $dispatchItemIds->isNotEmpty()
+            ? ReservationItem::whereIn('item_id', $dispatchItemIds)
+                ->whereIn('status', ReservationItem::ACTIVE_STATUSES)
+                ->groupBy('item_id')
+                ->selectRaw('item_id, SUM(reserved_quantity) as total_reserved')
+                ->pluck('total_reserved', 'item_id')
+            : collect();
+        $stockAvailability = [];
+        foreach ($requisition->items as $ri) {
+            foreach ($ri->dispatchItems as $di) {
+                if ($di->item && ! isset($stockAvailability[$di->item->id])) {
+                    $stockAvailability[$di->item->id] = max(0, (float) $di->item->quantity - (float) ($reservedMap[$di->item->id] ?? 0));
+                }
+            }
+        }
+
+        return view('requisitions.show', compact('requisition', 'stockAvailability'));
     }
 
     public function edit(Requisition $requisition)

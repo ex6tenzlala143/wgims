@@ -16,7 +16,7 @@
         <form method="GET" action="{{ route('stock_cards.summary') }}" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
             @if(auth()->user()->hasAdminAccess())
             <div>
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Warehouse</label>
+                <label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px">Warehouse</label>
                 <select name="warehouse_id" class="form-control" style="width:auto;min-width:180px">
                     <option value="">All Warehouses</option>
                     @foreach($warehouses as $c)
@@ -25,7 +25,7 @@
                 </select>
             </div>
             <div>
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Account Code</label>
+                <label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px">Account Code</label>
                 <select name="account_code" class="form-control" style="width:auto;min-width:200px">
                     <option value="">All Account Codes</option>
                     @foreach($accountCodes as $code => $label)
@@ -35,7 +35,7 @@
             </div>
             @endif
             <div>
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Item</label>
+                <label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px">Item</label>
                 <select name="description" class="form-control" style="width:auto;min-width:200px">
                     <option value="">All Items</option>
                     @foreach($descriptions as $desc)
@@ -89,14 +89,14 @@
                     $grandValue += $item->quantity * $item->unit_cost;
                 @endphp
                 <tr>
-                    <td><code style="font-size:12px">{{ $item->stock_number }}</code></td>
+                    <td><code style="font-size:11px">{{ $item->stock_number }}</code></td>
                     <td><strong>{{ $item->description }}</strong>@if($item->ris_number)<br><small style="color:var(--text-muted)">{{ $item->ris_number }}</small>@endif</td>
                     <td>{{ $item->unit }}</td>
-                    <td><span class="badge badge-info" style="font-size:10px">{{ $item->getCategoryLabel() }}</span></td>
-                    <td><span class="badge badge-primary" style="font-size:10px">{{ $item->account_code }}</span></td>
+                    <td><span class="badge badge-info">{{ $item->getCategoryLabel() }}</span></td>
+                    <td><span class="badge badge-primary">{{ $item->account_code }}</span></td>
                     @if(auth()->user()->hasAdminAccess())<td>{{ $item->warehouse->name ?? '-' }}</td>@endif
-                    <td style="text-align:right">{{ number_format($totalReceived, 2) }}</td>
-                    <td style="text-align:right">{{ number_format($totalIssued, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($totalReceived) }}</td>
+                    <td style="text-align:right">{{ number_format($totalIssued) }}</td>
                     <td style="text-align:right">
                         <strong class="{{ $item->quantity <= $item->reorder_point && $item->reorder_point > 0 ? 'badge badge-danger' : '' }}">
                             {{ number_format($item->quantity) }}
@@ -139,7 +139,7 @@
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
                     <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 6 }}" style="text-align:right">TOTAL:</td>
-                    <td style="text-align:right">{{ number_format($grandBalance, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($grandBalance) }}</td>
                     <td></td>
                     <td style="text-align:right">₱{{ number_format($grandValue, 2) }}</td>
                     <td colspan="2"></td>

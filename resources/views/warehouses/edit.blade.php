@@ -88,7 +88,7 @@
     </div>
     @else
     <div class="card-body" style="color:var(--text-muted);font-size:13px;text-align:center;padding:32px">
-        <i class="fas fa-user-slash" style="font-size:28px;margin-bottom:8px;display:block;opacity:.4"></i>
+        <i class="fas fa-user-slash" style="font-size:32px;margin-bottom:8px;display:block;opacity:.4"></i>
         No users are currently assigned to this warehouse.<br>
         <a href="{{ route('users.index') }}" style="color:var(--primary)">Manage users</a> to assign them here.
     </div>

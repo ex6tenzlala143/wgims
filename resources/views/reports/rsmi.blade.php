@@ -83,7 +83,7 @@
     @if($risGroups->isNotEmpty())
     <span style="padding-right:24px">
         Grand Total:&nbsp;
-        <strong style="font-size:15px;color:var(--primary)">₱{{ number_format($grandTotal, 2) }}</strong>
+        <strong style="font-size:14px;color:var(--primary)">₱{{ number_format($grandTotal, 2) }}</strong>
     </span>
     @endif
 </div>
@@ -117,7 +117,7 @@
         {{-- Left: RIS metadata --}}
         <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
             <div>
-                <div style="font-weight:700;font-size:15px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS ID:</span> <span style="font-family:monospace;color:var(--primary)">{{ $ris->ris_code ?? $ris->ris_id }}</span></span><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS No.:</span> <span style="font-weight:600">{{ $ris->ris_number }}</span></span></div>
+                <div style="font-weight:700;font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS ID:</span> <span style="font-family:monospace;color:var(--primary)">{{ $ris->ris_code ?? $ris->ris_id }}</span></span><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS No.:</span> <span style="font-weight:600">{{ $ris->ris_number }}</span></span></div>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
                     {{ $ris->date_approved?->format('M d, Y') ?? '—' }}
                     &nbsp;·&nbsp;
@@ -192,7 +192,7 @@
                     <td class="center">{{ $row['unit'] ?? '—' }}</td>
                     <td style="text-align:right">{{ number_format($row['qty_issued'] ?? 0) }}</td>
                     <td style="text-align:right;color:var(--success);font-weight:600">{{ number_format($row['qty_issued'] ?? 0) }}</td>
-                    <td style="text-align:right"><span class="badge badge-success" style="font-size:10px"><i class="fas fa-check"></i> Fulfilled</span></td>
+                    <td style="text-align:right"><span class="badge badge-success"><i class="fas fa-check"></i> Fulfilled</span></td>
                     <td style="text-align:right">{{ number_format($row['unit_cost'] ?? 0, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">{{ number_format($row['engas_unit_cost'] ?? 0, 2) }}</td>
@@ -215,7 +215,7 @@
 @empty
 <div class="card">
     <div class="card-body" style="text-align:center;padding:48px;color:var(--text-muted)">
-        <i class="fas fa-file-alt" style="font-size:36px;margin-bottom:12px;display:block;opacity:.3"></i>
+        <i class="fas fa-file-alt" style="font-size:32px;margin-bottom:12px;display:block;opacity:.3"></i>
         No issuances found for the selected period.
     </div>
 </div>
@@ -223,7 +223,7 @@
 
 {{-- Grand total footer --}}
 @if($risGroups->isNotEmpty())
-<div style="text-align:right;padding:12px 24px 12px 4px;font-size:15px;font-weight:700;border-top:2px solid var(--border)">
+<div style="text-align:right;padding:12px 24px 12px 4px;font-size:14px;font-weight:700;border-top:2px solid var(--border)">
     Grand Total: <span style="color:var(--primary);font-size:18px">₱{{ number_format($grandTotal, 2) }}</span>
 </div>
 @endif

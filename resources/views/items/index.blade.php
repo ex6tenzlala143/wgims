@@ -102,7 +102,7 @@
                         @php $reservedQty = \App\Models\ReservationItem::reservedQuantityForItem($item->id); @endphp
                         @if($item->quantity <= 0)
                             <span style="color:var(--danger);font-weight:700">{{ number_format($item->quantity) }}</span>
-                            <span class="badge badge-danger" style="font-size:10px;margin-left:4px">Out of Stock</span>
+                            <span class="badge badge-danger" style="margin-left:4px">Out of Stock</span>
                         @elseif($item->reorder_point > 0 && $item->quantity <= $item->reorder_point)
                             <span style="color:var(--warning);font-weight:700" title="Below reorder point">
                                 {{ number_format($item->quantity) }}
@@ -120,7 +120,7 @@
                     </td>
                     <td>{{ $item->expiration_date ? $item->expiration_date->format('M d, Y') : '—' }}</td>
                     <td>{{ $item->unit }}</td>
-                    <td><span class="badge badge-info" style="font-size:10px">{{ $item->getCategoryLabel() }}</span></td>
+                    <td><span class="badge badge-info">{{ $item->getCategoryLabel() }}</span></td>
                     <td><span class="badge badge-primary">{{ $item->account_code }}</span></td>
                     <td>{{ $item->warehouse->name ?? '—' }}</td>
                     <td style="text-align:right">₱{{ number_format($item->unit_cost, 2) }}</td>

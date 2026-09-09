@@ -103,7 +103,7 @@
 @if(count($balances) === 0)
 <div class="card">
     <div class="card-body" style="text-align:center;padding:48px;color:var(--text-muted)">
-        <i class="fas fa-box-open" style="font-size:40px;margin-bottom:12px;display:block"></i>
+        <i class="fas fa-box-open" style="font-size:32px;margin-bottom:12px;display:block"></i>
         No inventory items match the selected filters.
     </div>
 </div>
@@ -228,8 +228,8 @@
             </tbody>
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 10 : 8 }}" style="text-align:right">WAREHOUSE TOTAL:</td>
-                    <td style="text-align:right">₱{{ number_format($b['grand_total'], 2) }}</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 10 : 8 }}" style="text-align:right">WAREHOUSE TOTAL VALUE:</td>
+                    <td style="text-align:center">₱{{ number_format($b['grand_total'], 2) }}</td>
                 </tr>
             </tfoot>
         </table>
@@ -244,7 +244,7 @@
 <div class="card" style="background:#1e2a3a">
     <div class="card-body" style="display:flex;justify-content:space-between;align-items:center">
         <span style="color:white;font-size:18px;font-weight:700">OVERALL GRAND TOTAL</span>
-        <span style="color:#90cdf4;font-size:28px;font-weight:800">₱{{ number_format($overallTotal, 2) }}</span>
+        <span style="color:#90cdf4;font-size:22px;font-weight:800">₱{{ number_format($overallTotal, 2) }}</span>
     </div>
 </div>
 

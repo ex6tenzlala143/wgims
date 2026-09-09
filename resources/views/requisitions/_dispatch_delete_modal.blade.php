@@ -38,7 +38,7 @@
         background: linear-gradient(180deg, #ffffff, #fff5f5);
     }
     .dd-modal-header h2 {
-        font-size: 17px;
+        font-size: 18px;
         font-weight: 700;
         color: var(--danger);
         display: flex;
@@ -79,7 +79,7 @@
         background: #fffbeb;
         border: 1px solid #fde68a;
         border-radius: 8px;
-        font-size: 12.5px;
+        font-size: 13px;
         color: #92400e;
         line-height: 1.7;
     }

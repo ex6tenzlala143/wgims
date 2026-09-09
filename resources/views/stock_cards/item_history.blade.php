@@ -23,33 +23,33 @@
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Stock Number</div>
-            <div style="font-size:16px;font-weight:700;margin-top:4px"><code>{{ $item->stock_number }}</code></div>
+            <div style="font-size:18px;font-weight:700;margin-top:4px"><code>{{ $item->stock_number }}</code></div>
             <div style="margin-top:6px">@include('partials.subsidy-source-badge', ['status' => $item->source_subsidy_status, 'ris' => $item->sourceSubsidyReference(), 'dr' => $item->sourceDrReference(), 'code' => $item->sourceSubsidyCode(), 'prefix' => 'FROM'])</div>
         </div>
     </div>
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Unit</div>
-            <div style="font-size:16px;font-weight:700;margin-top:4px">{{ App\Models\Item::UNITS[$item->unit] ?? $item->unit }}</div>
+            <div style="font-size:18px;font-weight:700;margin-top:4px">{{ App\Models\Item::UNITS[$item->unit] ?? $item->unit }}</div>
         </div>
     </div>
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Current Balance</div>
-            <div style="font-size:24px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity) }}</div>
+            <div style="font-size:22px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity) }}</div>
         </div>
     </div>
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Total Value</div>
-            <div style="font-size:20px;font-weight:700;color:var(--success);margin-top:4px">₱{{ number_format($item->quantity * $item->unit_cost, 2) }}</div>
+            <div style="font-size:22px;font-weight:700;color:var(--success);margin-top:4px">₱{{ number_format($item->quantity * $item->unit_cost, 2) }}</div>
         </div>
     </div>
     @if(auth()->user()->hasAdminAccess() && $item->engas_unit_cost !== null)
     <div class="card" style="border:1px solid var(--primary)">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--primary);text-transform:uppercase;letter-spacing:1px;font-weight:600">Engas Unit Cost</div>
-            <div style="font-size:20px;font-weight:700;color:var(--primary);margin-top:4px">₱{{ number_format($item->engas_unit_cost, 2) }}</div>
+            <div style="font-size:22px;font-weight:700;color:var(--primary);margin-top:4px">₱{{ number_format($item->engas_unit_cost, 2) }}</div>
         </div>
     </div>
     @endif
@@ -90,7 +90,7 @@
                         <span class="badge badge-secondary">Adjustment</span>
                         @endif
                     </td>
-                    <td style="font-size:12px">{{ $entry->from_to ?? '—' }}</td>
+                    <td>{{ $entry->from_to ?? '—' }}</td>
                     <td style="text-align:right;color:var(--success)">{{ $entry->receipt_qty > 0 ? number_format($entry->receipt_qty) : '—' }}</td>
                     <td style="text-align:right">{{ $entry->receipt_unit_cost > 0 ? '₱'.number_format($entry->receipt_unit_cost, 2) : '—' }}</td>
                     <td style="text-align:right">{{ $entry->receipt_total_cost > 0 ? '₱'.number_format($entry->receipt_total_cost, 2) : '—' }}</td>

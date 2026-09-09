@@ -50,7 +50,7 @@
         margin: 0;
     }
     .de-modal-header h2 i { color: var(--primary); }
-    .de-modal-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+    .de-modal-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
     .de-modal-close {
         background: none;
         border: none;
@@ -103,14 +103,14 @@
         background: #fffbeb;
         border: 1px solid #fde68a;
         border-radius: 8px;
-        font-size: 12.5px;
+        font-size: 13px;
         color: #92400e;
         line-height: 1.6;
         display: none;
     }
     .de-summary strong { color: #78350f; }
 
-    .de-field-error { color: var(--danger); font-size: 11.5px; margin-top: 4px; line-height: 1.4; }
+    .de-field-error { color: var(--danger); font-size: 12px; margin-top: 4px; line-height: 1.4; }
     .de-form-error {
         color: var(--danger);
         font-size: 13px;

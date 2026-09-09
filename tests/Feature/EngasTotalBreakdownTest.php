@@ -109,9 +109,13 @@ class EngasTotalBreakdownTest extends TestCase
     private function breakdownSection(string $html): string
     {
         $start = strpos($html, 'Partial Delivery Breakdown by Item');
-        $end   = strpos($html, 'Shipment Records');
+        // The Shipment Records section was removed; the admin edit modal
+        // now directly follows the breakdown card.
+        $end   = strpos($html, 'id="editModal"');
         $this->assertNotFalse($start);
-        $this->assertNotFalse($end);
+        if ($end === false) {
+            return substr($html, $start);
+        }
 
         return substr($html, $start, $end - $start);
     }
@@ -179,11 +183,11 @@ class EngasTotalBreakdownTest extends TestCase
         $this->assertStringNotContainsString('3,486,150.00', $section);  // 183 × 19,050.00
         $this->assertStringNotContainsString('3,725,511.17', $section);  // 183 × 20,357.99
 
-        // Full delivery breakdown (Shipment Records) stays consistent too.
-        $shipStart = strpos($html, 'Shipment Records');
-        $shipments = substr($html, $shipStart);
-        $this->assertStringContainsString('3,399,784.33', $shipments);
-        $this->assertStringContainsString('304,800.00', $shipments);
+        // The Shipment Records section was removed; the per-item breakdown
+        // above remains the source of these ENGAS totals.
+        $this->assertStringNotContainsString('Shipment Records', $html);
+        $this->assertStringContainsString('3,399,784.33', $section);
+        $this->assertStringContainsString('304,800.00', $section);
     }
 
     /**

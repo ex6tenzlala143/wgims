@@ -65,13 +65,13 @@
                     $grandValue += $item->quantity * $item->unit_cost;
                 @endphp
                 <tr>
-                    <td><code style="font-size:12px">{{ $item->stock_number }}</code></td>
+                    <td><code style="font-size:11px">{{ $item->stock_number }}</code></td>
                     <td><strong>{{ $item->description }}</strong>@if($item->ris_number)<br><small style="color:var(--text-muted)">{{ $item->ris_number }}</small>@endif
                         @include('partials.subsidy-source-badge', ['status' => $item->source_subsidy_status, 'ris' => $item->sourceSubsidyReference(), 'dr' => $item->sourceDrReference(), 'code' => $item->sourceSubsidyCode(), 'prefix' => 'FROM'])</td>
                     <td>{{ $item->unit }}</td>
                     @if(auth()->user()->hasAdminAccess())<td>{{ $item->warehouse->name ?? '-' }}</td>@endif
-                    <td style="text-align:right">{{ number_format($totalReceived, 2) }}</td>
-                    <td style="text-align:right">{{ number_format($totalIssued, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($totalReceived) }}</td>
+                    <td style="text-align:right">{{ number_format($totalIssued) }}</td>
                     <td style="text-align:right">
                         <strong class="{{ $item->quantity <= $item->reorder_point && $item->reorder_point > 0 ? 'badge badge-danger' : '' }}">
                             {{ number_format($item->quantity) }}
@@ -114,7 +114,7 @@
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
                     <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 5 }}" style="text-align:right">TOTAL:</td>
-                    <td style="text-align:right">{{ number_format($grandBalance, 2) }}</td>
+                    <td style="text-align:right">{{ number_format($grandBalance) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td></td>
                     <td></td>

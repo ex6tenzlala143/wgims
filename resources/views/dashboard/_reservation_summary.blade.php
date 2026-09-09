@@ -81,7 +81,7 @@
             <span style="font-size:11px;color:var(--text-muted)">Items with active reservations</span>
         </div>
         <div class="table-wrapper">
-            <table style="font-size:12px">
+            <table>
                 <thead>
                     <tr>
                         <th>Item</th>
@@ -98,7 +98,7 @@
                             <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px"
                                  title="{{ $ri['description'] }}">{{ $ri['description'] }}</div>
                             @if($ri['stock_number'])
-                            <code style="font-size:10px;color:var(--text-muted)">{{ $ri['stock_number'] }}</code>
+                            <code style="font-size:11px;color:var(--text-muted)">{{ $ri['stock_number'] }}</code>
                             @endif
                         </td>
                         <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px"
@@ -151,7 +151,7 @@
                         <div style="display:flex;align-items:center;gap:6px">
                             <span style="width:8px;height:8px;border-radius:50%;background:{{ $dotColor }};flex-shrink:0;display:inline-block"></span>
                             <strong style="font-size:13px;color:var(--primary)">{{ $res['reservation_number'] }}</strong>
-                            <span class="badge {{ $res['status_badge'] }}" style="font-size:10px">{{ $res['status_label'] }}</span>
+                            <span class="badge {{ $res['status_badge'] }}">{{ $res['status_label'] }}</span>
                         </div>
                         <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
                             {{ $res['created_at']->format('M d, Y') }}

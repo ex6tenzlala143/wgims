@@ -28,7 +28,7 @@
         </div>
         <div>
             <div style="color:var(--text-muted);margin-bottom:2px">Total Requested</div>
-            <div style="font-weight:600">{{ number_format($requisition->totalRequested(), 2) }}</div>
+            <div style="font-weight:600">{{ number_format($requisition->totalRequested()) }}</div>
         </div>
         <div>
             <div style="color:var(--text-muted);margin-bottom:2px">Status</div>
@@ -40,7 +40,7 @@
 @if($logs->isEmpty())
 <div class="card">
     <div class="card-body" style="text-align:center;padding:48px;color:var(--text-muted)">
-        <i class="fas fa-history" style="font-size:36px;margin-bottom:12px;display:block"></i>
+        <i class="fas fa-history" style="font-size:32px;margin-bottom:12px;display:block"></i>
         No corrections have been recorded for this RIS yet.
     </div>
 </div>
@@ -61,7 +61,7 @@
             <tbody>
                 @foreach($logs as $log)
                 <tr>
-                    <td style="white-space:nowrap;font-size:12px">
+                    <td style="white-space:nowrap">
                         {{ $log->created_at->format('M d, Y') }}<br>
                         <span style="color:var(--text-muted)">{{ $log->created_at->format('h:i A') }}</span>
                     </td>

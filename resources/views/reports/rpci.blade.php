@@ -89,10 +89,10 @@
                 </tr>
                 @endif
                 <tr>
-                    <td style="font-size:12px">{{ $item->stock_number }}</td>
+                    <td>{{ $item->stock_number }}</td>
                     <td>{{ $item->description }}</td>
                     <td>{{ $item->unit }}</td>
-                    <td style="font-size:12px">{{ $item->getCategoryLabel() }}</td>
+                    <td>{{ $item->getCategoryLabel() }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td>{{ $item->warehouse->name ?? '-' }}</td>
                     @endif
@@ -123,7 +123,7 @@
             </tbody>
             @if($items->count() > 0)
             <tfoot>
-                <tr style="background:#f0fff4;font-weight:700;font-size:15px">
+                <tr style="background:#f0fff4;font-weight:700;font-size:14px">
                     <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 6 }}" style="text-align:right;padding-right:24px">GRAND TOTAL:</td>
                     <td style="text-align:right;padding-right:24px">₱{{ number_format($grandTotal, 2) }}</td>
                 </tr>

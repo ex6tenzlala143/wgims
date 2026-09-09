@@ -56,7 +56,7 @@
 <div style="margin-bottom:20px;padding:14px 20px;border-radius:8px;display:flex;align-items:center;gap:12px;
      background:{{ in_array($reservation->status,['DEPLOYED']) ? '#f0fff4' : (in_array($reservation->status,['CANCELLED','EXPIRED']) ? '#fff5f5' : '#f0f9ff') }};
      border:1px solid {{ in_array($reservation->status,['DEPLOYED']) ? '#9ae6b4' : (in_array($reservation->status,['CANCELLED','EXPIRED']) ? '#feb2b2' : '#90cdf4') }}">
-    <span class="badge {{ $reservation->status_badge_class }}" style="font-size:13px;padding:6px 14px">
+    <span class="badge {{ $reservation->status_badge_class }}">
         {{ $reservation->status_label }}
     </span>
     <div style="font-size:13px;color:var(--text-muted)">
@@ -74,7 +74,7 @@
     <div class="card">
         <div class="card-header"><h3>Reservation Information</h3></div>
         <div class="card-body">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:14px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:13px">
                 <div><span style="color:var(--text-muted)">Reservation No.</span><br>
                     <strong><code style="color:var(--primary)">{{ $reservation->reservation_number ?? '—' }}</code></strong>
                 </div>
@@ -119,15 +119,15 @@
             <div style="display:grid;gap:12px">
                 <div style="padding:12px;background:var(--surface-soft);border-radius:8px;text-align:center">
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Total Reserved</div>
-                    <div style="font-size:26px;font-weight:800;color:var(--primary)">{{ number_format($totalReserved) }}</div>
+                    <div style="font-size:22px;font-weight:800;color:var(--primary)">{{ number_format($totalReserved) }}</div>
                 </div>
                 <div style="padding:12px;background:#f0fff4;border-radius:8px;text-align:center">
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Total Deployed</div>
-                    <div style="font-size:26px;font-weight:800;color:var(--success)">{{ number_format($totalDeployed) }}</div>
+                    <div style="font-size:22px;font-weight:800;color:var(--success)">{{ number_format($totalDeployed) }}</div>
                 </div>
                 <div style="padding:12px;background:#fffff0;border-radius:8px;text-align:center;border:1px solid #faf089">
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Remaining</div>
-                    <div style="font-size:26px;font-weight:800;color:{{ $totalRemaining > 0 ? 'var(--warning)' : 'var(--success)' }}">
+                    <div style="font-size:22px;font-weight:800;color:{{ $totalRemaining > 0 ? 'var(--warning)' : 'var(--success)' }}">
                         {{ $totalRemaining > 0 ? number_format($totalRemaining) : '✓ Complete' }}
                     </div>
                 </div>
@@ -198,9 +198,9 @@
                         {{ $ri->remaining_quantity > 0 ? number_format($ri->remaining_quantity) : '✓' }}
                     </td>
                     <td style="text-align:right">{{ $ri->unit_cost ? '₱'.number_format($ri->unit_cost, 2) : '—' }}</td>
-                    <td style="font-size:12px">{{ $ri->expiration_date ? $ri->expiration_date->format('M d, Y') : '—' }}</td>
+                    <td>{{ $ri->expiration_date ? $ri->expiration_date->format('M d, Y') : '—' }}</td>
                     <td>
-                        <span class="badge {{ $ri->status_badge_class }}" style="font-size:10px">
+                        <span class="badge {{ $ri->status_badge_class }}">
                             {{ $ri->status_label }}
                         </span>
                         @if(auth()->user()->canWrite()
@@ -223,7 +223,7 @@
                 {{-- Dispatch history for this item --}}
                 @if($ri->dispatchItems->isNotEmpty())
                 <tr style="background:var(--surface-soft)">
-                    <td colspan="10" style="padding:8px 20px;font-size:12px;color:var(--text-muted)">
+                    <td colspan="10" style="padding:8px 20px;color:var(--text-muted)">
                         <strong>Deployment history:</strong>
                         @foreach($ri->dispatchItems as $di)
                             <span style="margin-right:12px">

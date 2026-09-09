@@ -80,7 +80,7 @@
             <div class="card-body" style="font-size:14px">
                 <div style="margin-bottom:16px;padding:14px;background:var(--surface-soft);border-radius:8px;text-align:center">
                     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Total Items</div>
-                    <div style="font-size:28px;font-weight:800;color:var(--primary)" id="res-total-items">0</div>
+                    <div style="font-size:22px;font-weight:800;color:var(--primary)" id="res-total-items">0</div>
                 </div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
                     <i class="fas fa-info-circle"></i>

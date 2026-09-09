@@ -113,9 +113,13 @@ class DeliveryBreakdownExpirationTest extends TestCase
     private function breakdownSection(string $html): string
     {
         $start = strpos($html, 'Partial Delivery Breakdown by Item');
-        $end   = strpos($html, 'Shipment Records');
+        // The Shipment Records section was removed; the admin edit modal
+        // now directly follows the breakdown card.
+        $end   = strpos($html, 'id="editModal"');
         $this->assertNotFalse($start);
-        $this->assertNotFalse($end);
+        if ($end === false) {
+            return substr($html, $start);
+        }
 
         return substr($html, $start, $end - $start);
     }
@@ -195,10 +199,10 @@ class DeliveryBreakdownExpirationTest extends TestCase
 
     /**
      * Multiple shipments, multiple items, mixed warehouses: every dispatch row
-     * keeps its own expiration in BOTH the per-item breakdown and the full
-     * Shipment Records table.
+     * keeps its own expiration in the per-item breakdown table. (The Shipment
+     * Records section was removed; the breakdown is now the single place.)
      */
-    public function test_shipments_and_items_keep_distinct_expirations_in_both_tables(): void
+    public function test_shipments_and_items_keep_distinct_expirations_in_breakdown_table(): void
     {
         $wh1 = $this->makeWarehouse('GAMC1', 'GAMC1');
         $wh2 = $this->makeWarehouse('GAMC2', 'GAMC2');
@@ -255,22 +259,9 @@ class DeliveryBreakdownExpirationTest extends TestCase
         $this->assertStringContainsString('Feb 14, 2028', $cannedRows[0]);
         $this->assertStringContainsString('GAMC2', $cannedRows[0]);
 
-        // ── Full delivery breakdown (Shipment Records) ──
-        $shipStart = strpos($html, 'Shipment Records');
-        $shipEnd   = strpos($html, '@include', $shipStart) ?: strlen($html);
-        $shipments = substr($html, $shipStart, $shipEnd - $shipStart);
-
-        $shipRowA = $this->rowsContaining($shipments, 'DR-EXPMIX-1-A');
-        $this->assertCount(1, $shipRowA);
-        $this->assertStringContainsString('Dec 31, 2026', $shipRowA[0]);
-
-        $shipRowB = $this->rowsContaining($shipments, 'DR-EXPMIX-1-B');
-        $this->assertCount(1, $shipRowB);
-        $this->assertStringContainsString('Feb 14, 2028', $shipRowB[0]);
-
-        $shipRow2 = $this->rowsContaining($shipments, 'DR-EXPMIX-2-A');
-        $this->assertCount(1, $shipRow2);
-        $this->assertStringContainsString('Jun 30, 2027', $shipRow2[0]);
+        // ── Shipment Records section removed: assert it is gone; the per-item
+        // breakdown above already verified each row's own expiration. ──
+        $this->assertStringNotContainsString('Shipment Records', $html);
     }
 
     /**

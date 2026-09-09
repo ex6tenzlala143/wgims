@@ -122,16 +122,16 @@
                             {{ $resItems->count() }} item(s)
                         </div>
                     </td>
-                    <td style="font-size:12px">{{ $whNames ?: '—' }}</td>
+                    <td>{{ $whNames ?: '—' }}</td>
                     <td style="text-align:right;font-weight:600">{{ number_format($totalReserved) }}</td>
                     <td style="text-align:right;color:var(--success)">{{ number_format($totalDeployed) }}</td>
                     <td style="text-align:right;color:{{ $totalRemaining > 0 ? 'var(--warning)' : 'var(--success)' }};font-weight:600">
                         {{ $totalRemaining > 0 ? number_format($totalRemaining) : '✓' }}
                     </td>
                     <td><span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span></td>
-                    <td style="font-size:12px">{{ \Illuminate\Support\Str::limit($reservation->purpose, 30) }}</td>
+                    <td>{{ \Illuminate\Support\Str::limit($reservation->purpose, 30) }}</td>
                     <td>{{ $reservation->creator->name ?? '—' }}</td>
-                    <td style="font-size:12px">
+                    <td>
                         @if($reservation->expires_at)
                             <span style="{{ $reservation->expires_at->isPast() ? 'color:var(--danger)' : '' }}">
                                 {{ $reservation->expires_at->format('M d, Y') }}

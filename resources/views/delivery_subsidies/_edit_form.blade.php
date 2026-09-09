@@ -62,7 +62,7 @@
                         <i class="fas fa-exclamation-triangle" style="font-size:20px;margin-top:2px"></i>
                         <div>
                             <strong>This subsidy already has related transactions.</strong>
-                            <div id="edit-related-warning-detail" style="margin-top:4px;font-size:12.5px;line-height:1.5">
+                            <div id="edit-related-warning-detail" style="margin-top:4px;font-size:13px;line-height:1.5">
                                 Deliveries, stock cards and inventory records exist for this request. The RIS number, supplier and DR number are locked, and lines that already have delivered stock can only have their requested quantity changed. Delivered stock and inventory are never modified here.
                             </div>
                         </div>
@@ -160,7 +160,7 @@
                     <aside class="subsidy-summary">
                         <div class="summary-left">
                             <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Requested Quantity</div>
-                            <div style="font-size:26px;font-weight:800;color:var(--primary);line-height:1.1" id="edit-grand-total">0</div>
+                            <div style="font-size:22px;font-weight:800;color:var(--primary);line-height:1.1" id="edit-grand-total">0</div>
                             <div id="edit-item-count" style="font-size:12px;color:var(--text-muted);margin-top:2px">0 line items</div>
                         </div>
                         <div class="summary-note">
@@ -173,7 +173,7 @@
             </div>
 
             <div class="modal-footer">
-                <div id="edit-confirm-wrap" style="display:none;flex:1;min-width:0;font-size:12.5px;line-height:1.5;color:var(--text-muted)">
+                <div id="edit-confirm-wrap" style="display:none;flex:1;min-width:0;font-size:13px;line-height:1.5;color:var(--text-muted)">
                     <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;margin:0">
                         <input type="checkbox" id="edit-confirm-check" style="margin-top:3px">
                         <span><strong style="color:var(--danger)">I understand</strong> — this subsidy already has related transactions. I only want to edit the request details; delivered stock and inventory records will not be changed.</span>

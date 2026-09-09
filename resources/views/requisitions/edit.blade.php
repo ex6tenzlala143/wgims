@@ -125,7 +125,7 @@
                                 <i class="fas fa-box" style="color:var(--primary)"></i>
                                 Item <span class="ris-item-num">{{ $loop->iteration }}</span>
                                 @if($ri->quantity_issued > 0)
-                                    <span class="badge badge-success" style="font-size:10px;margin-left:6px">
+                                    <span class="badge badge-success" style="margin-left:6px">
                                         <i class="fas fa-check"></i> {{ number_format($ri->quantity_issued) }} issued
                                     </span>
                                 @endif

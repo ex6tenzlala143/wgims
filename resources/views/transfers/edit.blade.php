@@ -198,7 +198,7 @@
         <div>
             <div class="card" style="position:sticky;top:80px">
                 <div class="card-header"><h3>Summary</h3></div>
-                <div class="card-body" style="font-size:14px">
+                <div class="card-body" style="font-size:13px">
                     <div style="margin-bottom:10px">
                         <span style="color:var(--text-muted)">Transfer #</span><br>
                         <strong>{{ $transfer->transfer_number }}</strong>

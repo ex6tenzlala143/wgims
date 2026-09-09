@@ -19,7 +19,7 @@
     <div class="card">
         <div class="card-header"><h3>Item Information</h3></div>
         <div class="card-body">
-            <table style="width:100%;font-size:14px">
+            <table style="width:100%">
                 <tr><td style="padding:8px 0;color:var(--text-muted);width:40%">Stock Number</td>
                     <td>
                         @if($item->stock_number)
@@ -61,12 +61,12 @@
         <div class="card-header"><h3>Stock Level</h3></div>
         <div class="card-body">
             <div style="text-align:center;padding:20px">
-                <div style="font-size:48px;font-weight:800;color:{{ $item->quantity <= $item->reorder_point && $item->reorder_point > 0 ? 'var(--danger)' : 'var(--success)' }}">
+                <div style="font-size:22px;font-weight:800;color:{{ $item->quantity <= $item->reorder_point && $item->reorder_point > 0 ? 'var(--danger)' : 'var(--success)' }}">
                     {{ number_format($item->quantity) }}
                 </div>
-                <div style="font-size:16px;color:var(--text-muted);margin-top:4px">{{ App\Models\Item::UNITS[$item->unit] ?? $item->unit }}</div>
+                <div style="font-size:18px;color:var(--text-muted);margin-top:4px">{{ App\Models\Item::UNITS[$item->unit] ?? $item->unit }}</div>
                 @if($item->quantity <= $item->reorder_point && $item->reorder_point > 0)
-                <div class="badge badge-danger" style="margin-top:12px;font-size:12px"><i class="fas fa-exclamation-triangle"></i> Below Reorder Point</div>
+                <div class="badge badge-danger" style="margin-top:12px"><i class="fas fa-exclamation-triangle"></i> Below Reorder Point</div>
                 @endif
             </div>
             <table style="width:100%;font-size:14px;margin-top:16px">
@@ -112,9 +112,11 @@
                     <td>{{ $entry->reference }}</td>
                     <td>
                         @if($entry->reference_type == 'delivery')
-                        <span class="badge badge-success">Receipt</span>
+                        <span class="badge badge-success">RECEIPT</span>
                         @elseif($entry->reference_type == 'issuance')
-                        <span class="badge badge-warning">Issue</span>
+                        <span class="badge badge-warning">ISSUE</span>
+                        @elseif($entry->reference_type == 'transfer_out' || $entry->reference_type == 'transfer_in')
+                        <span class="badge badge-info">TRANSFER</span>
                         @else
                         <span class="badge badge-secondary">Adjustment</span>
                         @endif

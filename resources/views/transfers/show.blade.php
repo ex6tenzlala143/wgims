@@ -51,7 +51,7 @@
 <div class="card" style="border:2px solid var(--danger);margin-bottom:16px">
     <div class="card-body" style="background:#fff5f5">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-            <span class="badge badge-danger" style="font-size:14px;padding:8px 14px">
+            <span class="badge badge-danger">
                 <i class="fas fa-exclamation-triangle"></i> RELATED TO DELETED SUBSIDY
             </span>
             <span style="font-size:13px;color:var(--text-muted)">
@@ -59,7 +59,7 @@
                 It was preserved for review — deleting it will reverse the inventory movement.
             </span>
         </div>
-        <table style="width:100%;font-size:14px;border-collapse:collapse">
+        <table style="width:100%;border-collapse:collapse">
             <tr>
                 <td style="padding:5px 0;color:var(--text-muted);width:32%">Subsidy ID</td>
                 <td style="padding:5px 0;font-weight:700"><code style="color:var(--primary)">{{ $transfer->sourceSubsidyCode() ?? '—' }}</code></td>
@@ -108,7 +108,7 @@
     <div class="card">
         <div class="card-header"><h3><i class="fas fa-info-circle"></i> Transfer Information</h3></div>
         <div class="card-body">
-            <table style="width:100%;font-size:14px;border-collapse:collapse">
+            <table style="width:100%;border-collapse:collapse">
                 <tr>
                     <td style="padding:8px 0;color:var(--text-muted);width:40%">Transfer Number</td>
                     <td style="padding:8px 0;font-weight:700">{{ $transfer->transfer_number }}</td>
@@ -150,7 +150,7 @@
                         @endif
                     </div>
                 </div>
-                <div style="font-size:28px;color:var(--primary)">
+                <div style="font-size:32px;color:var(--primary)">
                     <i class="fas fa-arrow-right"></i>
                 </div>
                 <div style="text-align:center;flex:1">

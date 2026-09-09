@@ -36,7 +36,7 @@
                                 <span style="font-size:12px;color:var(--text-muted);margin-left:6px">{{ $ri->unit }}</span>
                             @endif
                             @if($isDone)
-                                <span class="badge badge-success" style="font-size:10px;margin-left:6px"><i class="fas fa-check"></i> Fulfilled</span>
+                                <span class="badge badge-success" style="margin-left:6px"><i class="fas fa-check"></i> Fulfilled</span>
                             @endif
                         </div>
                         <div style="display:flex;gap:18px;font-size:12px;text-align:right">
@@ -44,7 +44,7 @@
                             <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Already Issued</div><strong style="color:var(--success)">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '—' }}</strong></div>
                             <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Outstanding</div>
                                 @if($isDone)
-                                    <span class="badge badge-success" style="font-size:10px">—</span>
+                                    <span class="badge badge-success">—</span>
                                 @else
                                     <strong style="color:var(--warning)">{{ number_format($outstanding) }}</strong>
                                 @endif
@@ -75,7 +75,7 @@
                     <div class="form-group">
                         <label class="form-label">Source of Items</label>
                         <div style="display:flex;gap:16px;align-items:center;padding:10px 14px;background:var(--surface-soft);border-radius:8px;border:1px solid var(--border)">
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:500">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:500">
                                 <input type="radio"
                                        name="items[{{ $ri->id }}][source]"
                                        value="normal"
@@ -86,7 +86,7 @@
                                 <i class="fas fa-warehouse" style="color:var(--primary)"></i>
                                 Normal Available Stock
                             </label>
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:500">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:500">
                                 <input type="radio"
                                        name="items[{{ $ri->id }}][source]"
                                        value="reserved"
@@ -157,9 +157,9 @@
                         {{-- Reservation detail card (shown after selection) --}}
                         <div id="res-detail-{{ $ri->id }}" style="display:none;padding:12px 14px;background:#f0f9ff;border:1px solid #90cdf4;border-radius:8px;margin-bottom:12px;font-size:13px">
                             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px">
-                                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">On Hand</div><div style="font-size:16px;font-weight:700" id="res-phys-{{ $ri->id }}">—</div></div>
-                                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;color:var(--warning)">Reserved</div><div style="font-size:16px;font-weight:700;color:var(--warning)" id="res-total-{{ $ri->id }}">—</div></div>
-                                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;color:var(--success)">Remaining</div><div style="font-size:16px;font-weight:700;color:var(--success)" id="res-remain-{{ $ri->id }}">—</div></div>
+                                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">On Hand</div><div style="font-size:18px;font-weight:700" id="res-phys-{{ $ri->id }}">—</div></div>
+                                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;color:var(--warning)">Reserved</div><div style="font-size:18px;font-weight:700;color:var(--warning)" id="res-total-{{ $ri->id }}">—</div></div>
+                                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;color:var(--success)">Remaining</div><div style="font-size:18px;font-weight:700;color:var(--success)" id="res-remain-{{ $ri->id }}">—</div></div>
                             </div>
                             <div id="res-meta-{{ $ri->id }}" style="font-size:11px;color:var(--text-muted)"></div>
                         </div>
@@ -254,7 +254,7 @@
     <div>
         <div class="card" style="position:sticky;top:80px">
             <div class="card-header"><h3>RIS Summary</h3></div>
-            <div class="card-body" style="font-size:14px">
+            <div class="card-body" style="font-size:13px">
                 <div style="margin-bottom:10px"><span style="color:var(--text-muted)">RIS Number:</span><br><strong>{{ $requisition->ris_number }}</strong></div>
                 <div style="margin-bottom:10px"><span style="color:var(--text-muted)">Warehouse(s):</span><br>{{ $requisition->warehouse_names }}</div>
                 <div style="margin-bottom:10px"><span style="color:var(--text-muted)">Purpose:</span><br>{{ $requisition->purpose }}</div>

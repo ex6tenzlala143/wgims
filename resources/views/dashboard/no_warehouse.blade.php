@@ -12,11 +12,11 @@
 
 <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
     <div style="text-align:center;max-width:480px;padding:40px">
-        <div style="font-size:64px;margin-bottom:16px">🏭</div>
+        <div style="font-size:32px;margin-bottom:16px">🏭</div>
         <h2 style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:8px">
             No Warehouse Assigned
         </h2>
-        <p style="color:var(--text-muted);font-size:15px;line-height:1.6;margin-bottom:24px">
+        <p style="color:var(--text-muted);font-size:14px;line-height:1.6;margin-bottom:24px">
             Your account is not yet assigned to any warehouse.
             Please contact an administrator to assign you to a warehouse before you can access inventory data.
         </p>

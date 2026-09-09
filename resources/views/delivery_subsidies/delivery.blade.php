@@ -96,19 +96,19 @@
             <div class="card-header" style="background:{{ $isDone ? '#f7fafc' : '#f0f9ff' }}">
                 <div style="display:flex;align-items:center;gap:10px">
                     <div>
-                        <strong style="font-size:14px">{{ $poi->item->description ?? $poi->description ?? '—' }}</strong>
+                        <strong style="font-size:13px">{{ $poi->item->description ?? $poi->description ?? '—' }}</strong>
                         <span style="font-size:12px;color:var(--text-muted);margin-left:6px">{{ $poi->item->unit ?? $poi->unit ?? '' }}</span>
                         @if($poi->warehouse)
-                            <span class="badge badge-info" style="margin-left:8px;font-size:10px" title="Assigned warehouse">
+                            <span class="badge badge-info" style="margin-left:8px" title="Assigned warehouse">
                                 <i class="fas fa-warehouse"></i> {{ $poi->warehouse->name }}
                             </span>
                         @endif
                         @if($isDone)
-                            <span class="badge badge-success" style="margin-left:6px;font-size:10px" title="Requested quantity has already been fully dispatched">
+                            <span class="badge badge-success" style="margin-left:6px" title="Requested quantity has already been fully dispatched">
                                 <i class="fas fa-check"></i> Fully Dispatched
                             </span>
                         @else
-                            <span class="badge badge-warning" style="margin-left:6px;font-size:10px" title="Still dispatchable">
+                            <span class="badge badge-warning" style="margin-left:6px" title="Still dispatchable">
                                 <i class="fas fa-hourglass-half"></i> Pending
                             </span>
                         @endif
@@ -289,7 +289,7 @@
 
                 <div style="background:#fff;border:2px solid var(--primary);border-radius:8px;padding:12px;margin-bottom:12px;text-align:center">
                     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">This Shipment</div>
-                    <div id="sidebar-qty" style="font-size:28px;font-weight:800;color:var(--primary)">0.00</div>
+                    <div id="sidebar-qty" style="font-size:22px;font-weight:800;color:var(--primary)">0.00</div>
                 </div>
 
                 <div style="background:#f7fafc;border-radius:8px;padding:12px;font-size:13px;margin-bottom:16px">

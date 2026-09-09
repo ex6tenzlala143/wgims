@@ -116,8 +116,8 @@
                         @endif
                     </td>
                     <td style="white-space:nowrap">{{ $transfer->transfer_date->format('M d, Y') }}</td>
-                    <td><span style="font-size:12px">{{ $transfer->fromWarehouse->name }}</span></td>
-                    <td><span style="font-size:12px">{{ $transfer->toWarehouse->name }}</span></td>
+                    <td><span>{{ $transfer->fromWarehouse->name }}</span></td>
+                    <td><span>{{ $transfer->toWarehouse->name }}</span></td>
                     <td style="text-align:right;font-weight:600">
                         {{ $transfer->items_count ?? 0 }}
                     </td>
@@ -136,7 +136,7 @@
                             {{ $pct }}% of {{ number_format($totalQty) }}
                         </div>
                         @else
-                        <span style="color:var(--text-muted);font-size:12px">—</span>
+                        <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td>

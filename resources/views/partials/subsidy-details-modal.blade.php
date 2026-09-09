@@ -45,7 +45,7 @@
         flex-shrink: 0;
     }
     .subsidy-modal-header h2 {
-        font-size: 17px;
+        font-size: 18px;
         font-weight: 700;
         color: var(--text);
         display: flex;
@@ -85,7 +85,7 @@
     }
     .subsidy-detail-row:last-of-type { border-bottom: none; }
     .subsidy-detail-label {
-        font-size: 12.5px;
+        font-size: 13px;
         font-weight: 600;
         color: var(--text-muted);
         text-transform: uppercase;
@@ -93,7 +93,7 @@
         flex-shrink: 0;
     }
     .subsidy-detail-value {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 700;
         color: var(--text);
         text-align: right;
@@ -105,7 +105,7 @@
         background: var(--warning-bg);
         border: 1px solid #fde68a;
         border-radius: 8px;
-        font-size: 12.5px;
+        font-size: 13px;
         color: var(--warning-text);
         line-height: 1.6;
     }

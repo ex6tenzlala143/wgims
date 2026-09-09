@@ -44,12 +44,12 @@
             <tbody>
                 @foreach($categories as $cat)
                 <tr>
-                    <td style="color:var(--text-muted);font-size:12px">{{ $cat->sort_order }}</td>
+                    <td style="color:var(--text-muted)">{{ $cat->sort_order }}</td>
                     <td>
                         <strong>{{ $cat->label }}</strong>
                     </td>
                     <td>
-                        <code style="font-size:12px;background:#f0f4f8;padding:2px 6px;border-radius:4px">{{ $cat->account_code }}</code>
+                        <code style="font-size:11px;background:#f0f4f8;padding:2px 6px;border-radius:4px">{{ $cat->account_code }}</code>
                     </td>
                     <td>
                         <code style="font-size:11px;color:var(--text-muted)">{{ $cat->key }}</code>
@@ -73,6 +73,12 @@
                                     title="View Items"
                                     onclick="openViewItemsModal({{ $cat->id }})">
                                 <i class="fas fa-list"></i>
+                            </button>
+
+                            <button type="button" class="btn btn-sm btn-outline btn-icon"
+                                    title="Add Item Name"
+                                    onclick="openAddItemModal({{ $cat->id }})">
+                                <i class="fas fa-plus"></i>
                             </button>
 
                             <button type="button" class="btn btn-sm btn-outline btn-icon"
@@ -149,7 +155,7 @@
                     <input type="number" name="sort_order" id="edit-sort-order" class="form-control" min="0" style="max-width:120px">
                 </div>
                 <div class="form-group">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
                         <input type="checkbox" name="is_active" value="1" id="edit-is-active" style="width:16px;height:16px">
                         Active (visible in dropdowns)
                     </label>
@@ -205,6 +211,9 @@
         </div>
         <div class="modal-body" style="overflow-y:auto">
             <div id="viewItemsContent"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="openAddItemModal(currentViewItemsCatId)"><i class="fas fa-plus"></i> Add Item Name</button>
         </div>
     </div>
 </div>
@@ -279,6 +288,7 @@
 <script>
 const editRouteBase = '{{ url("/item-categories") }}';
 const catalogItemsByCategory = @json($catalogItemsByCategory);
+let currentViewItemsCatId = null;
 
 function openAddCategoryModal() {
     const modal = document.getElementById('addCategoryModal');
@@ -348,6 +358,7 @@ document.getElementById('addCategoryForm').addEventListener('submit', function(e
 });
 
 function openViewItemsModal(catId) {
+    currentViewItemsCatId = catId;
     const items = catalogItemsByCategory[catId] || [];
     const content = document.getElementById('viewItemsContent');
     const modal = document.getElementById('viewItemsModal');
@@ -355,7 +366,7 @@ function openViewItemsModal(catId) {
     if (items.length === 0) {
         content.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px">No item names yet. Click <strong>Add Item Name</strong> to create one.</p>';
     } else {
-        let html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+        let html = '<table style="width:100%;border-collapse:collapse">';
         html += '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Item Name</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Account Code</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Status</th><th style="text-align:right;padding:8px;border-bottom:1px solid #ddd">Actions</th></tr></thead>';
         html += '<tbody>';
         items.forEach(item => {

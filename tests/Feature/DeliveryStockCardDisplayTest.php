@@ -103,17 +103,20 @@ class DeliveryStockCardDisplayTest extends TestCase
         $start = strpos($html, 'Ordered Items');
         $this->assertNotFalse($start);
         $end = strpos($html, 'Partial Delivery Breakdown by Item');
-        if ($end === false) $end = strpos($html, 'No deliveries recorded yet');
-        $this->assertNotFalse($end);
+        if ($end === false) $end = strlen($html);
         return substr($html, $start, $end - $start);
     }
 
     private function breakdownSection(string $html): string
     {
         $start = strpos($html, 'Partial Delivery Breakdown by Item');
-        $end   = strpos($html, 'Shipment Records');
+        // The Shipment Records section was removed; the admin edit modal
+        // now directly follows the breakdown card.
+        $end   = strpos($html, 'id="editModal"');
         $this->assertNotFalse($start);
-        $this->assertNotFalse($end);
+        if ($end === false) {
+            return substr($html, $start);
+        }
         return substr($html, $start, $end - $start);
     }
 
@@ -126,7 +129,7 @@ class DeliveryStockCardDisplayTest extends TestCase
         return $rows;
     }
 
-    public function test_ordered_item_shows_all_stock_cards_when_delivered_in_multiple_shipments(): void
+    public function test_ordered_items_hide_stock_cards_costs_and_pending_state(): void
     {
         $wh = $this->makeWarehouse('GAMC1', 'GAMC1');
         $rice = $this->makeItem($wh, 'Rice');
@@ -157,10 +160,13 @@ class DeliveryStockCardDisplayTest extends TestCase
         $html = $this->actingAs($this->admin())->get(route('delivery_subsidies.show', $ds))->getContent();
         $ordered = $this->orderedSection($html);
 
-        // Ordered Items must list ALL three stock cards — clickable links to stock_cards.item_history
+        // Ordered Items is intentionally simplified: it must NOT list stock
+        // cards, costs, or links — the three records still exist in the data
+        // layer (asserted above) and per-shipment detail lives in the
+        // Partial Delivery Breakdown section.
         foreach ($cards as $sc) {
-            $this->assertStringContainsString($sc->stock_number, $ordered);
-            $this->assertStringContainsString(route('stock_cards.item_history', $sc->id), $ordered);
+            $this->assertStringNotContainsString($sc->stock_number, $ordered);
+            $this->assertStringNotContainsString(route('stock_cards.item_history', $sc->id), $ordered);
         }
 
         // It must NOT show Pending delivery for a fulfilled line with cards
@@ -244,10 +250,11 @@ class DeliveryStockCardDisplayTest extends TestCase
         $ordered = $this->orderedSection($html);
         $section = $this->breakdownSection($html);
 
-        // Stock cards: two distinct cards in Ordered Items
+        // Stock cards are no longer listed in Ordered Items (simplified display);
+        // the two records themselves are asserted on the model above.
         $cards = $line->fresh()->assigned_stock_cards;
         $this->assertCount(2, $cards);
-        foreach ($cards as $c) $this->assertStringContainsString($c->stock_number, $ordered);
+        foreach ($cards as $c) $this->assertStringNotContainsString($c->stock_number, $ordered);
 
         // Per-shipment ENGAS correctness
         $rowAHtml = $this->rowsContaining($section, 'DR-SCE-1-A');
@@ -261,15 +268,17 @@ class DeliveryStockCardDisplayTest extends TestCase
         $this->assertStringNotContainsString('3,725,511.17', $section);
     }
 
-    public function test_single_stock_card_still_displays_and_pending_pending_when_no_delivery(): void
+    public function test_ordered_items_hide_stock_card_state_before_and_after_delivery(): void
     {
         $wh = $this->makeWarehouse('GAMC1', 'GAMC1');
         $rice = $this->makeItem($wh, 'Rice');
         $ds = $this->createSubsidy([['item_id' => $rice->id, 'description' => 'Rice', 'quantity' => 50]], 'RIS-SC-PEND');
 
+        // Before delivery the simplified Ordered Items shows no stock number
+        // and no "Pending delivery" placeholder.
         $htmlBefore = $this->actingAs($this->admin())->get(route('delivery_subsidies.show', $ds))->getContent();
         $orderedBefore = $this->orderedSection($htmlBefore);
-        $this->assertStringContainsString('Pending delivery', $orderedBefore);
+        $this->assertStringNotContainsString('Pending delivery', $orderedBefore);
 
         $line = $ds->items()->firstOrFail();
         $this->dispatch($ds, 'DR-PEND-1', [[
@@ -277,11 +286,13 @@ class DeliveryStockCardDisplayTest extends TestCase
             'unit_cost' => 700, 'engas_unit_cost' => 710, 'dr_number' => 'DR-PEND-1-A',
         ]]);
 
+        // After delivery the card still stays out of Ordered Items (detail is
+        // in Partial Delivery Breakdown); the assignment itself is model-level.
         $htmlAfter = $this->actingAs($this->admin())->get(route('delivery_subsidies.show', $ds))->getContent();
         $orderedAfter = $this->orderedSection($htmlAfter);
         $this->assertStringNotContainsString('Pending delivery', $orderedAfter);
         $card = $line->fresh()->assigned_stock_cards->sole();
-        $this->assertStringContainsString($card->stock_number, $orderedAfter);
+        $this->assertStringNotContainsString($card->stock_number, $orderedAfter);
     }
 
     public function test_fix_does_not_create_duplicate_stock_cards(): void

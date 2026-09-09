@@ -12,7 +12,7 @@
 </div>
 
 <div class="card" style="margin-bottom:16px">
-    <div class="card-body" style="font-size:14px;display:flex;gap:24px">
+    <div class="card-body" style="font-size:13px;display:flex;gap:24px">
         <div><span style="color:var(--text-muted)">Report Type:</span> <strong>{{ strtoupper($snapshot->report_type) }}</strong></div>
         <div><span style="color:var(--text-muted)">Period:</span> <strong>{{ $snapshot->period_month }}</strong></div>
         <div><span style="color:var(--text-muted)">Warehouse:</span> <strong>{{ $snapshot->warehouse->name ?? 'All Warehouses' }}</strong></div>

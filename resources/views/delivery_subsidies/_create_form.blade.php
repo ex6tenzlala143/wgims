@@ -154,7 +154,7 @@
                     <aside class="subsidy-summary">
                         <div class="summary-left">
                             <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Requested Quantity</div>
-                            <div style="font-size:26px;font-weight:800;color:var(--primary);line-height:1.1" id="grand-total">0</div>
+                            <div style="font-size:22px;font-weight:800;color:var(--primary);line-height:1.1" id="grand-total">0</div>
                             <div id="item-count" style="font-size:12px;color:var(--text-muted);margin-top:2px">0 line items</div>
                         </div>
                     </aside>

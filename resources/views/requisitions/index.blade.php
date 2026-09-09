@@ -56,7 +56,7 @@
                   <tr>
                     <th>RIS No. / RIS ID</th>
                     <th>DR No.</th>
-                    <th>Date</th>
+                    <th>Date Fully Delivered</th>
                     <th>Days Elapsed</th>
                     <th>Warehouse</th>
                     <th>Requesting LGU</th>
@@ -76,6 +76,11 @@
                     $risPct  = $risReq > 0 ? min(100, round($risIss / $risReq * 100)) : 0;
                     $risBar  = $risPct >= 100 ? 'var(--success)' : ($risPct > 0 ? 'var(--primary)' : '#e2e8f0');
                     $subSnapshot = $ris->deletedSubsidySnapshot();
+                    // The date shown in the Date column: completion date for
+                    // completed RIS only — blank while not fully delivered.
+                    $risDate = $ris->status === 'approved'
+                        ? ($ris->completion_date ?? $ris->date_approved)
+                        : null;
                 @endphp
                  <tr>
                     <td>
@@ -107,23 +112,23 @@
                         @endphp
                         @if($drs->isNotEmpty())
                             @foreach($drs as $dr)
-                                <code style="font-size:12px">{{ $dr }}</code>@if(!$loop->last)<br>@endif
+                                <code style="font-size:11px">{{ $dr }}</code>@if(!$loop->last)<br>@endif
                             @endforeach
                         @else
                             <span style="color:var(--text-muted);font-size:12px">—</span>
                         @endif
                     </td>
                      <td>
-                         @if($ris->status === 'approved' && $ris->date_approved)
-                             {{ $ris->date_approved->format('M d, Y') }}
+                         @if($risDate)
+                             {{ $risDate->format('M d, Y') }}
                          @else
-                             {{ $ris->date_requested->format('M d, Y') }}
+                             <span style="color:var(--text-muted)">—</span>
                          @endif
                      </td>
                       <td>
-                          @if($ris->status === 'approved' && $ris->date_approved)
+                          @if($risDate)
                               @php
-                                  $daysElapsed = max(0, (int) $ris->date_requested->copy()->startOfDay()->diffInDays($ris->date_approved->copy()->startOfDay()));
+                                  $daysElapsed = max(0, (int) $risDate->copy()->startOfDay()->diffInDays(now()->startOfDay(), true));
                               @endphp
                               {{ $daysElapsed }} day{{ $daysElapsed === 1 ? '' : 's' }}
                           @else

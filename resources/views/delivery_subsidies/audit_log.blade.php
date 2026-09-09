@@ -40,7 +40,7 @@
 @if($logs->isEmpty())
 <div class="card">
     <div class="card-body" style="text-align:center;padding:48px;color:var(--text-muted)">
-        <i class="fas fa-history" style="font-size:36px;margin-bottom:12px;display:block"></i>
+        <i class="fas fa-history" style="font-size:32px;margin-bottom:12px;display:block"></i>
         No edit history recorded for this delivery/subsidy yet.
     </div>
 </div>
@@ -62,7 +62,7 @@
             <tbody>
                 @foreach($logs as $log)
                 <tr>
-                    <td style="white-space:nowrap;font-size:12px">
+                    <td style="white-space:nowrap">
                         {{ $log->created_at->format('M d, Y') }}<br>
                         <span style="color:var(--text-muted)">{{ $log->created_at->format('h:i A') }}</span>
                     </td>
@@ -105,7 +105,7 @@
                             <span style="color:var(--text-muted);font-size:12px">No field details</span>
                         @endif
                     </td>
-                    <td style="font-size:12px">
+                    <td>
                         @if(! empty($log->cascade_summary))
                             <ul style="margin:0;padding-left:16px">
                                 @php

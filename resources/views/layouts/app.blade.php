@@ -1186,7 +1186,7 @@
                 }
 
                 if (data.notifications.length === 0) {
-                    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px"><i class="fas fa-bell-slash" style="display:block;font-size:24px;margin-bottom:8px"></i>No new notifications</div>';
+                    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px"><i class="fas fa-bell-slash" style="display:block;font-size:32px;margin-bottom:8px"></i>No new notifications</div>';
                 } else {
                     list.innerHTML = data.notifications.map(n => {
                         const iconMap = { success: 'fa-check-circle', warning: 'fa-exclamation-triangle', danger: 'fa-times-circle', transfer: 'fa-arrows-alt-h', info: 'fa-info-circle' };

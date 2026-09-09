@@ -94,7 +94,7 @@
                             <td>
                                 <strong>{{ $sti->sourceItem->description ?? '—' }}</strong>
                                 @if($isDone)
-                                    <span class="badge badge-success" style="font-size:10px;margin-left:4px">
+                                    <span class="badge badge-success" style="margin-left:4px">
                                         <i class="fas fa-check"></i> Done
                                     </span>
                                 @endif
@@ -148,7 +148,7 @@
                             <td style="text-align:right;padding:10px 14px;color:var(--warning)">{{ number_format($totalRemaining) }}</td>
                             <td></td>
                             <td style="padding:10px 14px">
-                                <span id="dispatch-total" style="font-size:16px;font-weight:800;color:var(--primary)">0</span>
+                                <span id="dispatch-total" style="font-size:18px;font-weight:800;color:var(--primary)">0</span>
                                 <div style="font-size:10px;color:var(--text-muted)">this dispatch</div>
                             </td>
                         </tr>
@@ -181,11 +181,11 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;text-align:center">
                     <div style="background:#f0f9ff;border-radius:8px;padding:10px">
                         <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Planned</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested) }}</div>
+                        <div style="font-size:22px;font-weight:800;color:var(--primary)">{{ number_format($totalRequested) }}</div>
                     </div>
                     <div style="background:#f0fff4;border-radius:8px;padding:10px">
                         <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Sent So Far</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--success)">{{ number_format($totalTransferred) }}</div>
+                        <div style="font-size:22px;font-weight:800;color:var(--success)">{{ number_format($totalTransferred) }}</div>
                     </div>
                 </div>
 
@@ -194,7 +194,7 @@
                     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
                         This Dispatch
                     </div>
-                    <div id="sidebar-qty" style="font-size:28px;font-weight:800;color:var(--primary)">0</div>
+                    <div id="sidebar-qty" style="font-size:22px;font-weight:800;color:var(--primary)">0</div>
                 </div>
 
                 {{-- After dispatch projection --}}

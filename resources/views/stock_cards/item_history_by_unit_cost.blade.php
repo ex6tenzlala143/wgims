@@ -20,20 +20,20 @@
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Stock Number</div>
-            <div style="font-size:16px;font-weight:700;margin-top:4px"><code>{{ $item->stock_number }}</code></div>
+            <div style="font-size:18px;font-weight:700;margin-top:4px"><code>{{ $item->stock_number }}</code></div>
             <div style="margin-top:6px">@include('partials.subsidy-source-badge', ['status' => $item->source_subsidy_status, 'ris' => $item->sourceSubsidyReference(), 'dr' => $item->sourceDrReference(), 'code' => $item->sourceSubsidyCode(), 'prefix' => 'FROM'])</div>
         </div>
     </div>
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Current Balance</div>
-            <div style="font-size:24px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity) }}</div>
+            <div style="font-size:22px;font-weight:800;color:var(--primary);margin-top:4px">{{ number_format($item->quantity) }}</div>
         </div>
     </div>
     <div class="card">
         <div class="card-body" style="text-align:center">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Total Batches</div>
-            <div style="font-size:24px;font-weight:800;color:var(--info);margin-top:4px">{{ count($batches) }}</div>
+            <div style="font-size:22px;font-weight:800;color:var(--info);margin-top:4px">{{ count($batches) }}</div>
         </div>
     </div>
 </div>
@@ -42,7 +42,7 @@
 <div class="card" style="margin-bottom:16px">
     <div class="card-header" style="background:{{ $batch['depleted'] ? '#f7fafc' : '#ebf4ff' }}">
         <div style="display:flex;align-items:center;gap:12px">
-            <span style="font-weight:700;font-size:15px">Batch #{{ $idx + 1 }}</span>
+            <span style="font-weight:700;font-size:14px">Batch #{{ $idx + 1 }}</span>
             <span class="badge {{ $batch['depleted'] ? 'badge-secondary' : 'badge-success' }}">
                 {{ $batch['depleted'] ? 'Depleted' : 'Active' }}
             </span>

@@ -65,7 +65,7 @@
                 @endphp
                 <div style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;max-height:320px;overflow-y:auto;background:#fff">
                     @forelse($warehouses as $wh)
-                    <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:14px">
+                    <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
                         <input type="checkbox"
                                name="warehouse_ids[]"
                                value="{{ $wh->id }}"
@@ -73,7 +73,7 @@
                         <span>
                             <strong>{{ $wh->name }}</strong>
                             @if($wh->code)
-                            <span class="badge badge-secondary" style="font-size:10px;margin-left:4px">{{ $wh->code }}</span>
+                            <span class="badge badge-secondary" style="margin-left:4px">{{ $wh->code }}</span>
                             @endif
                             @if($wh->place)
                             <span style="color:var(--text-muted);font-size:12px"> — {{ $wh->place }}</span>

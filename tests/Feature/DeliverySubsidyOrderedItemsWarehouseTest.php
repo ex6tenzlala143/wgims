@@ -148,19 +148,20 @@ class DeliverySubsidyOrderedItemsWarehouseTest extends TestCase
         $this->assertEquals(600.0, $rowGamc2['unit_cost']);
         $this->assertEquals(600.0, $rowGamc2['engas_unit_cost']);
 
-        // The show page's Ordered Items section must show BOTH warehouses and
-        // BOTH sets of costs.
+        // The show page's Ordered Items section is intentionally simplified:
+        // it must NOT show per-dispatch warehouses or costs (the data-layer
+        // separation is asserted above; detail lives in the breakdown below).
         $response = $this->actingAs($this->admin())
             ->get(route('delivery_subsidies.show', $ds));
         $html      = $response->getContent();
         $start     = strpos($html, 'Ordered Items');
         $end       = strpos($html, 'Partial Delivery Breakdown by Item');
         $orderedSection = substr($html, $start, $end - $start);
-        $this->assertStringContainsString('GAMC1', $orderedSection);
-        $this->assertStringContainsString('GAMC2', $orderedSection);
-        $this->assertStringContainsString('₱700.00', $orderedSection);
-        $this->assertStringContainsString('₱600.00', $orderedSection);
-        $this->assertStringContainsString('₱710.00', $orderedSection);
+        $this->assertStringNotContainsString('GAMC1', $orderedSection);
+        $this->assertStringNotContainsString('GAMC2', $orderedSection);
+        $this->assertStringNotContainsString('₱700.00', $orderedSection);
+        $this->assertStringNotContainsString('₱600.00', $orderedSection);
+        $this->assertStringNotContainsString('₱710.00', $orderedSection);
     }
 
     public function test_ordered_item_keeps_different_costs_for_the_same_warehouse(): void

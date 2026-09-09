@@ -54,7 +54,7 @@
         margin: 0;
     }
     .cr-modal-header h2 i { color: var(--primary); }
-    .cr-modal-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+    .cr-modal-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
     .cr-modal-close {
         background: none;
         border: none;
@@ -123,7 +123,7 @@
         background: #fffbeb;
         border: 1px solid #fde68a;
         border-radius: 8px;
-        font-size: 12.5px;
+        font-size: 13px;
         color: #92400e;
         line-height: 1.6;
         display: none;
@@ -136,12 +136,12 @@
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
         border-radius: 8px;
-        font-size: 12.5px;
+        font-size: 13px;
         color: #166534;
         line-height: 1.6;
     }
 
-    .cr-field-error { color: var(--danger); font-size: 11.5px; margin-top: 4px; line-height: 1.4; }
+    .cr-field-error { color: var(--danger); font-size: 12px; margin-top: 4px; line-height: 1.4; }
     .cr-form-error {
         color: var(--danger);
         font-size: 13px;
@@ -173,7 +173,7 @@
     .cr-item-row .cr-num { text-align: right; }
     .cr-locked-tag {
         display: inline-block;
-        font-size: 10.5px;
+        font-size: 11px;
         background: #eef2ff;
         color: #4f46e5;
         padding: 1px 7px;
@@ -182,7 +182,7 @@
         font-weight: 600;
     }
     .cr-static-item {
-        font-size: 13.5px;
+        font-size: 14px;
         font-weight: 600;
         padding: 8px 0 2px;
     }
@@ -419,12 +419,12 @@
 
             html += '<div class="cr-num">';
             html += '<label class="form-label">Issued</label>';
-            html += '<div style="font-size:15px;font-weight:700;color:var(--success);padding:8px 2px">' + fmt(ri.quantity_issued) + '</div>';
+            html += '<div style="font-size:14px;font-weight:700;color:var(--success);padding:8px 2px">' + fmt(ri.quantity_issued) + '</div>';
             html += '</div>';
 
             html += '<div class="cr-num">';
             html += '<label class="form-label">Outstanding</label>';
-            html += '<div id="cr-out-' + i + '" style="font-size:15px;font-weight:700;padding:8px 2px"></div>';
+            html += '<div id="cr-out-' + i + '" style="font-size:14px;font-weight:700;padding:8px 2px"></div>';
             html += '</div>';
 
             html += '</div>';
