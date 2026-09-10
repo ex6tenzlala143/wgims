@@ -197,7 +197,7 @@
                     <td style="text-align:right;color:{{ $ri->remaining_quantity > 0 ? 'var(--warning)' : 'var(--success)' }};font-weight:600">
                         {{ $ri->remaining_quantity > 0 ? number_format($ri->remaining_quantity) : '✓' }}
                     </td>
-                    <td style="text-align:right">{{ $ri->unit_cost ? '₱'.number_format($ri->unit_cost, 2) : '—' }}</td>
+                    <td style="text-align:right">{{ $ri->unit_cost !== null ? '₱'.number_format($ri->unit_cost, 2) : '—' }}</td>
                     <td>{{ $ri->expiration_date ? $ri->expiration_date->format('M d, Y') : '—' }}</td>
                     <td>
                         <span class="badge {{ $ri->status_badge_class }}">

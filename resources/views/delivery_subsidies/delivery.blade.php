@@ -209,7 +209,7 @@
                             <input type="number"
                                    name="items[{{ $poiIdx }}_0][unit_cost]"
                                    class="form-control"
-                                   min="0.01" step="0.01"
+                                   min="0" step="0.01"
                                    value="{{ old("items.{$poiIdx}_0.unit_cost", $poi->unit_cost > 0 ? number_format($poi->unit_cost, 2, '.', '') : '') }}"
                                    {{ $isDone ? 'disabled' : 'required' }}>
                         </div>
@@ -505,7 +505,7 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
                 <input type="number"
                        name="items[${key}][unit_cost]"
                        class="form-control"
-                       min="0.01" step="0.01"
+                       min="0" step="0.01"
                        value="${defaultCost > 0 ? defaultCost.toFixed(2) : ''}"
                        placeholder="0.00"
                        required

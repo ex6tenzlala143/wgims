@@ -195,12 +195,11 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
         $this->assertEquals('deleted', $flow['destItem']->fresh()->source_subsidy_status);
         $this->assertTrue($flow['destItem']->fresh()->isRelatedToDeletedSubsidy());
 
-        // Audit trail on the transfer survives the subsidy record.
+        // No delete-audit rows are written anymore; the transfer itself keeps
+        // the deletion flag and snapshots for review.
         $log = StockTransferAuditLog::where('stock_transfer_id', $transfer->id)
             ->where('action', 'subsidy_deleted')->first();
-        $this->assertNotNull($log);
-        $this->assertEquals('RIS-MARK-DEL', $log->changed_fields['ris_number']);
-        $this->assertEquals('deleted', $log->changed_fields['subsidy_status']);
+        $this->assertNull($log);
 
         // Both pages render the review marker.
         $this->actingAs($this->admin())
@@ -263,7 +262,7 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
         $this->assertEquals(0, (float) Item::where('warehouse_id', $whC->id)->where('description', 'Ration Pack')->firstOrFail()->quantity);
     }
 
-    public function test_deleting_marked_transfer_reverses_stock_and_keeps_audit_trail(): void
+    public function test_deleting_marked_transfer_reverses_stock_without_audit_trail(): void
     {
         $flow = $this->subsidyToTransferFlow('RIS-MARK-REV', 'DR-MARK-REV');
 
@@ -287,15 +286,12 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
         $this->assertEquals(0, StockCardEntry::where('reference_type', 'transfer_in')
             ->where('reference_id', $flow['transfer']->id)->count());
 
-        // The reversal is logged and the log row OUTLIVES the transfer.
+        // No delete-audit rows are written anymore; stock reversal is verified above.
         $this->assertDatabaseMissing('stock_transfers', ['id' => $flow['transfer']->id]);
-        $this->assertDatabaseHas('stock_transfer_audit_logs', [
+        $this->assertDatabaseMissing('stock_transfer_audit_logs', [
             'transfer_number' => $flow['transfer']->transfer_number,
             'action'          => 'reversed_deleted',
         ]);
-        $log = StockTransferAuditLog::where('transfer_number', $flow['transfer']->transfer_number)
-            ->where('action', 'reversed_deleted')->first();
-        $this->assertNotNull($log->changed_fields['reversed_lines']);
     }
 
     public function test_transfers_index_filters_related_to_deleted_subsidy(): void

@@ -384,7 +384,7 @@ function addTransferRow() {
         </td>
         <td data-label="Unit Cost">
             <input type="number" name="items[${idx}][unit_cost]" id="transfer-cost-${idx}"
-                   step="0.01" min="0.01" placeholder="0.00" required oninput="recalcTransferRow(${idx})">
+                   step="0.01" min="0" placeholder="0.00" required oninput="recalcTransferRow(${idx})">
         </td>
         <td data-label="Total"><input type="text" id="transfer-total-${idx}" readonly placeholder="0.00"></td>
         <td>

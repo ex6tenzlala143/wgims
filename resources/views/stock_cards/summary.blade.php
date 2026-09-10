@@ -129,7 +129,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 13 : 11 }}" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 14 : 11 }}" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-book-open" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No items match the selected filters.
                 </td></tr>
@@ -138,11 +138,15 @@
             @if($items->count() > 0)
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 9 : 6 }}" style="text-align:right">TOTAL:</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 7 }}" style="text-align:right">TOTAL:</td>
                     <td style="text-align:right">{{ number_format($grandBalance) }}</td>
                     <td></td>
+                    @if(auth()->user()->hasAdminAccess())
+                    <td></td>
+                    <td></td>
+                    @endif
                     <td style="text-align:right">₱{{ number_format($grandValue, 2) }}</td>
-                    <td colspan="2"></td>
+                    <td></td>
                 </tr>
             </tfoot>
             @endif

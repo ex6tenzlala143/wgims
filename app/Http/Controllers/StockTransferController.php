@@ -128,7 +128,7 @@ class StockTransferController extends Controller
             'items'             => 'required|array|min:1',
             'items.*.item_id'   => 'required|exists:items,id',
             'items.*.quantity'  => 'required|integer|min:1',
-            'items.*.unit_cost' => 'required|numeric|min:0.01',
+            'items.*.unit_cost' => 'required|numeric|min:0',
         ], [
             'to_warehouse_id.different' => 'Source warehouse and destination warehouse must be different.',
         ]);
@@ -338,13 +338,27 @@ class StockTransferController extends Controller
                 }
 
                 foreach ($request->items as $line) {
+                    // Lock the transfer line itself (not just the stock rows)
+                    // so two concurrent dispatches cannot both read a stale
+                    // remaining quantity and overrun quantity_requested.
                     $sti = StockTransferItem::with(['sourceItem', 'destinationItem'])
                         ->where('id', $line['sti_id'])
                         ->where('stock_transfer_id', $transfer->id)
+                        ->lockForUpdate()
                         ->firstOrFail();
 
                     $remaining   = max(0, $sti->quantity_requested - $sti->quantity);
-                    $dispatchQty = min((int) $line['quantity'], $remaining);
+                    $submitted   = (int) $line['quantity'];
+
+                    // Reject over-dispatch instead of silently capping: a cap
+                    // would drop quantities with a success message.
+                    if ($submitted > $remaining + 0.0001) {
+                        throw ValidationException::withMessages([
+                            'items' => "Cannot dispatch {$submitted}: only {$remaining} remains undispatched on this transfer line.",
+                        ]);
+                    }
+
+                    $dispatchQty = $submitted;
 
                     if ($dispatchQty <= 0) {
                         continue;
@@ -610,7 +624,7 @@ class StockTransferController extends Controller
             'items.*.sti_id'   => 'required|exists:stock_transfer_items,id',
             'items.*.quantity_requested' => 'required|integer|min:1',
             'items.*.quantity' => 'required|integer|min:0',
-            'items.*.unit_cost' => 'required|numeric|min:0.01',
+            'items.*.unit_cost' => 'required|numeric|min:0',
         ]);
 
         try {
@@ -887,9 +901,6 @@ class StockTransferController extends Controller
      * (requisition issues, onward transfers…). If the transferred stock has
      * already been used again, the deletion is refused so the ledger can never
      * be left inconsistent — the admin is told exactly what to resolve first.
-     *
-     * The reversal itself is written to the transfer audit log BEFORE the
-     * transfer row is deleted, so the audit trail outlives the record.
      */
     public function destroy(StockTransfer $transfer)
     {
@@ -909,7 +920,6 @@ class StockTransferController extends Controller
 
         try {
             DB::transaction(function () use ($transfer) {
-                $reversal = [];
                 $affectedItemIds = [];
 
                 foreach ($transfer->items as $sti) {
@@ -928,14 +938,6 @@ class StockTransferController extends Controller
                     if ($dispatched <= 0) {
                         continue;
                     }
-
-                    $reversal[] = [
-                        'description'          => $sti->sourceItem?->description ?? "Item #{$sti->item_id}",
-                        'quantity'             => $dispatched,
-                        'unit_cost'            => (float) $sti->unit_cost,
-                        'source_item_id'       => $sti->item_id,
-                        'destination_item_id'  => $sti->destination_item_id,
-                    ];
 
                     $affectedItemIds[$sti->item_id] = true;
                     $affectedItemIds[$sti->destination_item_id] = true;
@@ -957,22 +959,6 @@ class StockTransferController extends Controller
                         $destItem->update(['quantity' => $newQty]);
                     }
                 }
-
-            // Audit trail BEFORE the row disappears — the entry survives the delete.
-            StockTransferAuditLog::create([
-                'stock_transfer_id' => $transfer->id,
-                'transfer_number'   => $transfer->transfer_number,
-                'user_id'           => Auth::user()->id,
-                'action'            => 'reversed_deleted',
-                'changed_fields'    => [
-                    'transfer_number'        => $transfer->transfer_number,
-                    'source_warehouse'       => $transfer->fromWarehouse?->name,
-                    'destination_warehouse'  => $transfer->toWarehouse?->name,
-                    'transfer_date'          => $transfer->transfer_date?->toDateString(),
-                    'source_subsidy'         => $transfer->sourceSubsidyReference(),
-                    'reversed_lines'         => $reversal,
-                ],
-            ]);
 
             $transfer->items()->delete();
             $transfer->delete();

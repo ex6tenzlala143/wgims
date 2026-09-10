@@ -22,11 +22,6 @@
             <i class="fas fa-edit"></i> Edit Subsidy
         </button>
         @endif
-        @if(auth()->user()->isAdmin())
-        <a href="{{ route('delivery_subsidies.audit_log', $deliverySubsidy->id) }}" class="btn btn-outline">
-            <i class="fas fa-history"></i> Correction History
-        </a>
-        @endif
         @if(auth()->user()->canWrite())
         <form action="{{ route('delivery_subsidies.destroy', $deliverySubsidy->id) }}" method="POST"
             onsubmit="return confirm('Delete RIS #{{ $deliverySubsidy->ris_number }}?\n\nThis will permanently delete the record and reverse all delivered stock quantities. Related stock transfers will be preserved and flagged for review.')">
@@ -71,15 +66,9 @@
                 <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Total Amount</div>
                 <div style="font-size:22px;font-weight:800;color:var(--primary)">₱{{ number_format($deliverySubsidy->total_amount, 2) }}</div>
             </div>
-            <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
-                <div style="background:#f7fafc;border-radius:8px;padding:10px">
-                    <div style="color:var(--text-muted)">Items Ordered</div>
-                    <div style="font-weight:700;font-size:18px">{{ $deliverySubsidy->items->count() }}</div>
-                </div>
-                <div style="background:#f7fafc;border-radius:8px;padding:10px">
-                    <div style="color:var(--text-muted)">Shipments</div>
-                    <div style="font-weight:700;font-size:18px">{{ $deliverySubsidy->deliveries->count() }}</div>
-                </div>
+            <div style="margin-top:16px;background:#f7fafc;border-radius:8px;padding:10px;font-size:13px">
+                <div style="color:var(--text-muted)">Items Ordered</div>
+                <div style="font-weight:700;font-size:18px">{{ $deliverySubsidy->items->count() }}</div>
             </div>
         </div>
     </div>
@@ -280,9 +269,9 @@
             <table style="width:100%;border-collapse:collapse">
                 <thead>
                     <tr style="background:var(--surface-soft)">
+                        <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Date Delivered</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Shipment DR No.</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Stock No.</th>
-                        <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Date</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Warehouse</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Expiration</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Qty This Shipment</th>
@@ -303,6 +292,9 @@
                         $cumulativePct  = $orderedQty > 0 ? min(100, round($cumulativeQty / $orderedQty * 100)) : 0;
                     @endphp
                     <tr style="border-top:1px solid var(--border)">
+                        <td style="padding:10px 14px;text-align:center;color:var(--text-muted);white-space:nowrap">
+                            {{ $row['delivery']->delivery_date->format('M d, Y') }}
+                        </td>
                         <td style="padding:10px 14px;text-align:center">
                             <strong>{{ $row['di']->dr_number ?? $row['delivery']->dr_number }}</strong>
                             @if($row['delivery']->batch_number)
@@ -315,9 +307,6 @@
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
-                        </td>
-                        <td style="padding:10px 14px;text-align:center;color:var(--text-muted)">
-                            {{ $row['delivery']->delivery_date->format('M d, Y') }}
                         </td>
                         <td style="padding:10px 14px;text-align:center">
                             @php $shipWh = $row['di']->warehouse; @endphp
@@ -374,8 +363,8 @@
                             @endif
                             {{-- Edit shipment --}}
                             @if(auth()->user()->canWrite())
-                                <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $row['delivery']->id]) }}"
-                                   class="btn btn-sm btn-outline btn-icon" title="Edit Shipment">
+                                <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $row['delivery']->id]) }}?di={{ $row['di']->id }}"
+                                   class="btn btn-sm btn-outline btn-icon" title="Edit this row only">
                                     <i class="fas fa-edit"></i>
                                 </a>
                                 {{-- Delete shipment --}}
@@ -427,9 +416,8 @@
     @endforeach
 </div>
 
-{{-- Individual Shipment Records section intentionally removed. Per-shipment
-     detail with edit/delete actions remains in Partial Delivery Breakdown
-     by Item above. --}}
+{{-- Individual Shipment Records removed per request. Per-DR detail with
+     single-row edit lives in Partial Delivery Breakdown by Item above. --}}
 @endif
 
 @if(auth()->user()->canWrite())

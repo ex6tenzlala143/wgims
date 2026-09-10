@@ -56,7 +56,8 @@ class ReportController extends Controller
         $items = $query->orderBy('category')->orderBy('description')->get();
         $grouped = $items->groupBy('category');
 
-        $asOf = $request->as_of ? date('F d, Y', strtotime($request->as_of)) : date('F d, Y');
+        $asOfTs = $request->as_of ? strtotime($request->as_of) : false;
+        $asOf = $asOfTs ? date('F d, Y', $asOfTs) : date('F d, Y');
         $serialNumber = $request->serial_number ?? '';
         $centerName = $this->getCenterName($user, $request->warehouse_id ? (int) $request->warehouse_id : null);
 
@@ -131,6 +132,17 @@ class ReportController extends Controller
             $query->whereDate('date_approved', '<=', $request->date_to);
         }
 
+        // Same search fields as the Excel export so the screen and the file
+        // always show the same set.
+        if ($search = trim((string) $request->input('search', ''))) {
+            $query->where(function ($q) use ($search) {
+                $q->where('ris_number', 'like', "%{$search}%")
+                  ->orWhere('ris_code', 'like', "%{$search}%")
+                  ->orWhere('office', 'like', "%{$search}%")
+                  ->orWhere('purpose', 'like', "%{$search}%");
+            });
+        }
+
         $requisitions = $query->orderBy('date_approved')->get();
 
         // Group by RIS number — same structure used by the print view
@@ -159,6 +171,8 @@ class ReportController extends Controller
                         'stock_no'        => $di->item?->stock_number ?? $ri->item?->stock_number ?? '',
                         'description'     => $ri->description ?? $ri->item?->description ?? '',
                         'unit'            => $ri->unit ?? $ri->item?->unit ?? '',
+                        'qty_requested'   => (float) $ri->quantity_requested,
+                        'ri_issued'       => (float) $ri->quantity_issued,
                         'qty_issued'      => (float) $di->quantity_issued,
                         'unit_cost'       => (float) ($di->unit_cost ?? $di->item?->unit_cost ?? 0),
                         'engas_unit_cost' => (float) ($di->engas_unit_cost ?? $di->item?->engas_unit_cost ?? 0),
@@ -172,6 +186,8 @@ class ReportController extends Controller
                     'stock_no'        => $ri->item?->stock_number ?? '',
                     'description'     => $ri->description ?? $ri->item?->description ?? '',
                     'unit'            => $ri->unit ?? $ri->item?->unit ?? '',
+                    'qty_requested'   => (float) $ri->quantity_requested,
+                    'ri_issued'       => (float) $ri->quantity_issued,
                     'qty_issued'      => (float) $ri->quantity_issued,
                     'unit_cost'       => (float) ($ri->item?->unit_cost ?? 0),
                     'engas_unit_cost' => (float) ($ri->item?->engas_unit_cost ?? 0),
@@ -425,8 +441,9 @@ class ReportController extends Controller
             ? $request->source_subsidy_status
             : null;
 
-        // Fetch items with warehouse eager-loaded
-        $items = Item::with('warehouse')
+        // Fetch items with warehouse + source subsidy eager-loaded (the view
+        // shows the subsidy trail per row — lazy-loading it would N+1).
+        $items = Item::with(['warehouse', 'sourceSubsidy'])
             ->where('is_active', true)
             ->where('quantity', '>', 0)
             ->forWarehouse($warehouseId)
@@ -437,6 +454,16 @@ class ReportController extends Controller
             ->orderBy('category')
             ->orderBy('description')
             ->get();
+
+        // Reservation locks for all listed items in ONE grouped query (the
+        // view used to run one SUM per row).
+        $reservedMap = $items->isNotEmpty()
+            ? \App\Models\ReservationItem::whereIn('item_id', $items->pluck('id'))
+                ->whereIn('status', \App\Models\ReservationItem::ACTIVE_STATUSES)
+                ->groupBy('item_id')
+                ->selectRaw('item_id, SUM(reserved_quantity) as total_reserved')
+                ->pluck('total_reserved', 'item_id')
+            : collect();
 
         // Do NOT merge — display each inventory record separately.
         // Retains individual traceability (warehouse, cost, ENGAS, expiration, subsidy/RIS).
@@ -490,7 +517,7 @@ class ReportController extends Controller
             ->get(['id', 'description', 'warehouse_id']);
 
         return view('reports.inventory_balance', compact(
-            'balances', 'warehouses', 'allItems',
+            'balances', 'warehouses', 'allItems', 'reservedMap',
             'warehouseId', 'categoryKey', 'itemId', 'sourceStatus'
         ));
     }
@@ -518,7 +545,8 @@ class ReportController extends Controller
         $sheet->getStyle('A1')->getAlignment()->setHorizontal('center');
 
         $sheet->mergeCells('A2:J2');
-        $sheet->setCellValue('A2', 'As of '.($request->as_of ? date('F d, Y', strtotime($request->as_of)) : date('F d, Y')));
+        $exportAsOfTs = $request->as_of ? strtotime($request->as_of) : false;
+        $sheet->setCellValue('A2', 'As of '.($exportAsOfTs ? date('F d, Y', $exportAsOfTs) : date('F d, Y')));
         $sheet->getStyle('A2')->getAlignment()->setHorizontal('center');
 
         $sheet->mergeCells('A3:J3');

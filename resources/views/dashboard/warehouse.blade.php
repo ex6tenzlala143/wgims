@@ -16,80 +16,166 @@
     </div>
 </div>
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-boxes"></i></div>
-        <div>
-            <div class="stat-value">{{ number_format($stats['total_items']) }}</div>
-            <div class="stat-label">Items in Warehouse</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-file-invoice-dollar"></i></div>
-        <div>
-            <div class="stat-value">{{ number_format($stats['total_subsidies']) }}</div>
-            <div class="stat-label">Delivery / Subsidies</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon yellow"><i class="fas fa-clipboard-list"></i></div>
-        <div>
-            <div class="stat-value">{{ number_format($stats['pending_ris']) }}</div>
-            <div class="stat-label">Pending RIS</div>
-        </div>
-    </div>
-</div>
-
-{{-- ── NEW: Requisitions/Augmentations Summary ──────────────────────────────── --}}
+{{-- ── Row 1: on-hand inventory (assigned warehouses) ───────────────────────── --}}
 <div class="stats-grid" style="margin-bottom:12px">
     <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-clipboard-list"></i></div>
+        <div class="stat-icon blue"><i class="fas fa-hashtag"></i></div>
         <div>
-            <div class="stat-value">{{ number_format($totalRequisitionQty) }}</div>
-            <div class="stat-label">Requisitions Qty</div>
+            <div class="stat-value">{{ number_format($inventoryNamesCount) }}</div>
+            <div class="stat-label">Total Items</div>
         </div>
     </div>
+    <details class="stat-card stat-drop">
+        <summary>
+            <div class="stat-icon blue"><i class="fas fa-cubes"></i></div>
+            <div>
+                <div class="stat-value">{{ number_format($inventoryQty) }}</div>
+                <div class="stat-label">Total Items Quantity</div>
+            </div>
+        </summary>
+        <div class="stat-drop-panel">
+            @forelse($inventoryByItem as $row)
+            <div class="stat-drop-row"><span>{{ $row->description }}</span><strong>{{ number_format($row->qty) }}{{ $row->unit ? ' ' . $row->unit : '' }}</strong></div>
+            @empty
+            <div class="stat-drop-empty">No items</div>
+            @endforelse
+        </div>
+    </details>
     <div class="stat-card">
         <div class="stat-icon blue"><i class="fas fa-coins"></i></div>
         <div>
-            <div class="stat-value">₱{{ number_format($totalRequisitionAmt, 0) }}</div>
-            <div class="stat-label">Requisitions Amount</div>
+            <div class="stat-value">₱{{ number_format($inventoryAmt, 0) }}</div>
+            <div class="stat-label">Total Items Value</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-tag"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($inventoryEngas, 0) }}</div>
+            <div class="stat-label">Total Items ENGAS Value</div>
         </div>
     </div>
 </div>
 
-{{-- ── NEW: Subsidies Summary ──────────────────────────────────────────────── --}}
+{{-- ── Row 2: subsidies (count IDs) + delivered ─────────────────────────────── --}}
 <div class="stats-grid" style="margin-bottom:12px">
     <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-truck"></i></div>
+        <div class="stat-icon green"><i class="fas fa-hashtag"></i></div>
         <div>
-            <div class="stat-value">{{ number_format($totalSubsidyQty) }}</div>
-            <div class="stat-label">Subsidies Qty</div>
+            <div class="stat-value">{{ number_format($stats['total_subsidies']) }}</div>
+            <div class="stat-label">Total Subsidies</div>
         </div>
     </div>
+    <details class="stat-card stat-drop">
+        <summary>
+            <div class="stat-icon green"><i class="fas fa-truck"></i></div>
+            <div>
+                <div class="stat-value">{{ number_format($totalSubsidyQty) }}</div>
+                <div class="stat-label">Delivered Quantity</div>
+            </div>
+        </summary>
+        <div class="stat-drop-panel">
+            @forelse($deliveredByItem as $row)
+            <div class="stat-drop-row"><span>{{ $row->description }}</span><strong>{{ number_format($row->qty) }}{{ $row->unit ? ' ' . $row->unit : '' }}</strong></div>
+            @empty
+            <div class="stat-drop-empty">No deliveries</div>
+            @endforelse
+        </div>
+    </details>
     <div class="stat-card">
         <div class="stat-icon green"><i class="fas fa-money-bill-wave"></i></div>
         <div>
             <div class="stat-value">₱{{ number_format($totalSubsidyAmt, 0) }}</div>
-            <div class="stat-label">Subsidies Amount</div>
+            <div class="stat-label">Delivered Value</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-tags"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($totalSubsidyEngas, 0) }}</div>
+            <div class="stat-label">Delivered ENGAS Value</div>
         </div>
     </div>
 </div>
 
-{{-- ── NEW: Reservations Summary ────────────────────────────────────────────── --}}
+{{-- ── Row 3: requisitions (count RIS IDs) + issued ─────────────────────────── --}}
 <div class="stats-grid" style="margin-bottom:12px">
     <div class="stat-card">
-        <div class="stat-icon yellow"><i class="fas fa-lock"></i></div>
+        <div class="stat-icon blue"><i class="fas fa-hashtag"></i></div>
         <div>
-            <div class="stat-value">{{ number_format($totalReservedQty) }}</div>
-            <div class="stat-label">Reservations Qty</div>
+            <div class="stat-value">{{ number_format($totalRequisitionsCount) }}</div>
+            <div class="stat-label">Total Requisitions</div>
         </div>
     </div>
+    <details class="stat-card stat-drop">
+        <summary>
+            <div class="stat-icon blue"><i class="fas fa-clipboard-list"></i></div>
+            <div>
+                <div class="stat-value">{{ number_format($totalRequisitionQty) }}</div>
+                <div class="stat-label">Issued Quantity</div>
+            </div>
+        </summary>
+        <div class="stat-drop-panel">
+            @forelse($issuedByItem as $row)
+            <div class="stat-drop-row"><span>{{ $row->description }}</span><strong>{{ number_format($row->qty) }}{{ $row->unit ? ' ' . $row->unit : '' }}</strong></div>
+            @empty
+            <div class="stat-drop-empty">No issuances</div>
+            @endforelse
+        </div>
+    </details>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-coins"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($totalRequisitionAmt, 0) }}</div>
+            <div class="stat-label">Issued Value</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-tags"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($totalRequisitionEngas, 0) }}</div>
+            <div class="stat-label">Issued ENGAS Value</div>
+        </div>
+    </div>
+</div>
+
+{{-- ── Row 4: reservations (count nos.) + reserved (remaining) ──────────────── --}}
+<div class="stats-grid" style="margin-bottom:12px">
+    <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fas fa-hashtag"></i></div>
+        <div>
+            <div class="stat-value">{{ number_format($reservationStats['total']) }}</div>
+            <div class="stat-label">Total Reservations</div>
+        </div>
+    </div>
+    <details class="stat-card stat-drop">
+        <summary>
+            <div class="stat-icon yellow"><i class="fas fa-lock"></i></div>
+            <div>
+                <div class="stat-value">{{ number_format($totalReservedQty) }}</div>
+                <div class="stat-label">Reserved Quantity</div>
+            </div>
+        </summary>
+        <div class="stat-drop-panel">
+            @forelse($reservedByItem as $row)
+            <div class="stat-drop-row"><span>{{ $row->description }}</span><strong>{{ number_format($row->qty) }}{{ $row->unit ? ' ' . $row->unit : '' }}</strong></div>
+            @empty
+            <div class="stat-drop-empty">No reservations</div>
+            @endforelse
+        </div>
+    </details>
     <div class="stat-card">
         <div class="stat-icon yellow"><i class="fas fa-tag"></i></div>
         <div>
             <div class="stat-value">₱{{ number_format($totalReservedAmt, 0) }}</div>
-            <div class="stat-label">Reservations Amount</div>
+            <div class="stat-label">Reserved Value</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fas fa-tags"></i></div>
+        <div>
+            <div class="stat-value">₱{{ number_format($totalReservedEngas, 0) }}</div>
+            <div class="stat-label">Reserved ENGAS Value</div>
         </div>
     </div>
 </div>
@@ -101,14 +187,11 @@
         <span style="font-size:11px;color:var(--text-muted)">Last 12 months - comparing requisitions, subsidies, and reservations</span>
     </div>
     <div class="card-body" style="padding:12px">
-        <div style="position:relative;height:180px">
+        <div style="position:relative;height:320px">
             <canvas id="activityChart"></canvas>
         </div>
     </div>
 </div>
-
-{{-- ── Reservation Summary ──────────────────────────────────────────────── --}}
-@include('dashboard._reservation_summary', ['reservationStats' => $reservationStats, 'recentReservations' => $recentReservations, 'reservedItems' => $reservedItems])
 
 @section('scripts')
 @push('scripts')
@@ -119,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!ctx) return;
     var chartData = @json($chartData);
     new Chart(ctx, {
-        type: 'line',
+        type: 'bar',
         data: {
             labels: chartData.labels,
             datasets: chartData.datasets
@@ -144,6 +227,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-@endpush
 @endpush
 @endsection

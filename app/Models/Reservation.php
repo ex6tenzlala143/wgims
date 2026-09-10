@@ -256,11 +256,20 @@ class Reservation extends Model
             ReservationItem::STATUS_DEPLOYED,
             ReservationItem::STATUS_PARTIALLY_DEPLOYED,
         ]));
+        $allActive     = $items->every(fn ($i) => $i->status === ReservationItem::STATUS_ACTIVE);
 
         $newStatus = match (true) {
             $allDeployed  => self::STATUS_DEPLOYED,
             $allCancelled => self::STATUS_CANCELLED,
             $anyDeployed  => self::STATUS_PARTIALLY_DEPLOYED,
+            // Every line reverted to untouched (e.g. the consuming RIS was
+            // deleted): a DEPLOYED/PARTIALLY_DEPLOYED header is stale, so fall
+            // back to the usable locked state. Pre-approval (PENDING/RESERVED)
+            // and terminal (CANCELLED/EXPIRED) headers are left untouched.
+            $allActive && in_array($this->status, [
+                self::STATUS_DEPLOYED,
+                self::STATUS_PARTIALLY_DEPLOYED,
+            ], true) => self::STATUS_READY,
             default       => $this->status, // keep current (RESERVED / READY / etc.)
         };
 

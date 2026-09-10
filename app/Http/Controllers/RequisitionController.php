@@ -401,7 +401,6 @@ class RequisitionController extends Controller
             'responsibility_center_code' => 'nullable|string|max:255',
             'purpose' => 'required|string',
             'date_requested' => 'required|date',
-            'status' => 'required|string|in:pending,approved,partially_approved,cancelled',
             'requested_by_name' => 'nullable|string|max:255',
             'requested_by_designation' => 'nullable|string|max:255',
             'items' => 'required|array|min:1',
@@ -462,9 +461,11 @@ class RequisitionController extends Controller
                 'responsibility_center_code' => $request->responsibility_center_code,
                 'purpose' => $request->purpose,
                 'date_requested' => $request->date_requested,
-                'requested_by_name' => $request->requested_by_name,
+                'requested_by_name'        => $request->requested_by_name,
                 'requested_by_designation' => $request->requested_by_designation,
-                'status' => $request->status,
+                // Status is never mass-assigned: it is recomputed from issued
+                // vs requested quantities below so the header can never
+                // disagree with the actual fulfilment.
             ], fn($v) => $v !== null));
 
             // Remove lines dropped from the form — only those never dispatched.
@@ -544,6 +545,10 @@ class RequisitionController extends Controller
             return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
         }
 
+        // Recompute fulfilment from the edited lines (see above: the caller
+        // can no longer set the status directly).
+        $requisition->updateFulfilmentStatus();
+
         return redirect()->route('requisitions.show', $requisition)
             ->with('success', 'Requisition updated successfully.');
     }
@@ -608,8 +613,16 @@ class RequisitionController extends Controller
 
                 $newDeployed = max(0, (float) $resItem->deployed_quantity - $reversedQty);
 
-                // Revert status based on the corrected deployed quantity
+                // Revert status based on the corrected deployed quantity.
+                // Under a dead (CANCELLED/EXPIRED) header a fully-reversed
+                // line stays CANCELLED so it cannot phantom-lock stock that
+                // no live reservation owns anymore.
+                $parentDead = in_array($resItem->reservation?->status, [
+                    \App\Models\Reservation::STATUS_CANCELLED,
+                    \App\Models\Reservation::STATUS_EXPIRED,
+                ], true);
                 $newStatus = match (true) {
+                    $newDeployed <= 0 && $parentDead => \App\Models\ReservationItem::STATUS_CANCELLED,
                     $newDeployed <= 0       => \App\Models\ReservationItem::STATUS_ACTIVE,
                     $newDeployed < (float) $resItem->reserved_quantity - 0.0001
                                             => \App\Models\ReservationItem::STATUS_PARTIALLY_DEPLOYED,
@@ -851,7 +864,7 @@ class RequisitionController extends Controller
             // inventory records are untouched — only the request is reclassified.
             $requisition->updateFulfilmentStatus();
 
-            $newTotal = (int) $existingItems->sum('quantity_requested');
+            $newTotal = (int) $requisition->items->sum('quantity_requested');
             if (abs($newTotal - $oldTotal) > 0.0001) {
                 $changes['total_requested'] = ['old' => $oldTotal, 'new' => $newTotal];
             }
@@ -912,22 +925,6 @@ class RequisitionController extends Controller
         })->values()->all();
     }
 
-    /**
-     * Audit log view: who corrected the RIS, when, and every field that changed.
-     * GET /requisitions/{requisition}/audit-log
-     */
-    public function auditLog(Requisition $requisition)
-    {
-        $user = Auth::user();
-        abort_unless($user->canWrite(), 403);
-        abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
-
-        $requisition->load(['items', 'warehouse']);
-        $logs = $requisition->auditLogs()->with('user')->paginate(20);
-
-        return view('requisitions.audit_log', compact('requisition', 'logs'));
-    }
-
     public function approve(Requisition $requisition)
     {
         $user = Auth::user();
@@ -946,7 +943,17 @@ class RequisitionController extends Controller
         if ($user->hasAdminAccess()) {
             $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
         } else {
-            $warehouses = $user->warehouses()->where('is_active', true)->orderBy('name')->get();
+            $warehouses = Warehouse::where('is_active', true)
+                ->where(function ($q) use ($user) {
+                    // Same union as ScopesWarehouse: pivot assignments plus the
+                    // legacy warehouse_id column, so legacy-only users still
+                    // get a warehouse dropdown.
+                    $q->whereIn('id', $user->warehouses()->select('warehouses.id'));
+                    if ($user->warehouse_id) {
+                        $q->orWhere('id', (int) $user->warehouse_id);
+                    }
+                })
+                ->orderBy('name')->get();
         }
 
         return view('requisitions.approve', compact('requisition', 'warehouses'));
@@ -1043,6 +1050,46 @@ class RequisitionController extends Controller
                 $reservationItemId = ! empty($data['reservation_item_id'])
                     ? (int) $data['reservation_item_id']
                     : null;
+                $linkedResItem = null;
+
+                // The issued stock must be the requested item (description-level
+                // match). Without this, any description could be deducted
+                // against any RIS line while the line still counts as fulfilled.
+                if (mb_strtolower(trim((string) $riItem->description)) !== mb_strtolower(trim((string) $item->description))) {
+                    throw ValidationException::withMessages([
+                        "items.{$riItemId}.item_id" =>
+                            'The selected stock ("'.$item->description.'") does not match the requested item ("'.$riItem->description.'").',
+                    ]);
+                }
+
+                // A linked reservation must be usable: an active line on an
+                // active header, with enough remaining quantity. This also
+                // prevents resurrecting cancelled/expired reservations and
+                // deploying beyond what was reserved.
+                if ($reservationItemId) {
+                    $linkedResItem = \App\Models\ReservationItem::whereKey($reservationItemId)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $linkedResItem
+                        || ! in_array($linkedResItem->status, \App\Models\ReservationItem::ACTIVE_STATUSES, true)
+                        || ! $linkedResItem->reservation
+                        || ! in_array($linkedResItem->reservation->status, \App\Models\Reservation::ACTIVE_STATUSES, true)
+                    ) {
+                        throw ValidationException::withMessages([
+                            "items.{$riItemId}.reservation_item_id" =>
+                                'The selected reservation is no longer active and cannot be used.',
+                        ]);
+                    }
+
+                    $resRemaining = (float) $linkedResItem->reserved_quantity - (float) $linkedResItem->deployed_quantity;
+                    if ($wanted > $resRemaining + 0.0001) {
+                        throw ValidationException::withMessages([
+                            "items.{$riItemId}.quantity_issued" =>
+                                'Cannot deploy more than the remaining reserved quantity ('.number_format(max(0, $resRemaining)).').',
+                        ]);
+                    }
+                }
 
                 $totalReserved = \App\Models\Reservation::reservedQuantityForItem($item->id);
 
@@ -1102,10 +1149,10 @@ class RequisitionController extends Controller
 
                 // If this dispatch is linked to a reservation item, update its
                 // deployed quantity and recompute the reservation's overall status.
-                if ($dispatch->reservation_item_id) {
-                    $resItem = \App\Models\ReservationItem::whereKey($dispatch->reservation_item_id)
-                        ->lockForUpdate()
-                        ->first();
+                // The link was validated (active, remaining) above; reuse the
+                // already-locked row instead of re-reading it.
+                if ($dispatch->reservation_item_id && $linkedResItem && (int) $linkedResItem->id === (int) $dispatch->reservation_item_id) {
+                    $resItem = $linkedResItem;
 
                     if ($resItem) {
                         $newDeployed = $resItem->deployed_quantity + $wanted;
@@ -1236,7 +1283,14 @@ class RequisitionController extends Controller
 
         $warehouses = $user->hasAdminAccess()
             ? Warehouse::where('is_active', true)->orderBy('name')->get()
-            : $user->warehouses()->where('is_active', true)->orderBy('name')->get();
+            : Warehouse::where('is_active', true)
+                ->where(function ($q) use ($user) {
+                    $q->whereIn('id', $user->warehouses()->select('warehouses.id'));
+                    if ($user->warehouse_id) {
+                        $q->orWhere('id', (int) $user->warehouse_id);
+                    }
+                })
+                ->orderBy('name')->get();
 
         // Same selection rule as getItemsByWarehouse, but the dispatch's current
         // record is always included so the existing selection can be restored.
@@ -1358,6 +1412,34 @@ class RequisitionController extends Controller
                 ]);
             }
 
+            // The issued stock must be the requested item (description-level
+            // match) — same rule as dispatch creation.
+            if (mb_strtolower(trim((string) $ri->description)) !== mb_strtolower(trim((string) $newItem->description))) {
+                throw ValidationException::withMessages([
+                    'item_id' =>
+                        'The selected stock ("'.$newItem->description.'") does not match the requested item ("'.$ri->description.'").',
+                ]);
+            }
+
+            // Load the linked reservation (if any) once, locked, for both the
+            // availability check below and the deployed_quantity adjustment.
+            $linkedResItem = $dispatch->reservation_item_id
+                ? \App\Models\ReservationItem::whereKey($dispatch->reservation_item_id)->lockForUpdate()->first()
+                : null;
+
+            // A reservation link is bound to the exact stock record it locks.
+            // Moving the dispatch to another record would divorce the
+            // accounting, so re-pointing requires delete + re-dispatch.
+            if ($dispatch->reservation_item_id
+                && $linkedResItem
+                && (int) $linkedResItem->item_id !== (int) $newItem->id
+            ) {
+                throw ValidationException::withMessages([
+                    'item_id' =>
+                        'This dispatch is linked to a reservation on another stock record. Delete it and re-dispatch instead of moving it.',
+                ]);
+            }
+
             // The line can never exceed its requested quantity. The old dispatch's
             // quantity is credited back before the new value is counted.
             $lineTotalAfter = $ri->quantity_issued - $oldQty + $newQty;
@@ -1371,9 +1453,17 @@ class RequisitionController extends Controller
             }
 
             // Stock must exist on the exact new record — when it is the same
-            // record, the old quantity is credited back first.
-            $availableOnRecord = (float) $newItem->quantity
-                + ($oldItemId === $newItemId ? $oldQty : 0.0);
+            // record, the old quantity is credited back first. Active
+            // reservation locks count, except the lock of the reservation
+            // linked to this dispatch when it lives on this same record
+            // (that lock is being consumed here, not competed with).
+            $totalReservedEdit = \App\Models\Reservation::reservedQuantityForItem($newItem->id);
+            $creditBackEdit = ($linkedResItem && (int) $linkedResItem->item_id === (int) $newItem->id)
+                ? (float) $linkedResItem->reserved_quantity
+                : 0.0;
+            $availableOnRecord = max(0, (float) $newItem->quantity
+                + ($oldItemId === $newItemId ? $oldQty : 0.0)
+                - max(0, $totalReservedEdit - $creditBackEdit));
 
             if ($newQty > $availableOnRecord + 0.0001) {
                 throw ValidationException::withMessages([
@@ -1473,14 +1563,31 @@ class RequisitionController extends Controller
 
             // ── Reverse/adjust deployed_quantity on any linked reservation_item ─
             // If the quantity changed or the item record changed, the reservation's
-            // deployed_quantity must reflect the new dispatched amount.
-            if ($dispatch->reservation_item_id) {
-                $resItem = \App\Models\ReservationItem::whereKey($dispatch->reservation_item_id)
-                    ->lockForUpdate()->first();
+            // deployed_quantity must reflect the new dispatched amount. Increasing
+            // a deployment requires a live reservation with remaining quantity;
+            // decreasing always applies (it returns stock to the lock).
+            if ($dispatch->reservation_item_id && $linkedResItem) {
+                $resItem = $linkedResItem;
+                $delta   = $newQty - $oldQty;
 
-                if ($resItem) {
-                    // delta = newQty - oldQty: positive means more deployed, negative means less
-                    $delta       = $newQty - $oldQty;
+                if ($delta > 0.0001) {
+                    if (! in_array($resItem->status, \App\Models\ReservationItem::ACTIVE_STATUSES, true)
+                        || ! $resItem->reservation
+                        || ! in_array($resItem->reservation->status, \App\Models\Reservation::ACTIVE_STATUSES, true)
+                    ) {
+                        throw ValidationException::withMessages([
+                            'quantity_issued' => 'The linked reservation is no longer active.',
+                        ]);
+                    }
+
+                    $resRemaining = (float) $resItem->reserved_quantity - (float) $resItem->deployed_quantity;
+                    if ($delta > $resRemaining + 0.0001) {
+                        throw ValidationException::withMessages([
+                            'quantity_issued' =>
+                                'Cannot deploy more than the remaining reserved quantity ('.number_format(max(0, $resRemaining)).').',
+                        ]);
+                    }
+                }
                     $newDeployed = max(0, (float) $resItem->deployed_quantity + $delta);
 
                     $newResStatus = match (true) {
@@ -1495,7 +1602,6 @@ class RequisitionController extends Controller
                     ]);
 
                     $resItem->reservation?->updateOverallStatus();
-                }
             }
 
             $requisition->load('items');
@@ -1539,24 +1645,8 @@ class RequisitionController extends Controller
         $itemId      = $dispatch->item_id;
         $qty         = (float) $dispatch->quantity_issued;
 
-        // Snapshot for the audit trail BEFORE anything is deleted.
-        $audit = [
-            'dispatch_id'     => $dispatch->id,
-            'requisition_item_id' => $requisitionItem->id,
-            'item_id'         => $itemId,
-            'description'     => $dispatch->item->description ?? ($requisitionItem->description ?? '—'),
-            'stock_number'    => $dispatch->item->stock_number ?? null,
-            'warehouse'       => $dispatch->item?->warehouse?->name,
-            'quantity_issued' => $qty,
-            'unit_cost'       => round((float) $dispatch->unit_cost, 2),
-            'engas_unit_cost' => $dispatch->engas_unit_cost !== null ? round((float) $dispatch->engas_unit_cost, 2) : null,
-            'expiration_date' => $dispatch->expiration_date?->toDateString(),
-            'dr_number'       => $dispatch->dr_number,
-            'restored_to_stock_record' => true,
-        ];
-
         try {
-            DB::transaction(function () use ($dispatch, $requisition, $itemId, $qty, $audit) {
+            DB::transaction(function () use ($dispatch, $requisition, $itemId, $qty) {
 
                 // 1) Restore the quantity to the EXACT stock record that was
                 //    deducted. Explicit update() — not increment() — so the
@@ -1582,27 +1672,23 @@ class RequisitionController extends Controller
                     StockCardEntry::recalculateBalancesForItem((int) $itemId);
                 }
 
-                // 3) Audit trail written before the row disappears.
-                RequisitionAuditLog::create([
-                    'requisition_id' => $requisition->id,
-                    'user_id'        => Auth::user()->id,
-                    'action'         => 'dispatch_deleted',
-                    'changed_fields' => $audit,
-                ]);
-
-                // 4) Delete the dispatched item itself.
+                // 3) Delete the dispatched item itself.
                 $dispatch->delete();
 
-                // 5) If this dispatch was linked to a reservation item, reverse
+                // 4) If this dispatch was linked to a reservation item, reverse
                 //    the deployed_quantity and recompute the reservation status
                 //    so it no longer incorrectly shows as DEPLOYED.
                 if ($dispatch->reservation_item_id) {
                     $resItem = \App\Models\ReservationItem::find($dispatch->reservation_item_id);
                     if ($resItem) {
-                        $newDeployed = max(0, (float) $resItem->deployed_quantity - $qty);
+                $newDeployed = max(0, (float) $resItem->deployed_quantity - $qty);
 
-                        $newStatus = match (true) {
-                            $newDeployed <= 0 => \App\Models\ReservationItem::STATUS_ACTIVE,
+                $newStatus = match (true) {
+                    $newDeployed <= 0 && in_array($resItem->reservation?->status, [
+                        \App\Models\Reservation::STATUS_CANCELLED,
+                        \App\Models\Reservation::STATUS_EXPIRED,
+                    ], true) => \App\Models\ReservationItem::STATUS_CANCELLED,
+                    $newDeployed <= 0 => \App\Models\ReservationItem::STATUS_ACTIVE,
                             $newDeployed < (float) $resItem->reserved_quantity - 0.0001
                                               => \App\Models\ReservationItem::STATUS_PARTIALLY_DEPLOYED,
                             default           => \App\Models\ReservationItem::STATUS_DEPLOYED,

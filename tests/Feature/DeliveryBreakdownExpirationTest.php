@@ -113,8 +113,8 @@ class DeliveryBreakdownExpirationTest extends TestCase
     private function breakdownSection(string $html): string
     {
         $start = strpos($html, 'Partial Delivery Breakdown by Item');
-        // The Shipment Records section was removed; the admin edit modal
-        // now directly follows the breakdown card.
+        // Shipment Records was removed; the admin edit modal directly
+        // follows the breakdown card.
         $end   = strpos($html, 'id="editModal"');
         $this->assertNotFalse($start);
         if ($end === false) {
@@ -199,8 +199,8 @@ class DeliveryBreakdownExpirationTest extends TestCase
 
     /**
      * Multiple shipments, multiple items, mixed warehouses: every dispatch row
-     * keeps its own expiration in the per-item breakdown table. (The Shipment
-     * Records section was removed; the breakdown is now the single place.)
+     * keeps its own expiration in the per-item breakdown table. (Shipment
+     * Records was removed; the breakdown is the single place.)
      */
     public function test_shipments_and_items_keep_distinct_expirations_in_breakdown_table(): void
     {
@@ -259,7 +259,7 @@ class DeliveryBreakdownExpirationTest extends TestCase
         $this->assertStringContainsString('Feb 14, 2028', $cannedRows[0]);
         $this->assertStringContainsString('GAMC2', $cannedRows[0]);
 
-        // ── Shipment Records section removed: assert it is gone; the per-item
+        // ── Shipment Records removed: assert it is gone; the per-item
         // breakdown above already verified each row's own expiration. ──
         $this->assertStringNotContainsString('Shipment Records', $html);
     }

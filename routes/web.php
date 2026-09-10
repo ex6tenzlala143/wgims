@@ -70,7 +70,6 @@ Route::middleware('auth')->group(function () {
             Route::get('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}/edit', [DeliverySubsidyController::class, 'editDelivery'])->name('delivery_subsidies.edit_delivery');
             Route::put('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}',      [DeliverySubsidyController::class, 'updateDelivery'])->name('delivery_subsidies.update_delivery');
             Route::delete('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}',   [DeliverySubsidyController::class, 'destroyDelivery'])->name('delivery_subsidies.destroy_delivery');
-            Route::get('/delivery-subsidies/{deliverySubsidy}/audit-log',                  [DeliverySubsidyController::class, 'auditLog'])->name('delivery_subsidies.audit_log');
         });
     });
 
@@ -119,7 +118,6 @@ Route::middleware('auth')->group(function () {
         Route::put('/requisitions/{requisition}/signatories',     [RequisitionController::class, 'updateSignatories'])->name('requisitions.update_signatories');
         Route::get('/requisitions/{requisition}/correction-data', [RequisitionController::class, 'correctionData'])->name('requisitions.correction_data');
         Route::put('/requisitions/{requisition}/correct',         [RequisitionController::class, 'correct'])->name('requisitions.correct');
-        Route::get('/requisitions/{requisition}/audit-log',       [RequisitionController::class, 'auditLog'])->name('requisitions.audit_log');
     });
     
     // Delete — admin only (admin.write already restricts to admin)

@@ -205,18 +205,23 @@ class Requisition extends Model
 
     /**
      * Completion date: the actual date of the final dispatch/issuance that
-     * made this RIS fully fulfilled.
+     * made this RIS fully fulfilled (null unless the RIS is completed).
      *
      * Derived read-only from the dispatch records themselves (max
      * requisition_dispatch_items.created_at across ALL line items), so for a
      * multi-item RIS this is the date the LAST outstanding item was completed
      * — not the date any single item finished. Null when nothing has been
-     * dispatched yet. Never stored, so dispatch edits/deletes are always
-     * reflected; falls back to date_approved at the call site for anomalous
-     * approved-without-dispatch rows.
+     * dispatched yet or the RIS is not fully fulfilled. Never stored, so
+     * dispatch edits/deletes are always reflected; falls back to
+     * date_approved at the call site for anomalous approved-without-dispatch
+     * rows.
      */
     public function getCompletionDateAttribute(): ?\Illuminate\Support\Carbon
     {
+        if ($this->status !== 'approved' || $this->totalRemaining() > 0.0001) {
+            return null;
+        }
+
         $latest = $this->items
             ->flatMap(fn ($ri) => $ri->dispatchItems)
             ->max('created_at');

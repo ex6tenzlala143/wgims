@@ -406,21 +406,13 @@ class RequisitionCorrectionTest extends TestCase
         $this->actingAs($this->staff())
             ->putJson(route('requisitions.correct', $ris->id), $this->correctPayload($ris))
             ->assertStatus(403);
-
-        $this->actingAs($this->staff())
-            ->get(route('requisitions.audit_log', $ris->id))
-            ->assertStatus(403);
     }
 
-    public function test_audit_log_view_is_accessible_to_admin(): void
+    public function test_audit_log_route_has_been_removed(): void
     {
         [, , , $ris] = $this->completedRis();
-        $this->correctRis($ris, ['items' => [0 => ['quantity_requested' => 620]]]);
 
-        $this->actingAs($this->admin())
-            ->get(route('requisitions.audit_log', $ris->id))
-            ->assertOk()
-            ->assertSee('Correction History')
-            ->assertSee('RC Admin', false);
+        $this->expectException(\Symfony\Component\Routing\Exception\RouteNotFoundException::class);
+        route('requisitions.audit_log', $ris->id);
     }
 }

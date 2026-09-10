@@ -299,6 +299,10 @@ class ReservationController extends Controller
 
         $reservationItem->delete();
 
+        // Recompute the header: removing a line can resolve the reservation
+        // back to fully-deployed (or change nothing) — never leave it stale.
+        $reservation->refresh()->updateOverallStatus();
+
         return back()->with('success', 'Item removed from reservation.');
     }
 
@@ -423,7 +427,7 @@ class ReservationController extends Controller
                         $ri->warehouse->name ?? '—',
                         number_format($ri->remaining_quantity),
                         number_format($ri->unit_cost ?? $item->unit_cost ?? 0, 2),
-                        $ri->engas_unit_cost ? ' · ENGAS ₱' . number_format($ri->engas_unit_cost, 2) : '',
+                        $ri->engas_unit_cost !== null ? ' · ENGAS ₱' . number_format($ri->engas_unit_cost, 2) : '',
                         $ri->expiration_date ? ' · Exp: ' . $ri->expiration_date->format('M d, Y') : ''
                     ),
                 ];

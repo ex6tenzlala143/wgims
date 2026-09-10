@@ -169,30 +169,24 @@
                 </tr>
             </thead>
             <tbody>
-                {{-- Use dispatch_rows for accurate stock-level data (one row per dispatch item) --}}
-                @php
-                    $dispatchData = $dispatchRows->map(function($row) use ($items) {
-                        // Find the matching requisition item to get requested quantity
-                        $matchingItem = $items->firstWhere('id', function($ri) use ($row) {
-                            foreach ($ri->dispatchItems as $di) {
-                                if ($di->item_id === $row['stock_no'] || $di->item_id) {
-                                    // Check if this dispatch item belongs to this RI
-                                }
-                            }
-                            return false;
-                        });
-                        return $row;
-                    });
-                @endphp
-
                 @foreach($dispatchRows as $row)
+                @php
+                    $rowRequested   = (float) ($row['qty_requested'] ?? 0);
+                    $rowOutstanding = max(0, $rowRequested - (float) ($row['ri_issued'] ?? 0));
+                @endphp
                 <tr>
                     <td style="font-family:monospace;font-size:11px">{{ $row['stock_no'] ?? '—' }}</td>
                     <td class="left">{{ $row['description'] ?? '—' }}</td>
                     <td class="center">{{ $row['unit'] ?? '—' }}</td>
-                    <td style="text-align:right">{{ number_format($row['qty_issued'] ?? 0) }}</td>
+                    <td style="text-align:right">{{ number_format($rowRequested) }}</td>
                     <td style="text-align:right;color:var(--success);font-weight:600">{{ number_format($row['qty_issued'] ?? 0) }}</td>
-                    <td style="text-align:right"><span class="badge badge-success"><i class="fas fa-check"></i> Fulfilled</span></td>
+                    <td style="text-align:right">
+                        @if($rowOutstanding > 0)
+                            <span class="badge badge-warning">{{ number_format($rowOutstanding) }} left</span>
+                        @else
+                            <span class="badge badge-success"><i class="fas fa-check"></i> Fulfilled</span>
+                        @endif
+                    </td>
                     <td style="text-align:right">{{ number_format($row['unit_cost'] ?? 0, 2) }}</td>
                     @if(auth()->user()->hasAdminAccess())
                     <td style="text-align:right">{{ number_format($row['engas_unit_cost'] ?? 0, 2) }}</td>

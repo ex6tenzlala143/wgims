@@ -22,9 +22,8 @@
         <a href="{{ route('requisitions.signatories', $requisition->id) }}" class="btn btn-outline"><i class="fas fa-eye"></i> View Signatories</a>
         @endif
         <a href="{{ route('requisitions.print', $requisition->id) }}" class="btn btn-outline" target="_blank"><i class="fas fa-print"></i> Print RIS</a>
-        @if(auth()->user()->canWrite())
-        <a href="{{ route('requisitions.audit_log', $requisition->id) }}" class="btn btn-outline"><i class="fas fa-history"></i> Correction History</a>
-        <button type="button" class="btn btn-primary" onclick="openCorrectRisModal()"><i class="fas fa-edit"></i> Edit RIS</button>
+@if(auth()->user()->canWrite())
+<button type="button" class="btn btn-primary" onclick="openCorrectRisModal()"><i class="fas fa-edit"></i> Edit RIS</button>
         @endif
     </div>
 </div>
@@ -36,7 +35,7 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
                 <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="color:var(--text-muted)">RIS ID:</span><strong style="font-family:monospace;color:var(--primary)">{{ $requisition->ris_code ?? $requisition->ris_id }}</strong> <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">(system)</span></div>
                 <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="color:var(--text-muted)">RIS No.:</span><strong>{{ $requisition->ris_number }}</strong> <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">(official)</span></div>
-                <div><span style="color:var(--text-muted)">Date Requested:</span><br>{{ $requisition->date_requested->format('F d, Y') }}</div>
+                <div><span style="color:var(--text-muted)">Date Requested:</span><br>{{ $requisition->date_requested?->format('F d, Y') ?? '—' }}</div>
                 <div><span style="color:var(--text-muted)">Entity Name:</span><br>{{ $requisition->entity_name ?? '-' }}</div>
                 <div><span style="color:var(--text-muted)">Fund Cluster:</span><br>{{ $requisition->fund_cluster ?? '-' }}</div>
                 <div><span style="color:var(--text-muted)">Office:</span><br>{{ $requisition->office ?? '-' }}</div>
@@ -268,7 +267,7 @@
             <table style="width:100%;border-collapse:collapse">
                 <thead>
                     <tr style="background:#f0f9ff">
-                        <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Date</th>
+                        <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Date Dispatched</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Stock No.</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Warehouse</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Qty</th>
@@ -279,9 +278,9 @@
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">ENGAS Total</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Cumulative</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Available Stocks</th>
-                        @if(auth()->user()->canApprove())
-                        <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Actions</th>
-                        @endif
+@if(auth()->user()->canWrite())
+<th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Actions</th>
+@endif
                     </tr>
                 </thead>
                 <tbody>
@@ -291,7 +290,7 @@
                         $cumulativePct = $ri->quantity_requested > 0
                             ? min(100, round($runningTotal / $ri->quantity_requested * 100))
                             : 0;
-                        $engasTotal = $di->engas_unit_cost ? ($di->quantity_issued * $di->engas_unit_cost) : null;
+                        $engasTotal = $di->engas_unit_cost !== null ? ($di->quantity_issued * $di->engas_unit_cost) : null;
                     @endphp
                     <tr style="border-top:1px solid var(--border)">
                         <td style="padding:10px 14px;text-align:center">
@@ -332,14 +331,14 @@
                             ₱{{ number_format($di->quantity_issued * $di->unit_cost, 2) }}
                         </td>
                         <td style="padding:10px 14px;text-align:center">
-                            @if($di->engas_unit_cost)
+                            @if($di->engas_unit_cost !== null)
                                 <span style="color:#059669">₱{{ number_format($di->engas_unit_cost, 2) }}</span>
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
                         </td>
                         <td style="padding:10px 14px;text-align:center">
-                            @if($engasTotal)
+                            @if($engasTotal !== null)
                                 <span style="color:#059669;font-weight:600">₱{{ number_format($engasTotal, 2) }}</span>
                             @else
                                 <span style="color:var(--text-muted)">—</span>

@@ -153,8 +153,9 @@ class StockCardController extends Controller
             ->unique()
             ->sortKeys();
 
-        $descriptions = Item::where('is_active', true)
-            ->select('description')->distinct()
+        $descQuery = Item::where('is_active', true);
+        $this->applyWarehouseScope($descQuery, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
+        $descriptions = $descQuery->select('description')->distinct()
             ->orderBy('description')
             ->pluck('description');
 

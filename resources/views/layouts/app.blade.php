@@ -49,7 +49,7 @@
             --shadow-md: 0 12px 32px rgba(15, 23, 42, 0.16);
 
             --sidebar-width: 190px;
-            --topbar-height: 40px;
+            --topbar-height: 52px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -83,7 +83,7 @@
             overflow: hidden;
         }
         .sidebar-brand {
-            padding: 10px 12px 8px;
+            padding: 9px 12px 8px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
@@ -285,6 +285,15 @@
         .stat-icon.red { background: var(--danger-bg); color: var(--danger); }
         .stat-value { font-size: 18px; font-weight: 700; }
         .stat-label { font-size: 10px; color: var(--text-muted); }
+        details.stat-card { display: block; padding: 0; }
+        details.stat-card > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px; }
+        details.stat-card > summary::-webkit-details-marker { display: none; }
+        details.stat-card > summary::after { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 10px; color: var(--text-muted); margin-left: auto; }
+        details.stat-card[open] > summary::after { content: '\f077'; }
+        .stat-drop-panel { border-top: 1px solid var(--border); max-height: 220px; overflow-y: auto; padding: 4px 12px 10px; }
+        .stat-drop-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+        .stat-drop-row:last-child { border-bottom: none; }
+        .stat-drop-empty { padding: 8px 0; font-size: 11px; color: var(--text-muted); }
 
         /* ── Quick nav cards ──────────────────────────────────────────────── */
         .quick-nav { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -516,6 +525,7 @@
             margin-bottom: 12px;
             overflow: hidden;
         }
+        .shipment-item-card:target { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25); }
         .shipment-item-head {
             display: flex;
             flex-wrap: wrap;

@@ -167,7 +167,7 @@
                                            id="cost-{{ $idx }}"
                                            class="form-control"
                                            value="{{ old("items.{$idx}.unit_cost", $line->unit_cost) }}"
-                                           min="0.01" step="0.01" required
+                                           min="0" step="0.01" required
                                            oninput="recalcRow({{ $idx }})">
                                     @error("items.{$idx}.unit_cost")
                                     <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>

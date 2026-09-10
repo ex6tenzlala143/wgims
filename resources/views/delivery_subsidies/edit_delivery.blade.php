@@ -16,7 +16,15 @@
 </div>
 
 <form action="{{ route('delivery_subsidies.update_delivery', [$deliverySubsidy->id, $delivery->id]) }}" method="POST" id="edit-delivery-form">
-    @csrf @method('PUT')
+@csrf @method('PUT')
+
+@if(!empty($focusedDiId) && $allItemsCount > 1)
+<div style="margin-bottom:12px;padding:10px 14px;background:#f0f9ff;border:1px solid #90cdf4;border-radius:8px;font-size:12px;color:var(--text)">
+    <i class="fas fa-info-circle" style="color:var(--primary)"></i>
+    Showing the 1 selected row out of {{ $allItemsCount }} in this shipment — other lines are unchanged on save.
+    <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $delivery->id]) }}" style="margin-left:8px">Show all</a>
+</div>
+@endif
 
     <div class="edit-layout">
         <div class="edit-main">
@@ -88,7 +96,7 @@
 
                 <div style="padding:20px 20px 4px">
                     @foreach($delivery->items as $idx => $di)
-                    <div class="shipment-item-card">
+                    <div class="shipment-item-card" id="di-{{ $di->id }}">
                         <input type="hidden" name="items[{{ $idx }}][di_id]" value="{{ $di->id }}">
                         @php
                             $dsLine     = $di->deliverySubsidyItem;
@@ -157,8 +165,8 @@
                                        name="items[{{ $idx }}][unit_cost]"
                                        id="cost-{{ $idx }}"
                                        class="form-control"
-                                       value="{{ old("items.{$idx}.unit_cost", $di->unit_cost) }}"
-                                       min="0.01" step="0.01" required
+value="{{ old("items.{$idx}.unit_cost", $di->unit_cost) }}"
+                                           min="0" step="0.01" required
                                        oninput="recalcRow({{ $idx }})">
                                 @error("items.{$idx}.unit_cost")
                                     <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>

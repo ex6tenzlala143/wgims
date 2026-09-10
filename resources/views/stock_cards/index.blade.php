@@ -104,7 +104,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 11 : 9 }}" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 12 : 9 }}" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-book-open" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No items in this category.
                 </td></tr>
@@ -113,8 +113,9 @@
             @if($items->count() > 0)
             <tfoot>
                 <tr style="background:#f0fff4;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 8 : 5 }}" style="text-align:right">TOTAL:</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 6 : 5 }}" style="text-align:right">TOTAL:</td>
                     <td style="text-align:right">{{ number_format($grandBalance) }}</td>
+                    <td></td>
                     @if(auth()->user()->hasAdminAccess())
                     <td></td>
                     <td></td>

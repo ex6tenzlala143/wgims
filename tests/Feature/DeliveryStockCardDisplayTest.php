@@ -110,8 +110,8 @@ class DeliveryStockCardDisplayTest extends TestCase
     private function breakdownSection(string $html): string
     {
         $start = strpos($html, 'Partial Delivery Breakdown by Item');
-        // The Shipment Records section was removed; the admin edit modal
-        // now directly follows the breakdown card.
+        // Shipment Records was removed; the admin edit modal directly
+        // follows the breakdown card.
         $end   = strpos($html, 'id="editModal"');
         $this->assertNotFalse($start);
         if ($end === false) {

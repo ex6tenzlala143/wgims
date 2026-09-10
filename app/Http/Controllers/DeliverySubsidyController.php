@@ -12,9 +12,9 @@ use App\Models\DeliverySubsidyAuditLog;
 use App\Models\DeliverySubsidyItem;
 use App\Models\RequisitionDispatchItem;
 use App\Models\RequisitionItem;
+use App\Models\ReservationItem;
 use App\Models\StockCardEntry;
 use App\Models\StockTransfer;
-use App\Models\StockTransferAuditLog;
 use App\Models\StockTransferItem;
 use App\Models\Supplier;
 use App\Models\SystemNotification;
@@ -37,20 +37,30 @@ class DeliverySubsidyController extends Controller
         $user = Auth::user();
         $query = DeliverySubsidy::with(['supplier', 'warehouse', 'creator', 'items.warehouse', 'deliveries.items.warehouse']);
 
-        $scoped = $this->applyWarehouseScope($query, $user, $request->warehouse_id ? (int) $request->warehouse_id : null);
+        // Multi-warehouse deliveries: a record is visible when its header OR
+        // any of its line items OR any of its dispatches is assigned to a
+        // warehouse the user belongs to. The three alternatives are grouped
+        // so that status/search filters below apply to ALL of them (a bare
+        // orWhereHas would let later AND-filters bind to only one branch).
+        $ids      = $this->getUserWarehouseIds($user);
+        $filterWh = $request->warehouse_id ? (int) $request->warehouse_id : null;
 
-        // Multi-warehouse deliveries: a record is also visible when any of its
-        // line items OR any of its dispatches is assigned to a warehouse the
-        // user belongs to.
-        if ($scoped) {
-            $ids = $this->getUserWarehouseIds($user);
-            if ($ids !== null) {
-                $query->orWhereHas('items', fn ($q) => $q->whereIn('warehouse_id', $ids))
-                    ->orWhereHas('deliveries.items', fn ($q) => $q->whereIn('warehouse_id', $ids));
-            } elseif ($request->warehouse_id) {
-                $query->orWhereHas('items', fn ($q) => $q->where('warehouse_id', (int) $request->warehouse_id))
-                    ->orWhereHas('deliveries.items', fn ($q) => $q->where('warehouse_id', (int) $request->warehouse_id));
+        if ($ids !== null) {
+            if (empty($ids)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($ids) {
+                    $q->whereIn('delivery_subsidies.warehouse_id', $ids)
+                      ->orWhereHas('items', fn ($i) => $i->whereIn('warehouse_id', $ids))
+                      ->orWhereHas('deliveries.items', fn ($i) => $i->whereIn('warehouse_id', $ids));
+                });
             }
+        } elseif ($filterWh) {
+            $query->where(function ($q) use ($filterWh) {
+                $q->where('delivery_subsidies.warehouse_id', $filterWh)
+                  ->orWhereHas('items', fn ($i) => $i->where('warehouse_id', $filterWh))
+                  ->orWhereHas('deliveries.items', fn ($i) => $i->where('warehouse_id', $filterWh));
+            });
         }
 
         if ($request->status) {
@@ -261,15 +271,6 @@ class DeliverySubsidyController extends Controller
         }
 
         return view('delivery_subsidies.show', $data);
-    }
-
-    public function auditLog(DeliverySubsidy $deliverySubsidy)
-    {
-        abort_unless(Auth::user()->isAdmin(), 403);
-        $deliverySubsidy->load(['supplier', 'warehouse']);
-        $logs = $deliverySubsidy->auditLogs()->with('user')->paginate(25);
-
-        return view('delivery_subsidies.audit_log', compact('deliverySubsidy', 'logs'));
     }
 
     public function edit(DeliverySubsidy $deliverySubsidy)
@@ -642,7 +643,7 @@ class DeliverySubsidyController extends Controller
             // auto-deleted: the administrator reviews it and decides afterwards.
             // The snapshot columns (source_ris_number / source_dr_number) survive
             // the hard delete because the FK is nullOnDelete.
-            $markedTransferCount = $this->markTransfersWithSubsidyState($deliverySubsidy, 'deleted', 'subsidy_deleted');
+            $markedTransferCount = $this->markTransfersWithSubsidyState($deliverySubsidy, 'deleted');
 
             // Eager-load to avoid N+1 inside the nested loops
             $deliverySubsidy->loadMissing('deliveries.items.item');
@@ -862,12 +863,11 @@ class DeliverySubsidyController extends Controller
 
     /**
      * Flag every Stock Transfer related to the given Subsidy with a new source
-     * state ('deleted'), snapshot the RIS/DR references, and write
-     * an audit entry on each transfer so the trail outlives the subsidy record.
+     * state ('deleted') and snapshot the RIS/DR references.
      *
      * Returns the number of transfers flagged.
      */
-    private function markTransfersWithSubsidyState(DeliverySubsidy $deliverySubsidy, string $state, string $auditAction): int
+    private function markTransfersWithSubsidyState(DeliverySubsidy $deliverySubsidy, string $state): int
     {
         $transfers = $this->relatedStockTransfers($deliverySubsidy);
 
@@ -877,19 +877,6 @@ class DeliverySubsidyController extends Controller
                 'source_ris_number'     => $transfer->source_ris_number ?: $deliverySubsidy->ris_number,
                 'source_dr_number'      => $transfer->source_dr_number ?: $deliverySubsidy->dr_number,
             ])->save();
-
-            StockTransferAuditLog::create([
-                'stock_transfer_id' => $transfer->id,
-                'transfer_number'   => $transfer->transfer_number,
-                'user_id'           => Auth::user()->id,
-                'action'            => $auditAction,
-                'changed_fields'    => [
-                    'ris_number'     => $deliverySubsidy->ris_number,
-                    'dr_number'      => $deliverySubsidy->dr_number,
-                    'subsidy_status' => $state,
-                    'marked_at'      => now()->toDateTimeString(),
-                ],
-            ]);
         }
 
         return $transfers->count();
@@ -991,6 +978,21 @@ class DeliverySubsidyController extends Controller
             abort(403);
         }
 
+        // Normalize blank cost inputs to null BEFORE validation: HTML forms
+        // submit '' for empty fields, and '' must mean "no cost given" (not a
+        // numeric zero and not a validation trip). An explicitly entered 0
+        // stays 0. Required-ness for dispatching lines is enforced below.
+        $request->merge(['items' => collect($request->input('items', []))->map(function ($line) {
+            if (is_array($line)) {
+                foreach (['unit_cost', 'engas_unit_cost'] as $costField) {
+                    if (array_key_exists($costField, $line) && $line[$costField] === '') {
+                        $line[$costField] = null;
+                    }
+                }
+            }
+            return $line;
+        })->toArray()]);
+
         // Build per-item validation rules. A line is treated as a real dispatch
         // ONLY when it still has a remaining quantity (requested − already
         // delivered) AND a positive quantity is being submitted for it.
@@ -1019,8 +1021,8 @@ class DeliverySubsidyController extends Controller
 
             $rules["items.{$key}.ds_item_id"]      = ['required', 'exists:delivery_subsidy_items,id'];
             $rules["items.{$key}.quantity_delivered"] = ['integer', 'min:0'];
-            $rules["items.{$key}.unit_cost"]          = ['numeric', 'min:0.01'];
-            $rules["items.{$key}.engas_unit_cost"]    = ['numeric', 'min:0'];
+            $rules["items.{$key}.unit_cost"]          = ['nullable', 'numeric', 'min:0'];
+            $rules["items.{$key}.engas_unit_cost"]    = ['nullable', 'numeric', 'min:0'];
             $rules["items.{$key}.warehouse_id"]       = ['exists:warehouses,id'];
             $rules["items.{$key}.expiration_date"]    = ['nullable', 'date'];
             $rules["items.{$key}.dr_number"]          = ['string', 'max:100'];
@@ -1249,7 +1251,7 @@ class DeliverySubsidyController extends Controller
             // (amounts are only known once unit cost is set at dispatch time).
             $dispatchedTotal = DeliverySubsidyItem::where('delivery_subsidy_id', $deliverySubsidy->id)
                 ->get()
-                ->sum(fn ($i) => $i->amount ?? ($i->unit_cost ? $i->quantity * $i->unit_cost : 0));
+                ->sum(fn ($i) => $i->amount ?? ($i->unit_cost !== null ? $i->quantity * $i->unit_cost : 0));
 
             $deliverySubsidy->update(['total_amount' => round($dispatchedTotal, 2)]);
 
@@ -1291,7 +1293,7 @@ class DeliverySubsidyController extends Controller
     /**
      * Admin: show the edit form for a single delivery record.
      */
-    public function editDelivery(DeliverySubsidy $deliverySubsidy, Delivery $delivery)
+    public function editDelivery(Request $request, DeliverySubsidy $deliverySubsidy, Delivery $delivery)
     {
         abort_unless(Auth::user()->canWrite(), 403);
         abort_unless($delivery->delivery_subsidy_id === $deliverySubsidy->id, 404);
@@ -1301,7 +1303,23 @@ class DeliverySubsidyController extends Controller
 
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
 
-        return view('delivery_subsidies.edit_delivery', compact('deliverySubsidy', 'delivery', 'warehouses'));
+        // Optional single-row focus (?di=delivery_item_id) from the Partial
+        // Delivery Breakdown: show only the selected DR row for editing.
+        // Unsubmitted lines are never touched by updateDelivery (it processes
+        // submitted lines only and recomputes the header from the database),
+        // so scoping the form is safe. Unknown IDs fall back to all rows.
+        $allItemsCount = $delivery->items->count();
+        $focusedDiId   = (int) $request->query('di', 0);
+        if ($focusedDiId > 0) {
+            $focused = $delivery->items->firstWhere('id', $focusedDiId);
+            if ($focused) {
+                $delivery->setRelation('items', collect([$focused]));
+            } else {
+                $focusedDiId = 0;
+            }
+        }
+
+        return view('delivery_subsidies.edit_delivery', compact('deliverySubsidy', 'delivery', 'warehouses', 'focusedDiId', 'allItemsCount'));
     }
 
     /**
@@ -1330,6 +1348,19 @@ class DeliverySubsidyController extends Controller
         abort_unless(Auth::user()->canWrite(), 403);
         abort_unless($delivery->delivery_subsidy_id === $deliverySubsidy->id, 404);
 
+        // Same blank-to-null normalization as storeDelivery: '' means "no
+        // cost given", while an explicit 0 stays 0.
+        $request->merge(['items' => collect($request->input('items', []))->map(function ($line) {
+            if (is_array($line)) {
+                foreach (['unit_cost', 'engas_unit_cost'] as $costField) {
+                    if (array_key_exists($costField, $line) && $line[$costField] === '') {
+                        $line[$costField] = null;
+                    }
+                }
+            }
+            return $line;
+        })->toArray()]);
+
         // Dispatch fields are strictly required only for lines that still carry
         // a positive quantity; a line set to 0 fully reverses and needs none.
         $rules = [
@@ -1341,8 +1372,8 @@ class DeliverySubsidyController extends Controller
             'items'              => 'required|array|min:1',
             'items.*.di_id'              => 'required|exists:delivery_items,id',
             'items.*.quantity_delivered' => 'required|integer|min:0',
-            'items.*.unit_cost'          => 'numeric|min:0.01',
-            'items.*.engas_unit_cost'    => 'numeric|min:0',
+            'items.*.unit_cost'          => 'nullable|numeric|min:0',
+            'items.*.engas_unit_cost'    => 'nullable|numeric|min:0',
             'items.*.warehouse_id'       => 'exists:warehouses,id',
             'items.*.expiration_date'    => 'nullable|date',
             'items.*.dr_number'          => 'string|max:100',
@@ -1443,7 +1474,7 @@ class DeliverySubsidyController extends Controller
                 $delta     = $newQty - $oldQty;
                 $oldCost   = (float) $di->unit_cost;
 
-                $dsItem = $di->deliverySubsidyItem;
+                $dsItem = DeliverySubsidyItem::whereKey($di->delivery_subsidy_item_id)->lockForUpdate()->first();
                 $oldItem = Item::whereKey($di->item_id)->lockForUpdate()->first();
 
                 if (! $dsItem) {
@@ -1465,6 +1496,19 @@ class DeliverySubsidyController extends Controller
 
                 // ── Resolve the item that ends up holding the stock ─────────
                 if ($movedWarehouse && $newQty > 0) {
+                    // The old record must actually hold what this receipt put
+                    // there — otherwise moving it would duplicate stock that
+                    // downstream transactions already consumed. Reject instead
+                    // of flooring with max(0, …).
+                    if ($oldQty > (float) $oldItem->quantity + 0.0001) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.warehouse_id" =>
+                                'Cannot move this line: the source record only holds '
+                                .number_format($oldItem->quantity).' of the '
+                                .number_format($oldQty).' received (the rest was already issued or transferred).',
+                        ]);
+                    }
+
                     $baseDescription = $dsItem->item?->description ?? $dsItem->description;
                     $baseUnit        = $dsItem->item?->unit ?? $dsItem->unit;
                     $baseCategory    = $dsItem->item?->category ?? $dsItem->category;
@@ -1492,9 +1536,14 @@ class DeliverySubsidyController extends Controller
 
                         $item->update([
                             'quantity'   => $item->quantity + $newQty,
-                            'unit_cost'  => $newCost,
                             'ris_number' => $deliverySubsidy->ris_number,
                         ]);
+                        // Costs describe live stock: a fully-reversed line
+                        // (newQty 0, possibly blank cost input) must not zero
+                        // the shared record's cost basis or ENGAS.
+                        if ($newQty > 0.0001) {
+                            $item->update(['unit_cost' => $newCost]);
+                        }
                         if ($newEngas !== null) {
                             $item->update(['engas_unit_cost' => $newEngas]);
                         }
@@ -1511,9 +1560,13 @@ class DeliverySubsidyController extends Controller
                     if ($item) {
                         $itemUpdate = [
                             'quantity'   => max(0, $item->quantity + $delta),
-                            'unit_cost'  => $newCost,
                             'ris_number' => $deliverySubsidy->ris_number,
                         ];
+                        // Same rule as the cross-warehouse branch above: costs
+                        // only sync while the line still carries quantity.
+                        if ($newQty > 0.0001) {
+                            $itemUpdate['unit_cost'] = $newCost;
+                        }
                         if ($newEngas !== null) {
                             $itemUpdate['engas_unit_cost'] = $newEngas;
                         }
@@ -1540,20 +1593,25 @@ class DeliverySubsidyController extends Controller
                 // Cascade cost/ENGAS changes to every snapshot referencing this
                 // item — requisition lines, dispatch records, and the full
                 // transfer chain — so reports never show stale values.
+                // Cost changes only cascade while the line still carries
+                // quantity; a full reversal must not rewrite history to zero.
                 $oldEngas = $oldItem?->engas_unit_cost;
-                if (abs($delta) > 0.0001
-                    || abs($oldCost - $newCost) > 0.001
-                    || ($newEngas !== null && abs((float) ($oldEngas ?? 0) - $newEngas) > 0.001)) {
-                    $cascadeSvc->cascadeItemCost($item, $newCost, $newEngas, $cascadeSummary);
+                $costChanged  = $newQty > 0.0001 && abs($oldCost - $newCost) > 0.001;
+                $engasChanged = $newQty > 0.0001 && $newEngas !== null && abs((float) ($oldEngas ?? 0) - $newEngas) > 0.001;
+                if (abs($delta) > 0.0001 || $costChanged || $engasChanged) {
+                    $cascadeSvc->cascadeItemCost($item, $costChanged ? $newCost : $oldCost, $newEngas, $cascadeSummary);
                 }
 
-                // Adjust delivery/subsidy item qty_delivered (never negative)
+                // Adjust delivery/subsidy item qty_delivered (never negative).
+                // The line's own cost basis only syncs while it still carries
+                // quantity — a reversal to zero keeps the last real cost.
                 $newDsDelivered = max(0, $dsItem->qty_delivered + $delta);
-                $dsItem->update([
-                    'qty_delivered' => $newDsDelivered,
-                    'unit_cost'     => $newCost,
-                    'amount'        => round($dsItem->quantity * $newCost, 2),
-                ]);
+                $dsItemUpdate = ['qty_delivered' => $newDsDelivered];
+                if ($newQty > 0.0001) {
+                    $dsItemUpdate['unit_cost'] = $newCost;
+                    $dsItemUpdate['amount']    = round($dsItem->quantity * $newCost, 2);
+                }
+                $dsItem->update($dsItemUpdate);
                 if ($newQty > 0) {
                     $dsItemUpdate = ['item_id' => $item->id];
 
@@ -1662,7 +1720,7 @@ class DeliverySubsidyController extends Controller
             // Recompute subsidy total_amount (amounts live on the line items)
             $dispatchedTotal = DeliverySubsidyItem::where('delivery_subsidy_id', $deliverySubsidy->id)
                 ->get()
-                ->sum(fn ($i) => $i->amount ?? ($i->unit_cost ? $i->quantity * $i->unit_cost : 0));
+                ->sum(fn ($i) => $i->amount ?? ($i->unit_cost !== null ? $i->quantity * $i->unit_cost : 0));
 
             $deliverySubsidy->update(['total_amount' => round($dispatchedTotal, 2)]);
             $deliverySubsidy->updateDeliveryStatus();
@@ -1717,22 +1775,64 @@ class DeliverySubsidyController extends Controller
 
         $delivery->load(['items.item', 'items.deliverySubsidyItem']);
 
+        // Refuse when this shipment's stock was already consumed downstream
+        // (RIS issuance, onward transfer, active reservation lock). Reversing
+        // the receipt underneath those movements would leave them pointing at
+        // stock that no longer exists — resolve them first, same rule as
+        // transfer deletion.
+        $blockers = [];
+        foreach ($delivery->items as $di) {
+            if (! $di->item) {
+                continue;
+            }
+            $label = $di->item->stock_number ?? $di->item->description;
+            $risNos = RequisitionDispatchItem::where('item_id', $di->item_id)
+                ->with('requisitionItem.requisition')
+                ->get()
+                ->map(fn ($d) => $d->requisitionItem?->requisition?->ris_number)
+                ->filter()->unique()->values()->all();
+            foreach ($risNos as $n) {
+                $blockers[] = "RIS {$n} issued {$label}";
+            }
+            $trfNos = StockTransferItem::where('item_id', $di->item_id)
+                ->where('quantity', '>', 0)
+                ->with('transfer')
+                ->get()
+                ->map(fn ($s) => $s->transfer?->transfer_number)
+                ->filter()->unique()->values()->all();
+            foreach ($trfNos as $t) {
+                $blockers[] = "transfer {$t} moved {$label}";
+            }
+            if (ReservationItem::reservedQuantityForItem($di->item_id) > 0.0001) {
+                $blockers[] = "active reservation locks {$label}";
+            }
+        }
+        if (! empty($blockers)) {
+            return back()->with('error', 'This shipment cannot be deleted because its stock has since been used by: '.implode('; ', array_unique($blockers)).'. Resolve those transactions first, then delete this shipment.');
+        }
+
         try {
             DB::transaction(function () use ($deliverySubsidy, $delivery) {
                 $affectedItemIds = [];
 
                 foreach ($delivery->items as $di) {
-                    // Reverse the quantity this shipment added to inventory
-                    if ($di->item) {
-                        $newQty = max(0, $di->item->quantity - $di->quantity_delivered);
-                        $di->item->update(['quantity' => $newQty]);
+                    // Lock the exact record, then reverse the quantity this
+                    // shipment added. The guard above guarantees the record
+                    // still holds at least what is reversed.
+                    $item = $di->item ? Item::whereKey($di->item_id)->lockForUpdate()->first() : null;
+                    if ($item) {
+                        $newQty = max(0, $item->quantity - $di->quantity_delivered);
+                        $item->update(['quantity' => $newQty]);
                         $affectedItemIds[$di->item_id] = true;
                     }
 
                     // Decrement the subsidy line's running delivered total
                     if ($di->deliverySubsidyItem) {
-                        $newDelivered = max(0, $di->deliverySubsidyItem->qty_delivered - $di->quantity_delivered);
-                        $di->deliverySubsidyItem->update(['qty_delivered' => $newDelivered]);
+                        $dsi = DeliverySubsidyItem::whereKey($di->delivery_subsidy_item_id)->lockForUpdate()->first();
+                        if ($dsi) {
+                            $newDelivered = max(0, $dsi->qty_delivered - $di->quantity_delivered);
+                            $dsi->update(['qty_delivered' => $newDelivered]);
+                        }
                     }
 
                     // Remove the stock-card receipt entry for this shipment line

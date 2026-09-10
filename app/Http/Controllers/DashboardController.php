@@ -81,24 +81,79 @@ class DashboardController extends Controller
                 'total_warehouses' => Warehouse::where('is_active', true)->count(),
             ];
 
+            // ── Row 1: on-hand inventory totals (every item) ──
+            $inventoryTotals = DB::table('items')
+                ->join('warehouses', 'warehouses.id', '=', 'items.warehouse_id')
+                ->where('items.is_active', true)
+                ->where('warehouses.is_active', true)
+                ->selectRaw('SUM(items.quantity) as qty, SUM(items.quantity * items.unit_cost) as amt, SUM(items.quantity * COALESCE(items.engas_unit_cost, 0)) as engas')
+                ->first();
+            $inventoryQty   = (float) ($inventoryTotals->qty ?? 0);
+            $inventoryAmt   = (float) ($inventoryTotals->amt ?? 0);
+            $inventoryEngas = (float) ($inventoryTotals->engas ?? 0);
+
+            // Total number of items = distinct item names (descriptions)
+            $inventoryNamesCount = (int) DB::table('items')
+                ->join('warehouses', 'warehouses.id', '=', 'items.warehouse_id')
+                ->where('items.is_active', true)
+                ->where('warehouses.is_active', true)
+                ->distinct('items.description')
+                ->count('items.description');
+
+            // Per-item dropdown data (by description): inventory / delivered /
+            // issued / reserved-remaining quantities for the quantity cards.
+            $inventoryByItem = DB::table('items')
+                ->join('warehouses', 'warehouses.id', '=', 'items.warehouse_id')
+                ->where('items.is_active', true)
+                ->where('warehouses.is_active', true)
+                ->groupBy('items.description')
+                ->havingRaw('SUM(items.quantity) > 0')
+                ->selectRaw('items.description, MIN(items.unit) as unit, SUM(items.quantity) as qty')
+                ->orderByDesc('qty')
+                ->get();
+
+            // ── Row 3: requisitions (count RIS IDs) + issued qty/value/ENGAS ──
+            // (Row 2 count reuses $stats['total_subsidies']; row 4 count reuses
+            // $reservationStats['total'] in the view.)
+            $totalRequisitionsCount = Requisition::count();
+
             // ── NEW: Calculate Requisition/Augmentation totals (actual dispatched) ──
             $rdiTotals = DB::table('requisition_dispatch_items')
                 ->join('requisition_items', 'requisition_items.id', '=', 'requisition_dispatch_items.requisition_item_id')
                 ->join('requisitions', 'requisitions.id', '=', 'requisition_items.requisition_id')
                 ->where('requisitions.status', '!=', 'cancelled')
-                ->selectRaw('SUM(requisition_dispatch_items.quantity_issued) as total_qty, SUM(requisition_dispatch_items.quantity_issued * requisition_dispatch_items.unit_cost) as total_amt')
+                ->selectRaw('SUM(requisition_dispatch_items.quantity_issued) as total_qty, SUM(requisition_dispatch_items.quantity_issued * requisition_dispatch_items.unit_cost) as total_amt, SUM(requisition_dispatch_items.quantity_issued * COALESCE(requisition_dispatch_items.engas_unit_cost, 0)) as total_engas')
                 ->first();
 
             $totalRequisitionQty = (float) ($rdiTotals->total_qty ?? 0);
             $totalRequisitionAmt = (float) ($rdiTotals->total_amt ?? 0);
+            $totalRequisitionEngas = (float) ($rdiTotals->total_engas ?? 0);
+
+            $issuedByItem = DB::table('requisition_dispatch_items')
+                ->join('requisition_items', 'requisition_items.id', '=', 'requisition_dispatch_items.requisition_item_id')
+                ->join('requisitions', 'requisitions.id', '=', 'requisition_items.requisition_id')
+                ->join('items', 'items.id', '=', 'requisition_dispatch_items.item_id')
+                ->where('requisitions.status', '!=', 'cancelled')
+                ->groupBy('items.description')
+                ->selectRaw('items.description, MIN(items.unit) as unit, SUM(requisition_dispatch_items.quantity_issued) as qty')
+                ->orderByDesc('qty')
+                ->get();
 
             // ── NEW: Calculate Subsidy totals (actual delivered) ──
             $subsidyTotals = DB::table('delivery_items')
-                ->selectRaw('SUM(quantity_delivered) as total_qty, SUM(quantity_delivered * unit_cost) as total_amt')
+                ->selectRaw('SUM(quantity_delivered) as total_qty, SUM(quantity_delivered * unit_cost) as total_amt, SUM(quantity_delivered * COALESCE(engas_unit_cost, 0)) as total_engas')
                 ->first();
 
             $totalSubsidyQty = (float) ($subsidyTotals->total_qty ?? 0);
             $totalSubsidyAmt = (float) ($subsidyTotals->total_amt ?? 0);
+            $totalSubsidyEngas = (float) ($subsidyTotals->total_engas ?? 0);
+
+            $deliveredByItem = DB::table('delivery_items')
+                ->join('items', 'items.id', '=', 'delivery_items.item_id')
+                ->groupBy('items.description')
+                ->selectRaw('items.description, MIN(items.unit) as unit, SUM(delivery_items.quantity_delivered) as qty')
+                ->orderByDesc('qty')
+                ->get();
 
             // ── NEW: Calculate Reservation totals (active only) ──
             // Active reservations: ACTIVE and PARTIALLY_DEPLOYED
@@ -116,6 +171,22 @@ class DashboardController extends Controller
                 ->first();
             $totalReservedAmt = (float) ($reservationAmtQuery->total ?? 0);
 
+            // Reservation ENGAS value: remaining_qty * ENGAS unit cost snapshot
+            $reservationEngasQuery = DB::table('reservation_items')
+                ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+                ->selectRaw('SUM((reserved_quantity - deployed_quantity) * COALESCE(engas_unit_cost, 0)) as total')
+                ->first();
+            $totalReservedEngas = (float) ($reservationEngasQuery->total ?? 0);
+
+            $reservedByItem = DB::table('reservation_items')
+                ->join('items', 'items.id', '=', 'reservation_items.item_id')
+                ->whereIn('reservation_items.status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+                ->groupBy('items.description')
+                ->havingRaw('SUM(reservation_items.reserved_quantity - reservation_items.deployed_quantity) > 0')
+                ->selectRaw('items.description, MIN(items.unit) as unit, SUM(reservation_items.reserved_quantity - reservation_items.deployed_quantity) as qty')
+                ->orderByDesc('qty')
+                ->get();
+
             // ── Chart data: Monthly activity comparison ──
             // Compare monthly: requisition dispatched, subsidy delivered, reservation deployed
             $chartData = $this->getMonthlyActivityChart();
@@ -127,9 +198,13 @@ class DashboardController extends Controller
             return view('dashboard.admin', compact(
                 'balances', 'unliquidated', 'stats',
                 'reservationStats', 'recentReservations', 'reservedItems',
-                'totalRequisitionQty', 'totalRequisitionAmt',
-                'totalSubsidyQty', 'totalSubsidyAmt',
-                'totalReservedQty', 'totalReservedAmt',
+                'inventoryQty', 'inventoryAmt', 'inventoryEngas',
+                'inventoryNamesCount',
+                'totalRequisitionQty', 'totalRequisitionAmt', 'totalRequisitionEngas',
+                'totalRequisitionsCount',
+                'totalSubsidyQty', 'totalSubsidyAmt', 'totalSubsidyEngas',
+                'totalReservedQty', 'totalReservedAmt', 'totalReservedEngas',
+                'inventoryByItem', 'deliveredByItem', 'issuedByItem', 'reservedByItem',
                 'chartData'
             ));
         }
@@ -180,6 +255,39 @@ class DashboardController extends Controller
                 ->count(),
         ];
 
+        // ── Row 1: on-hand inventory totals (assigned warehouses) ──
+        $invTotals = DB::table('items')
+            ->whereIn('warehouse_id', $warehouseIds)
+            ->where('is_active', true)
+            ->selectRaw('SUM(quantity) as qty, SUM(quantity * unit_cost) as amt, SUM(quantity * COALESCE(engas_unit_cost, 0)) as engas')
+            ->first();
+        $inventoryQty   = (float) ($invTotals->qty ?? 0);
+        $inventoryAmt   = (float) ($invTotals->amt ?? 0);
+        $inventoryEngas = (float) ($invTotals->engas ?? 0);
+
+        // Total number of items = distinct item names (descriptions)
+        $inventoryNamesCount = (int) DB::table('items')
+            ->whereIn('warehouse_id', $warehouseIds)
+            ->where('is_active', true)
+            ->distinct('description')
+            ->count('description');
+
+        $inventoryByItem = DB::table('items')
+            ->whereIn('warehouse_id', $warehouseIds)
+            ->where('is_active', true)
+            ->groupBy('description')
+            ->havingRaw('SUM(quantity) > 0')
+            ->selectRaw('description, MIN(unit) as unit, SUM(quantity) as qty')
+            ->orderByDesc('qty')
+            ->get();
+
+        // ── Row 3: requisitions touching assigned warehouses (count RIS IDs) ──
+        $totalRequisitionsCount = Requisition::where(function ($q) use ($warehouseIds) {
+            $q->whereHas('items', fn ($i) => $i->whereIn('warehouse_id', $warehouseIds))
+              ->orWhereHas('items.dispatchItems.item', fn ($i) => $i->whereIn('warehouse_id', $warehouseIds))
+              ->orWhereIn('warehouse_id', $warehouseIds);
+        })->count();
+
         // ── NEW: Calculate Requisition/Augmentation totals (warehouse-scoped) ──
         $rdiTotals = DB::table('requisition_dispatch_items')
             ->join('requisition_items', 'requisition_items.id', '=', 'requisition_dispatch_items.requisition_item_id')
@@ -187,18 +295,39 @@ class DashboardController extends Controller
             ->join('items', 'items.id', '=', 'requisition_dispatch_items.item_id')
             ->where('requisitions.status', '!=', 'cancelled')
             ->whereIn('items.warehouse_id', $warehouseIds)
-            ->selectRaw('SUM(requisition_dispatch_items.quantity_issued) as total_qty, SUM(requisition_dispatch_items.quantity_issued * requisition_dispatch_items.unit_cost) as total_amt')
+            ->selectRaw('SUM(requisition_dispatch_items.quantity_issued) as total_qty, SUM(requisition_dispatch_items.quantity_issued * requisition_dispatch_items.unit_cost) as total_amt, SUM(requisition_dispatch_items.quantity_issued * COALESCE(requisition_dispatch_items.engas_unit_cost, 0)) as total_engas')
             ->first();
         $totalRequisitionQty = (float) ($rdiTotals->total_qty ?? 0);
         $totalRequisitionAmt = (float) ($rdiTotals->total_amt ?? 0);
+        $totalRequisitionEngas = (float) ($rdiTotals->total_engas ?? 0);
+
+        $issuedByItem = DB::table('requisition_dispatch_items')
+            ->join('requisition_items', 'requisition_items.id', '=', 'requisition_dispatch_items.requisition_item_id')
+            ->join('requisitions', 'requisitions.id', '=', 'requisition_items.requisition_id')
+            ->join('items', 'items.id', '=', 'requisition_dispatch_items.item_id')
+            ->where('requisitions.status', '!=', 'cancelled')
+            ->whereIn('items.warehouse_id', $warehouseIds)
+            ->groupBy('items.description')
+            ->selectRaw('items.description, MIN(items.unit) as unit, SUM(requisition_dispatch_items.quantity_issued) as qty')
+            ->orderByDesc('qty')
+            ->get();
 
         // ── NEW: Calculate Subsidy totals (warehouse-scoped) ──
         $subsidyTotals = DB::table('delivery_items')
             ->whereIn('delivery_items.warehouse_id', $warehouseIds)
-            ->selectRaw('SUM(delivery_items.quantity_delivered) as total_qty, SUM(delivery_items.quantity_delivered * delivery_items.unit_cost) as total_amt')
+            ->selectRaw('SUM(delivery_items.quantity_delivered) as total_qty, SUM(delivery_items.quantity_delivered * delivery_items.unit_cost) as total_amt, SUM(delivery_items.quantity_delivered * COALESCE(delivery_items.engas_unit_cost, 0)) as total_engas')
             ->first();
         $totalSubsidyQty = (float) ($subsidyTotals->total_qty ?? 0);
         $totalSubsidyAmt = (float) ($subsidyTotals->total_amt ?? 0);
+        $totalSubsidyEngas = (float) ($subsidyTotals->total_engas ?? 0);
+
+        $deliveredByItem = DB::table('delivery_items')
+            ->join('items', 'items.id', '=', 'delivery_items.item_id')
+            ->whereIn('delivery_items.warehouse_id', $warehouseIds)
+            ->groupBy('items.description')
+            ->selectRaw('items.description, MIN(items.unit) as unit, SUM(delivery_items.quantity_delivered) as qty')
+            ->orderByDesc('qty')
+            ->get();
 
         // ── NEW: Calculate Reservation totals (warehouse-scoped) ──
         $riTotals = DB::table('reservation_items')
@@ -216,6 +345,24 @@ class DashboardController extends Controller
             ->first();
         $totalReservedAmt = (float) ($reservationAmtQuery->total ?? 0);
 
+        // Reservation ENGAS value: remaining_qty * ENGAS unit cost snapshot
+        $reservationEngasQuery = DB::table('reservation_items')
+            ->whereIn('status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+            ->whereIn('warehouse_id', $warehouseIds)
+            ->selectRaw('SUM((reserved_quantity - deployed_quantity) * COALESCE(engas_unit_cost, 0)) as total')
+            ->first();
+        $totalReservedEngas = (float) ($reservationEngasQuery->total ?? 0);
+
+        $reservedByItem = DB::table('reservation_items')
+            ->join('items', 'items.id', '=', 'reservation_items.item_id')
+            ->whereIn('reservation_items.status', ['ACTIVE', 'PARTIALLY_DEPLOYED'])
+            ->whereIn('reservation_items.warehouse_id', $warehouseIds)
+            ->groupBy('items.description')
+            ->havingRaw('SUM(reservation_items.reserved_quantity - reservation_items.deployed_quantity) > 0')
+            ->selectRaw('items.description, MIN(items.unit) as unit, SUM(reservation_items.reserved_quantity - reservation_items.deployed_quantity) as qty')
+            ->orderByDesc('qty')
+            ->get();
+
         // ── Chart data (warehouse-scoped) ──
         $chartData = $this->getMonthlyActivityChart($warehouseIds);
 
@@ -231,9 +378,13 @@ class DashboardController extends Controller
         return view('dashboard.warehouse', compact(
             'warehouse', 'assignedWarehouses', 'accountBalances', 'stats',
             'reservationStats', 'recentReservations', 'reservedItems',
-            'totalRequisitionQty', 'totalRequisitionAmt',
-            'totalSubsidyQty', 'totalSubsidyAmt',
-            'totalReservedQty', 'totalReservedAmt',
+            'inventoryQty', 'inventoryAmt', 'inventoryEngas',
+            'inventoryNamesCount',
+            'totalRequisitionQty', 'totalRequisitionAmt', 'totalRequisitionEngas',
+            'totalRequisitionsCount',
+            'totalSubsidyQty', 'totalSubsidyAmt', 'totalSubsidyEngas',
+            'totalReservedQty', 'totalReservedAmt', 'totalReservedEngas',
+            'inventoryByItem', 'deliveredByItem', 'issuedByItem', 'reservedByItem',
             'chartData'
         ));
     }
@@ -528,21 +679,21 @@ class DashboardController extends Controller
                     'label' => 'Requisition Dispatched',
                     'data' => $reqSeries,
                     'borderColor' => '#3b82f6',
-                    'backgroundColor' => 'rgba(59, 130, 246, 0.1)',
+                    'backgroundColor' => 'rgba(59, 130, 246, 0.75)',
                     'fill' => true,
                 ],
                 [
                     'label' => 'Subsidy Delivered',
                     'data' => $subSeries,
                     'borderColor' => '#10b981',
-                    'backgroundColor' => 'rgba(16, 185, 129, 0.1)',
+                    'backgroundColor' => 'rgba(16, 185, 129, 0.75)',
                     'fill' => true,
                 ],
                 [
                     'label' => 'Reservation Deployed',
                     'data' => $resSeries,
                     'borderColor' => '#f59e0b',
-                    'backgroundColor' => 'rgba(245, 158, 11, 0.1)',
+                    'backgroundColor' => 'rgba(245, 158, 11, 0.75)',
                     'fill' => true,
                 ],
             ],

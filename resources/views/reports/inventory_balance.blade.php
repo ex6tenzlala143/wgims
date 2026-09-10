@@ -156,7 +156,7 @@
                     </td>
                     <td>{{ $item->unit }}</td>
                     <td style="text-align:right">
-                        @php $resQty = \App\Models\ReservationItem::reservedQuantityForItem($item->id); @endphp
+                        @php $resQty = (float) ($reservedMap[$item->id] ?? 0); @endphp
                         <div style="font-weight:600">{{ number_format($item->quantity) }}</div>
                         @if($resQty > 0)
                         <div style="font-size:10px;margin-top:2px;line-height:1.5">

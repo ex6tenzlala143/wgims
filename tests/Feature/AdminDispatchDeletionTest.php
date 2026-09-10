@@ -18,16 +18,17 @@ class AdminDispatchDeletionTest extends TestCase
 {
     use RefreshDatabase;
 
-    public static bool $forceAuditFailure = false;
+    public static bool $forceDeleteFailure = false;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         // Registered once per test run; only fires while the rollback test
-        // flips the flag, simulating a crash mid-reversal.
-        RequisitionAuditLog::creating(function () {
-            if (self::$forceAuditFailure) {
+        // flips the flag, simulating a crash mid-reversal (on the dispatch
+        // row delete itself, after stock was already restored in-DB).
+        RequisitionDispatchItem::deleting(function () {
+            if (self::$forceDeleteFailure) {
                 throw new \RuntimeException('Simulated failure during reversal.');
             }
         });
@@ -198,11 +199,11 @@ class AdminDispatchDeletionTest extends TestCase
         $this->assertEquals(100, (float) $receipt->balance_qty);
         $this->assertEquals(100 * 950, (float) $receipt->balance_total_cost);
 
-        // Audit trail records who deleted what
-        $log = RequisitionAuditLog::where('requisition_id', $ris->id)
-            ->where('action', 'dispatch_deleted')
-            ->firstOrFail();
-        $this->assertEquals(40, (float) $log->changed_fields['quantity_issued']);
+// No delete-audit rows are written anymore; the reversal itself is verified below.
+$log = RequisitionAuditLog::where('requisition_id', $ris->id)
+    ->where('action', 'dispatch_deleted')
+    ->first();
+$this->assertNull($log);
     }
 
     public function test_deletion_returns_stock_to_the_exact_record_not_a_same_name_record(): void
@@ -310,12 +311,12 @@ class AdminDispatchDeletionTest extends TestCase
 
         $this->assertEquals(60, (float) $item->fresh()->quantity);
 
-        self::$forceAuditFailure = true;
+        self::$forceDeleteFailure = true;
         try {
             $this->actingAs($this->adminUser());
             $this->deleteDispatch($disp)->assertStatus(500);
         } finally {
-            self::$forceAuditFailure = false;
+            self::$forceDeleteFailure = false;
         }
 
         // Nothing was partially changed: stock, dispatch, card, cache, status

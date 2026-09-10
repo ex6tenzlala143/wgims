@@ -9,7 +9,7 @@
         <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / Suppliers</div>
     </div>
     @if(auth()->user()->canCreate())
-    <a href="{{ route('suppliers.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Supplier</a>
+    <button type="button" class="btn btn-primary" onclick="openAddSupplierModal()"><i class="fas fa-plus"></i> Add Supplier</button>
     @endif
 </div>
 
@@ -84,4 +84,75 @@
     <div class="card-footer">{{ $suppliers->links() }}</div>
     @endif
 </div>
+
+{{-- ── Add Supplier Modal ───────────────────────────────────────────────── --}}
+<div class="modal-overlay" id="addSupplierModal" aria-hidden="true">
+    <div class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="addSupplierTitle" style="max-width:560px;height:auto;max-height:min(85vh,640px)">
+        <div class="modal-header">
+            <h2 id="addSupplierTitle"><i class="fas fa-plus"></i> Add Supplier</h2>
+            <button type="button" class="modal-close" onclick="closeAddSupplierModal()">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('suppliers.store') }}">
+            @csrf
+            <div class="modal-body">
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label class="form-label">Supplier Name <span class="req">*</span></label>
+                        <input type="text" name="name" class="form-control {{ $errors->has('name') ? 'is-invalid' : '' }}" value="{{ old('name') }}" required>
+                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">TIN Number</label>
+                        <input type="text" name="tin" class="form-control" value="{{ old('tin') }}" placeholder="000-000-000">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Address</label>
+                    <textarea name="address" class="form-control" rows="2">{{ old('address') }}</textarea>
+                </div>
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label class="form-label">Contact Person</label>
+                        <input type="text" name="contact_person" class="form-control" value="{{ old('contact_person') }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="text" name="phone" class="form-control" value="{{ old('phone') }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" value="{{ old('email') }}">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeAddSupplierModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Supplier</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+function openAddSupplierModal() {
+    const modal = document.getElementById('addSupplierModal');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+}
+function closeAddSupplierModal() {
+    const modal = document.getElementById('addSupplierModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+}
+document.getElementById('addSupplierModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAddSupplierModal();
+});
+@if($errors->any())
+openAddSupplierModal();
+@endif
+</script>
+@endpush
 @endsection
