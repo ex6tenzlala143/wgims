@@ -43,6 +43,7 @@
                         <option value="supply_custodian" {{ old('role')=='supply_custodian'?'selected':'' }}>Supply Custodian</option>
                         <option value="center_head" {{ old('role')=='center_head'?'selected':'' }}>Warehouse Head</option>
                         <option value="center_staff" {{ old('role')=='center_staff'?'selected':'' }}>Warehouse Staff</option>
+                        <option value="delivery_updater" {{ old('role')=='delivery_updater'?'selected':'' }}>Delivery Updater</option>
                     </select>
                 </div>
             </div>
@@ -53,7 +54,7 @@
                 <ul id="role-info-list" style="margin-top:6px;padding-left:20px"></ul>
             </div>
 
-            <div class="form-group" id="warehouse-group" style="{{ in_array(old('role'), ['admin', 'warehouse_manager']) ? 'display:none' : '' }}">
+            <div class="form-group" id="warehouse-group" style="{{ in_array(old('role'), ['admin', 'warehouse_manager', 'delivery_updater']) ? 'display:none' : '' }}">
                 <label class="form-label">
                     Warehouse Assignment <span class="req">*</span>
                     <small style="color:var(--text-muted);font-weight:400"> — select one or more; the first selected becomes the primary</small>
@@ -122,13 +123,14 @@ const roleInfo = {
     supply_custodian: { title: 'Supply Custodian', perms: ['Manage warehouse inventory', 'Create and view Delivery/Subsidies', 'Create and approve RIS', 'View own warehouse data only'] },
     center_head: { title: 'Warehouse Head', perms: ['View warehouse inventory', 'Create RIS', 'Approve RIS', 'View own warehouse data only'] },
     center_staff: { title: 'Warehouse Staff', perms: ['View warehouse inventory', 'Create RIS', 'View own warehouse data only'] },
+    delivery_updater: { title: 'Delivery Updater', perms: ['View all warehouses data', 'Confirm delivered dispatch lines (with date + notes)', 'Admins are notified, incl. when an RIS is fully delivered', 'Cannot create, edit, approve, or delete any records'] },
 };
 
 function toggleCenter() {
     const role = document.getElementById('role').value;
     const cg = document.getElementById('warehouse-group');
     const ri = document.getElementById('role-info');
-    cg.style.display = (role === 'admin' || role === 'warehouse_manager') ? 'none' : '';
+    cg.style.display = (role === 'admin' || role === 'warehouse_manager' || role === 'delivery_updater') ? 'none' : '';
     if (role && roleInfo[role]) {
         ri.style.display = 'block';
         document.getElementById('role-info-title').textContent = roleInfo[role].title + ' Permissions:';

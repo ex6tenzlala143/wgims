@@ -86,6 +86,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/requisitions/{requisition}/signatories',         [RequisitionController::class, 'signatories'])->name('requisitions.signatories');
     Route::get('/requisitions/{requisition}/print',               [RequisitionController::class, 'printRis'])->name('requisitions.print');
 
+    // Delivery confirmation (delivery updater workflow). auth-only like the
+    // approve routes — the controller enforces canConfirmDelivery()
+    // (admin + warehouse manager + delivery updater).
+    Route::post('/requisitions/dispatch/{dispatch}/confirm-delivery',   [RequisitionController::class, 'confirmDelivery'])->name('requisitions.dispatch_confirm_delivery');
+    Route::post('/requisitions/dispatch/{dispatch}/unconfirm-delivery', [RequisitionController::class, 'unconfirmDelivery'])->name('requisitions.dispatch_unconfirm_delivery');
+
     // ── Reservations ──────────────────────────────────────────────────────────
     Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
     Route::middleware('admin.create')->group(function () {
@@ -149,8 +155,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/transfers/{transfer}/dispatch', [StockTransferController::class, 'processDispatch'])->name('transfers.process_dispatch');
     });
     Route::get('/transfers/{transfer}',          [StockTransferController::class, 'show'])->name('transfers.show');
-    // Edit / Update / Delete — admin only
-    Route::middleware('admin')->group(function () {
+    // Edit / Update / Delete — admin only (controllers enforce canWrite; the
+    // route matches so warehouse managers get 403 up front, not mid-page)
+    Route::middleware('admin.write')->group(function () {
         Route::get('/transfers/{transfer}/edit', [StockTransferController::class, 'edit'])->name('transfers.edit');
         Route::put('/transfers/{transfer}',      [StockTransferController::class, 'update'])->name('transfers.update');
         Route::delete('/transfers/{transfer}',   [StockTransferController::class, 'destroy'])->name('transfers.destroy');
@@ -210,8 +217,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/users/{user}/edit',  [UserController::class, 'edit'])->name('users.edit');
     });
 
-    // Username availability check
-    Route::get('/api/check-username', [UserController::class, 'checkUsername'])->name('users.check_username');
+    // Username availability check (admin user form only)
+    Route::get('/api/check-username', [UserController::class, 'checkUsername'])->middleware('admin.only.strict')->name('users.check_username');
 
     // ── API helpers (throttled: 120 requests/minute per user) ────────────────
     Route::middleware('throttle:120,1')->group(function () {
@@ -221,10 +228,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/reservations/{reservation}/items', [ReservationController::class, 'getReservationItems'])->name('reservations.api.items');
 
     Route::get('/api/check-dr', function (Request $req) {
+        // Serves delivery forms only — creating rights required.
+        abort_unless(auth()->user()->canCreate(), 403);
         return response()->json(['exists' => DeliverySubsidy::where('dr_number', $req->string('dr_number'))->exists()]);
     })->name('ds.check_number');
 
     Route::get('/api/item-stock-card', function (Request $req) {
+        // Serves delivery forms only — creating rights required.
+        abort_unless(auth()->user()->canCreate(), 403);
         $item = Item::find($req->integer('item_id'));
         if (! $item) {
             return response()->json(['found' => false, 'stock_number' => null, 'preview' => null]);

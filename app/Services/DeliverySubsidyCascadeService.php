@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\DeliverySubsidyAuditLog;
 use App\Models\Item;
 use App\Models\RequisitionDispatchItem;
-use App\Models\RequisitionItem;
 use App\Models\StockCardEntry;
 use App\Models\StockTransferItem;
 use App\Models\Supplier;
@@ -24,43 +23,6 @@ use Illuminate\Support\Facades\DB;
  */
 class DeliverySubsidyCascadeService
 {
-    /**
-     * Cascade a unit-cost change for a single DeliverySubsidyItem line.
-     *
-     * Touches:
-     *   - source item.unit_cost
-     *   - delivery stock card entries (receipt_unit_cost, balance_unit_cost)
-     *   - all items in the transfer chain (unit_cost)
-     *   - transfer_in / transfer_out stock card entries in the chain
-     *   - RequisitionItems tied to any item in the chain
-     *
-     * @param  Item   $sourceItem   The item directly linked to the DSI
-     * @param  float  $newCost
-     * @param  array  &$summary     Accumulates affected record counts for audit
-     */
-    public function cascadeUnitCost(Item $sourceItem, float $newCost, array &$summary): void
-    {
-        // 1. Update the source item
-        $sourceItem->update(['unit_cost' => $newCost]);
-        $summary['items_updated'][] = $sourceItem->id;
-
-        // 2. Delivery stock card entries for the source item
-        $updated = StockCardEntry::where('item_id', $sourceItem->id)
-            ->where('reference_type', 'delivery')
-            ->update([
-                'receipt_unit_cost' => $newCost,
-                'balance_unit_cost' => $newCost,
-            ]);
-        $summary['stock_card_delivery_rows'] = ($summary['stock_card_delivery_rows'] ?? 0) + $updated;
-
-        // 3. Requisition items: unit_cost column was dropped in migration 2026_08_24_210730.
-        // Cost data now lives exclusively on requisition_dispatch_items.
-        $summary['requisition_rows'] = ($summary['requisition_rows'] ?? 0);
-
-        // 4. Walk the full transfer chain recursively
-        $this->walkTransferChain($sourceItem->id, $newCost, $summary, []);
-    }
-
     /**
      * Cascade a RIS-number change to an item and the full transfer chain.
      *
@@ -104,8 +66,8 @@ class DeliverySubsidyCascadeService
      * updated it.
      *
      * Touches:
-     *   - RequisitionItems tied to the item (unit_cost, engas_unit_cost)
      *   - RequisitionDispatchItems tied to the item (unit_cost, engas_unit_cost)
+     *     (requisition_items has no cost columns since 2026_08_24_210730)
      *   - StockTransferItems where the item is the source (unit_cost)
      *   - every destination item in the transfer chain (unit_cost,
      *     engas_unit_cost when provided) plus their snapshot rows, recursively
@@ -198,72 +160,6 @@ class DeliverySubsidyCascadeService
     // ─────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Recursively walk the transfer chain from $sourceItemId and apply the
-     * new unit cost to every destination item and its stock card entries.
-     *
-     * @param  int    $sourceItemId   Current node in the chain
-     * @param  float  $newCost
-     * @param  array  &$summary
-     * @param  array  $visited        Guard against cycles (should not occur in practice)
-     */
-    private function walkTransferChain(int $sourceItemId, float $newCost, array &$summary, array $visited): void
-    {
-        if (in_array($sourceItemId, $visited, true)) {
-            return; // cycle guard
-        }
-        $visited[] = $sourceItemId;
-
-        // Find all transfer items where this item is the source
-        $transferItems = StockTransferItem::with(['destinationItem', 'transfer'])
-            ->where('item_id', $sourceItemId)
-            ->get();
-
-        foreach ($transferItems as $sti) {
-            $destItem = $sti->destinationItem;
-            if (! $destItem) {
-                continue;
-            }
-
-            // Update destination item unit cost
-            $destItem->update(['unit_cost' => $newCost]);
-            $summary['items_updated'][] = $destItem->id;
-
-            // Update StockTransferItem unit_cost
-            $sti->update(['unit_cost' => $newCost]);
-
-            // Update transfer_out entry at source warehouse
-            $outUpdated = StockCardEntry::where('reference_type', 'transfer_out')
-                ->where('reference_id', $sti->stock_transfer_id)
-                ->where('item_id', $sourceItemId)
-                ->update([
-                    'balance_unit_cost'  => $newCost,
-                    'balance_total_cost' => DB::raw('balance_qty * ' . (float) $newCost),
-                ]);
-            $summary['stock_card_transfer_rows'] = ($summary['stock_card_transfer_rows'] ?? 0) + $outUpdated;
-
-            // Update transfer_in entry at destination warehouse
-            $inUpdated = StockCardEntry::where('reference_type', 'transfer_in')
-                ->where('reference_id', $sti->stock_transfer_id)
-                ->where('item_id', $destItem->id)
-                ->update([
-                    'receipt_unit_cost'  => $newCost,
-                    'receipt_total_cost' => DB::raw('receipt_qty * ' . (float) $newCost),
-                    'balance_unit_cost'  => $newCost,
-                    'balance_total_cost' => DB::raw('balance_qty * ' . (float) $newCost),
-                ]);
-            $summary['stock_card_transfer_rows'] = ($summary['stock_card_transfer_rows'] ?? 0) + $inUpdated;
-
-            // Update requisition items at destination
-            $rqUpdated = RequisitionItem::where('item_id', $destItem->id)
-                ->update(['unit_cost' => $newCost]);
-            $summary['requisition_rows'] = ($summary['requisition_rows'] ?? 0) + $rqUpdated;
-
-            // Recurse: destination item may itself have been transferred further
-            $this->walkTransferChain($destItem->id, $newCost, $summary, $visited);
-        }
-    }
 
     /**
      * Recursively walk the transfer chain and cascade a RIS number update.

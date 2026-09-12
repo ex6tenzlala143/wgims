@@ -349,7 +349,7 @@ class RequisitionController extends Controller
     {
         $user = Auth::user();
         abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
-        $requisition->load(['warehouse', 'creator', 'approver', 'items.item', 'items.warehouse', 'items.dispatchItems.item.warehouse']);
+        $requisition->load(['warehouse', 'creator', 'approver', 'items.item', 'items.warehouse', 'items.dispatchItems.item.warehouse', 'items.dispatchItems.deliverer']);
 
         // Available stock per dispatched stock record, in ONE grouped query
         // (avoids N+1 from the per-item reserved_quantity accessor). Used by
@@ -1724,6 +1724,130 @@ class RequisitionController extends Controller
         return response()->json(['redirect' => route('requisitions.show', $requisition->id)]);
     }
 
+    /**
+     * Confirm that an issued dispatch line was physically delivered to the
+     * requesting party (delivery updater workflow).
+     *
+     * Who: admin, warehouse manager, delivery updater (canConfirmDelivery).
+     * Effect: stamps delivered_at/delivered_by/delivery_notes ONLY — stock,
+     * costs, DR numbers, and fulfilment status are never touched.
+     * Notifies all admins + warehouse managers; sends a "fully delivered"
+     * notice when the last open line of the RIS is confirmed.
+     */
+    public function confirmDelivery(Request $request, RequisitionDispatchItem $dispatch)
+    {
+        $user = Auth::user();
+        abort_unless($user->canConfirmDelivery(), 403, 'Only administrators, warehouse managers, and delivery updaters can confirm deliveries.');
+
+        $dispatch->load(['requisitionItem.requisition', 'item.warehouse']);
+        $requisitionItem = $dispatch->requisitionItem;
+        abort_unless($requisitionItem && $requisitionItem->requisition, 404, 'The dispatch is not linked to a valid requisition.');
+        abort_unless($this->userCanAccessRequisition($user, $requisitionItem->requisition), 403);
+
+        $validated = $request->validate([
+            'delivered_date' => 'nullable|date',
+            'delivery_notes' => 'nullable|string|max:1000',
+        ]);
+
+        if ($dispatch->delivered_at !== null) {
+            return back()->with('warning', 'This dispatch line was already confirmed as delivered.');
+        }
+
+        $requisition = $requisitionItem->requisition;
+        $fullyDelivered = false;
+
+        DB::transaction(function () use ($dispatch, $requisition, $user, $validated, &$fullyDelivered) {
+            RequisitionDispatchItem::whereKey($dispatch->id)->lockForUpdate()->firstOrFail();
+
+            $dispatch->update([
+                'delivered_at'   => $validated['delivered_date'] ?? now(),
+                'delivered_by'   => $user->id,
+                'delivery_notes' => $validated['delivery_notes'] ?? null,
+            ]);
+
+            $fullyDelivered = $requisition->fresh()->isDeliveryConfirmed();
+        });
+
+        $this->notifyDeliveryConfirmed($dispatch->fresh(), $user, $fullyDelivered);
+
+        return back()->with(
+            'success',
+            $fullyDelivered
+                ? "All lines of RIS #{$requisition->ris_number} are now confirmed delivered."
+                : 'Delivery confirmed and the administrators have been notified.'
+        );
+    }
+
+    /**
+     * Withdraw a delivery confirmation (e.g. recorded on the wrong line).
+     * Same roles as confirm. Clears the three delivery fields only.
+     */
+    public function unconfirmDelivery(Request $request, RequisitionDispatchItem $dispatch)
+    {
+        $user = Auth::user();
+        abort_unless($user->canConfirmDelivery(), 403, 'Only administrators, warehouse managers, and delivery updaters can update delivery confirmations.');
+
+        $dispatch->load(['requisitionItem.requisition']);
+        $requisitionItem = $dispatch->requisitionItem;
+        abort_unless($requisitionItem && $requisitionItem->requisition, 404, 'The dispatch is not linked to a valid requisition.');
+        abort_unless($this->userCanAccessRequisition($user, $requisitionItem->requisition), 403);
+
+        if ($dispatch->delivered_at === null) {
+            return back()->with('warning', 'This dispatch line has no delivery confirmation to withdraw.');
+        }
+
+        DB::transaction(function () use ($dispatch) {
+            RequisitionDispatchItem::whereKey($dispatch->id)->lockForUpdate()->firstOrFail();
+
+            $dispatch->update([
+                'delivered_at'   => null,
+                'delivered_by'   => null,
+                'delivery_notes' => null,
+            ]);
+        });
+
+        return back()->with('success', 'Delivery confirmation withdrawn.');
+    }
+
+    /**
+     * Notify every active admin + warehouse manager about a delivery
+     * confirmation. When the RIS just became fully delivered, the message
+     * says so explicitly.
+     */
+    private function notifyDeliveryConfirmed(RequisitionDispatchItem $dispatch, User $actor, bool $fullyDelivered): void
+    {
+        $requisition = $dispatch->requisitionItem->requisition;
+        $itemLabel   = $dispatch->item
+            ? "{$dispatch->item->description} (" . number_format((float) $dispatch->quantity_issued) . ' ' . $dispatch->item->unit . ')'
+            : 'Issued items';
+        $drLabel = $dispatch->dr_number ? "DR #{$dispatch->dr_number}" : 'no DR#';
+
+        $recipients = User::where('is_active', true)
+            ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_WAREHOUSE_MANAGER])
+            ->whereKeyNot($actor->id)
+            ->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $now = now();
+        $notifRows = $recipients->map(fn ($recipient) => [
+            'user_id'    => $recipient->id,
+            'title'      => $fullyDelivered ? 'RIS Fully Delivered' : 'Delivery Confirmed',
+            'message'    => $fullyDelivered
+                ? "All lines of RIS #{$requisition->ris_number} are confirmed delivered. Last: {$itemLabel}, {$drLabel}, confirmed by {$actor->name}."
+                : "Delivery confirmed for RIS #{$requisition->ris_number}: {$itemLabel}, {$drLabel}, confirmed by {$actor->name}.",
+            'type'       => $fullyDelivered ? 'success' : 'info',
+            'link'       => route('requisitions.show', $requisition->id),
+            'is_read'    => false,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->toArray();
+
+        SystemNotification::insert($notifRows);
+    }
+
     public function signatories(Requisition $requisition)
     {
         $user = Auth::user();
@@ -1767,7 +1891,30 @@ class RequisitionController extends Controller
         abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
         $requisition->load(['warehouse', 'items.item', 'items.warehouse', 'items.dispatchItems.item.warehouse', 'creator', 'approver']);
 
-        return view('requisitions.print', compact('requisition'));
+        // Live availability per dispatched stock record, in ONE grouped query
+        // (same as show()). The requisition_items.stock_available flag is a
+        // frozen dispatch-time snapshot and is NOT used here — it goes stale
+        // whenever stock moves afterwards. Available = on-hand − reserved.
+        $dispatchItemIds = $requisition->items
+            ->flatMap(fn ($ri) => $ri->dispatchItems->pluck('item_id'))
+            ->filter()->unique()->values();
+        $reservedMap = $dispatchItemIds->isNotEmpty()
+            ? ReservationItem::whereIn('item_id', $dispatchItemIds)
+                ->whereIn('status', ReservationItem::ACTIVE_STATUSES)
+                ->groupBy('item_id')
+                ->selectRaw('item_id, SUM(reserved_quantity) as total_reserved')
+                ->pluck('total_reserved', 'item_id')
+            : collect();
+        $stockAvailability = [];
+        foreach ($requisition->items as $ri) {
+            foreach ($ri->dispatchItems as $di) {
+                if ($di->item && ! isset($stockAvailability[$di->item->id])) {
+                    $stockAvailability[$di->item->id] = max(0, (float) $di->item->quantity - (float) ($reservedMap[$di->item->id] ?? 0));
+                }
+            }
+        }
+
+        return view('requisitions.print', compact('requisition', 'stockAvailability'));
     }
 
     /**
@@ -1777,7 +1924,7 @@ class RequisitionController extends Controller
      */
     private function userCanAccessRequisition(User $user, Requisition $requisition): bool
     {
-        if ($user->hasAdminAccess()) {
+        if ($user->hasAdminAccess() || $user->isDeliveryUpdater()) {
             return true;
         }
 

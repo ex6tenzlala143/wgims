@@ -480,7 +480,7 @@ class StockTransferController extends Controller
     {
         $user = Auth::user();
 
-        if (! $user->hasAdminAccess()) {
+        if (! $user->hasAdminAccess() && ! $user->isDeliveryUpdater()) {
             $ids = $this->getUserWarehouseIds($user);
             $involved = in_array($transfer->from_warehouse_id, $ids ?? [], true)
                      || in_array($transfer->to_warehouse_id, $ids ?? [], true);
@@ -501,7 +501,7 @@ class StockTransferController extends Controller
     {
         $user = Auth::user();
 
-        if (! $user->hasAdminAccess()) {
+        if (! $user->hasAdminAccess() && ! $user->isDeliveryUpdater()) {
             $ids = $this->getUserWarehouseIds($user);
             $involved = in_array($transfer->from_warehouse_id, $ids ?? [], true)
                      || in_array($transfer->to_warehouse_id, $ids ?? [], true);
@@ -521,6 +521,15 @@ class StockTransferController extends Controller
     public function itemsForWarehouse(Request $request)
     {
         $request->validate(['warehouse_id' => 'required|exists:warehouses,id']);
+
+        $user        = Auth::user();
+        $warehouseId = (int) $request->warehouse_id;
+
+        // Non-admin users can only query warehouses they are assigned to
+        // (same rule as the sibling requisition/reservation item APIs).
+        if (! $user->hasAdminAccess() && ! $user->hasWarehouse($warehouseId)) {
+            abort(403);
+        }
 
         $items = Item::where('warehouse_id', $request->warehouse_id)
             ->where('quantity', '>', 0)

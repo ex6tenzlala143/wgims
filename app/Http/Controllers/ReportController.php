@@ -67,6 +67,7 @@ class ReportController extends Controller
     public function saveRpciSnapshot(Request $request)
     {
         $user = Auth::user();
+        abort_unless($user->canCreate(), 403, 'Only administrators and warehouse managers can save report snapshots.');
         $request->validate(['period_month' => 'required|string']);
 
         $query = Item::with('warehouse')->where('is_active', true);
@@ -374,6 +375,7 @@ class ReportController extends Controller
     public function saveRsmiSnapshot(Request $request)
     {
         $user = Auth::user();
+        abort_unless($user->canCreate(), 403, 'Only administrators and warehouse managers can save report snapshots.');
         $request->validate(['period_month' => 'required|string']);
 
         $query = Requisition::with(['warehouse', 'items.item', 'items.dispatchItems'])

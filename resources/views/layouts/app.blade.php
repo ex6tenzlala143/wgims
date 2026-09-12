@@ -1033,7 +1033,7 @@
                 <i class="fas fa-tags"></i> Item Categories
             </a>
             @endif
-            @if($navUser->hasAdminAccess() || $navUser->isCenterUser())
+            @if($navUser->hasAdminAccess() || $navUser->isCenterUser() || $navUser->isDeliveryUpdater())
             <a href="{{ route('warehouses.index') }}" class="nav-item {{ request()->routeIs('warehouses*') ? 'active' : '' }}">
                 <i class="fas fa-warehouse"></i> Warehouses
             </a>

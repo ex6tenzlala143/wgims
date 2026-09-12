@@ -179,10 +179,18 @@
                 Responsibility Center Code:&nbsp;
                 <span class="underline-field sm">{{ $requisition->responsibility_center_code ?? '' }}</span>
                 <br>
-                RIS ID:&nbsp;
-                <strong style="font-family:monospace">{{ $requisition->ris_code ?? $requisition->ris_id }}</strong>
-                &nbsp;&nbsp;RIS No.:&nbsp;
+                RIS No.:&nbsp;
                 <strong>{{ $requisition->ris_number }}</strong>
+                @php
+                    $headerDrs = $requisition->items
+                        ->flatMap(fn ($ri) => $ri->dispatchItems->pluck('dr_number'))
+                        ->filter()->unique()->values();
+                @endphp
+                @if($headerDrs->isNotEmpty())
+                    <br>
+                    DR No.:&nbsp;
+                    <strong>{{ $headerDrs->implode(', ') }}</strong>
+                @endif
             </td>
         </tr>
     </table>
@@ -191,15 +199,17 @@
     @php
         $items = $requisition->items;
         $minRows = 20;
-        $filled  = $items->count();
+        $printRows = 0;
     @endphp
 
     <table class="ris-table">
         <thead>
             <tr>
-                <th colspan="3" style="border-bottom:none">Requisition</th>
+                <th colspan="3">Requisition</th>
+                <th>Requested<br>Quantity</th>
                 <th colspan="2">Stocks<br>Available</th>
-                <th colspan="2">Issue</th>
+                <th>Issue</th>
+                <th rowspan="2" style="width:20%;vertical-align:middle">Remarks</th>
             </tr>
             <tr>
                 <th style="width:12%">Stock No.</th>
@@ -209,54 +219,58 @@
                 <th style="width:6%">Yes</th>
                 <th style="width:6%">No</th>
                 <th style="width:8%">Qty</th>
-                <th style="width:20%">Remarks</th>
             </tr>
         </thead>
         <tbody>
             @foreach($items as $ri)
             @php
-                // Issuance details (stock no., warehouse, availability) exist only
-                // once the line has actually been dispatched/issued.
-                $issued = $ri->dispatchItems->isNotEmpty() || $ri->quantity_issued > 0;
+                // One printed row per dispatch: lines issued from different
+                // stock piles must NEVER merge into a single row.
+                $lineDispatches = $ri->dispatchItems;
             @endphp
+            @if($lineDispatches->isEmpty())
             <tr class="item-row">
-                <td>{{ $issued ? $ri->dispatchItems->pluck('item.stock_number')->filter()->unique()->implode(', ') : '' }}</td>
+                <td></td>
                 <td>{{ $ri->unit ?? '' }}</td>
                 <td class="left">
                     {{ $ri->description ?? ($ri->item?->description ?? '') }}
-                    @php
-                        $drNumbers = $ri->dispatchItems->pluck('dr_number')->filter()->unique();
-                    @endphp
-                    @if($drNumbers->isNotEmpty())
-                        @foreach($drNumbers as $dr)
-                        <div style="font-size:6.5pt;color:#333;margin-top:1px"><strong>DR:</strong> {{ $dr }}</div>
-                        @endforeach
-                    @endif
-                    @php
-                        $whName = $ri->dispatchItems->pluck('item.warehouse.name')->filter()->unique()->implode(', ');
-                        $whName = $whName ?: ($ri->warehouse?->name ?? null);
-                    @endphp
-                    @if($whName)
-                        <div style="font-size:6.5pt;color:#333;margin-top:1px">Whse: {{ $whName }}</div>
-                    @elseif($requisition->warehouse)
-                        <div style="font-size:6.5pt;color:#333;margin-top:1px">Whse: {{ $requisition->warehouse->name }}</div>
-                    @endif
                 </td>
                 <td class="right">{{ number_format($ri->quantity_requested) }}</td>
-                @if($issued)
-                <td>{{ $ri->stock_available ? '✓' : '' }}</td>
-                <td>{{ !$ri->stock_available ? '✓' : '' }}</td>
+                <td></td>
+                <td></td>
+                <td class="right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '' }}</td>
+                <td class="left">{{ $ri->remarks ?? '' }}</td>
+            </tr>
+            @php $printRows++; @endphp
+            @else
+            @foreach($lineDispatches as $diIdx => $di)
+            <tr class="item-row">
+                <td>{{ $di->item?->stock_number ?? '' }}</td>
+                <td>{{ $ri->unit ?? '' }}</td>
+                <td class="left">
+                    {{ $ri->description ?? ($ri->item?->description ?? '') }}
+                </td>
+                <td class="right">{{ $diIdx === 0 ? number_format($ri->quantity_requested) : '' }}</td>
+                {{-- Live availability of THIS dispatch's exact pile (on-hand minus
+                     reserved). The stock_available column is a frozen dispatch-time
+                     snapshot and is deliberately not used here. --}}
+                @if($di->item)
+                <td>{{ ($stockAvailability[$di->item->id] ?? 0) > 0 ? '✓' : '' }}</td>
+                <td>{{ ($stockAvailability[$di->item->id] ?? 0) > 0 ? '' : '✓' }}</td>
                 @else
                 <td></td>
                 <td></td>
                 @endif
-                <td class="right">{{ $ri->quantity_issued > 0 ? number_format($ri->quantity_issued) : '' }}</td>
-                <td class="left">{{ $ri->remarks ?? '' }}</td>
+                <td class="right">{{ number_format($di->quantity_issued) }}</td>
+                <td class="left">{{ $diIdx === 0 ? ($ri->remarks ?? '') : '' }}</td>
             </tr>
+            @php $printRows++; @endphp
+            @endforeach
+            @endif
             @endforeach
 
             {{-- Empty filler rows --}}
-            @for($i = $filled; $i < $minRows; $i++)
+            @for($i = $printRows; $i < $minRows; $i++)
             <tr class="empty-row">
                 <td></td><td></td><td></td><td></td>
                 <td></td><td></td><td></td><td></td>

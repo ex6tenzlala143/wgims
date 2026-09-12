@@ -17,7 +17,7 @@ class ItemController extends Controller
         // Non-admins only see active items.
         $query = Item::with('warehouse');
 
-        if ($user->hasAdminAccess()) {
+        if ($user->hasAdminAccess() || $user->isDeliveryUpdater()) {
             // No is_active filter for admins/managers — they see everything including out-of-stock
         } else {
             $query->where('is_active', true);
@@ -56,7 +56,7 @@ class ItemController extends Controller
         }
 
         if ($request->warehouse_id) {
-            if ($user->hasAdminAccess() || $user->hasWarehouse((int) $request->warehouse_id)) {
+            if ($user->hasAdminAccess() || $user->isDeliveryUpdater() || $user->hasWarehouse((int) $request->warehouse_id)) {
                 $query->where('warehouse_id', $request->warehouse_id);
             }
         }
@@ -97,7 +97,7 @@ class ItemController extends Controller
     {
         $user = Auth::user();
 
-        if (! $user->hasAdminAccess() && ! $user->hasWarehouse((int) $item->warehouse_id)) {
+        if (! $user->hasAdminAccess() && ! $user->isDeliveryUpdater() && ! $user->hasWarehouse((int) $item->warehouse_id)) {
             abort(403);
         }
 

@@ -39,20 +39,20 @@ class UserController extends Controller
             'username'        => 'required|string|unique:users,username|max:50',
             'name'            => 'required|string|max:100',
             'email'           => 'nullable|email|unique:users,email',
-            'role'            => 'required|in:admin,warehouse_manager,supply_custodian,center_staff,center_head',
+            'role'            => 'required|in:admin,warehouse_manager,supply_custodian,center_staff,center_head,delivery_updater',
             'warehouse_ids'   => 'nullable|array',
             'warehouse_ids.*' => 'exists:warehouses,id',
             'password'        => 'required|string|min:8|confirmed',
         ]);
 
-        $noWarehouseRole = in_array($request->role, ['admin', 'warehouse_manager']);
+        $noWarehouseRole = in_array($request->role, ['admin', 'warehouse_manager', 'delivery_updater']);
 
-        // Roles other than admin/warehouse_manager must have at least one warehouse
+        // Roles other than admin/warehouse_manager/delivery_updater must have at least one warehouse
         if (! $noWarehouseRole && empty($request->warehouse_ids)) {
             return back()->withErrors(['warehouse_ids' => 'Please select at least one warehouse.'])->withInput();
         }
 
-        // Primary warehouse: first selected, or null for admin/warehouse_manager
+        // Primary warehouse: first selected, or null for all-scope roles (admin/warehouse_manager/delivery_updater)
         $primaryId = (! $noWarehouseRole && ! empty($request->warehouse_ids))
             ? (int) $request->warehouse_ids[0]
             : null;
@@ -67,7 +67,7 @@ class UserController extends Controller
             'is_active'    => true,
         ]);
 
-        // Sync pivot — empty array for admin/warehouse_manager, selected IDs for everyone else
+        // Sync pivot — empty array for all-scope roles, selected IDs for everyone else
         $user->warehouses()->sync(
             $noWarehouseRole ? [] : ($request->warehouse_ids ?? [])
         );
@@ -97,20 +97,20 @@ class UserController extends Controller
             'username'        => 'required|string|unique:users,username,'.$user->id.'|max:50',
             'name'            => 'required|string|max:100',
             'email'           => 'nullable|email|unique:users,email,'.$user->id,
-            'role'            => 'required|in:admin,warehouse_manager,supply_custodian,center_staff,center_head',
+            'role'            => 'required|in:admin,warehouse_manager,supply_custodian,center_staff,center_head,delivery_updater',
             'warehouse_ids'   => 'nullable|array',
             'warehouse_ids.*' => 'exists:warehouses,id',
             'password'        => 'nullable|string|min:8|confirmed',
         ]);
 
-        $noWarehouseRole = in_array($request->role, ['admin', 'warehouse_manager']);
+        $noWarehouseRole = in_array($request->role, ['admin', 'warehouse_manager', 'delivery_updater']);
 
-        // Roles other than admin/warehouse_manager must have at least one warehouse
+        // Roles other than admin/warehouse_manager/delivery_updater must have at least one warehouse
         if (! $noWarehouseRole && empty($request->warehouse_ids)) {
             return back()->withErrors(['warehouse_ids' => 'Please select at least one warehouse.'])->withInput();
         }
 
-        // Primary warehouse: first selected, or null for admin/warehouse_manager
+        // Primary warehouse: first selected, or null for all-scope roles (admin/warehouse_manager/delivery_updater)
         $primaryId = (! $noWarehouseRole && ! empty($request->warehouse_ids))
             ? (int) $request->warehouse_ids[0]
             : null;
@@ -138,7 +138,7 @@ class UserController extends Controller
         }
 
         if ($noWarehouseRole) {
-            // Admins and warehouse managers have no warehouse assignments
+            // All-scope roles (admin/warehouse_manager/delivery_updater) have no warehouse assignments
             $user->warehouses()->sync([]);
         } else {
             $submittedIds = array_map('intval', $request->warehouse_ids ?? []);
@@ -174,3 +174,4 @@ class UserController extends Controller
         return response()->json(['available' => ! $exists]);
     }
 }
+

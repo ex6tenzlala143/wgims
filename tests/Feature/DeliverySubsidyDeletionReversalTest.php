@@ -468,7 +468,7 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
         $this->assertEquals(0, (float) $item->fresh()->quantity);
     }
 
-    public function test_deleting_subsidy_keeps_item_referenced_by_a_stock_transfer(): void
+    public function test_subsidy_with_transfer_destination_reference_cannot_be_deleted(): void
     {
         $wh   = $this->makeWarehouse('Warehouse A', 'WHA');
         $whB  = $this->makeWarehouse('Warehouse B', 'WHB');
@@ -507,11 +507,14 @@ class DeliverySubsidyDeletionReversalTest extends TestCase
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'));
+            ->assertRedirect()
+            ->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'cannot be deleted')
+                && str_contains($msg, 'moved by transfer'));
 
-        // Referenced as a transfer destination → the item must survive.
+        // Refused: the subsidy, the item, and its quantity all survive.
+        $this->assertDatabaseHas('delivery_subsidies', ['id' => $ds->id]);
         $this->assertDatabaseHas('items', ['id' => $item->id]);
-        $this->assertEquals(0, (float) $item->fresh()->quantity);
+        $this->assertEquals(60, (float) $item->fresh()->quantity);
     }
 
     private function deliveryId(string $dr): ?int

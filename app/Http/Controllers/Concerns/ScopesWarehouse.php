@@ -18,13 +18,16 @@ trait ScopesWarehouse
     /**
      * Returns the warehouse IDs the given user is allowed to see.
      *
-     * - Admin / Warehouse Manager → null  (no restriction — sees all data)
+     * - Admin / Warehouse Manager / Delivery Updater → null  (no restriction — sees all data)
      * - Others → array of IDs from the pivot table + the legacy warehouse_id column
      *            (may be empty if the user has no assignments at all)
+     *
+     * NOTE: null scope is view-only breadth. It does NOT grant admin powers —
+     * hasAdminAccess()/canWrite()/canCreate()/canApprove() are unchanged.
      */
     protected function getUserWarehouseIds(User $user): ?array
     {
-        if ($user->hasAdminAccess()) {
+        if ($user->hasAdminAccess() || $user->isDeliveryUpdater()) {
             return null; // null = no restriction
         }
 
@@ -96,11 +99,12 @@ trait ScopesWarehouse
 
     /**
      * Check whether a non-admin user is allowed to access a specific warehouse.
-     * Admins and warehouse managers always pass. Returns false if the user has no access.
+     * Admins, warehouse managers, and delivery updaters always pass.
+     * Returns false if the user has no access.
      */
     protected function userCanAccessWarehouse(User $user, int $warehouseId): bool
     {
-        if ($user->hasAdminAccess()) {
+        if ($user->hasAdminAccess() || $user->isDeliveryUpdater()) {
             return true;
         }
 
@@ -114,7 +118,7 @@ trait ScopesWarehouse
      */
     protected function getCenterName(User $user, ?int $filterWarehouseId = null): string
     {
-        if ($user->hasAdminAccess()) {
+        if ($user->hasAdminAccess() || $user->isDeliveryUpdater()) {
             if ($filterWarehouseId) {
                 return optional(Warehouse::find($filterWarehouseId))->name ?? 'All Warehouses';
             }

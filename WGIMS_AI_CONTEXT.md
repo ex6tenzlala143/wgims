@@ -1,7 +1,10 @@
 # WGIMS — AI Context Document (Deep Audit v2)
 
 > Deep read/analyze/audit of the entire codebase. No functional code was changed to produce this.
-> **Audit date:** 2026-09-08 · **HEAD:** `d4edc9e` · **Installed:** Laravel 12.58.0, PHP 8.2.12 CLI
+> **Audit v3:** 2026-09-11 · **HEAD:** `a4db5e2` · **Installed:** Laravel 12.58.0, PHP 8.2.12 CLI
+> v2 covered `d4edc9e`; v3 absorbs `fb5390f` (RSMI/dashboard, own prior merge work),
+> `4afed31` (RIS completion dates + line statuses, show-page simplification, font unification),
+> `a4db5e2` (dashboard stat dropdowns, reservation reversal fix, donated zero-cost, audit removal).
 > **Method:** full read of `app/`, `routes/`, `database/migrations/` (57 files), `app/Models/` (23),
 > `resources/views/`, `config/`, `composer.json`, `package.json`, `.env.example`, `docs/`.
 > Start here before any major change. Companion: `AGENTS.md` (agent rules).
@@ -54,7 +57,7 @@ DATABASE_SCHEMA, BUSINESS_RULES, WORKFLOWS, SECURITY, KNOWN_ISSUES, etc. — rea
 |---|---|
 | **Dashboard** (`DashboardController`) | Dual view: `dashboard.admin` (all warehouses: balance by warehouse×category, unliquidated pending/partial, totals, monthly activity chart, reservation stats) vs `dashboard.warehouse` (scoped). Inventory Balance is a **separate** report — not the same as dashboard |
 | **Items** (`ItemController`, read-only) | Stock listing (filters: search/category/warehouse/stock_status/source_subsidy_status, paginate 20) + detail with stock cards. **No create/edit/delete routes — stock enters only via deliveries/transfers** |
-| **Delivery Subsidies** (`DeliverySubsidyController`, 1793 lines, largest) | Create request (`store`, no cost/warehouse/stock yet) → record shipments (`storeDelivery`, stock IN) → edit/delete subsidy or single delivery, audit log |
+| **Delivery Subsidies** (`DeliverySubsidyController`, largest) | Create request (`store`, no cost/warehouse/stock yet) → record shipments (`storeDelivery`, stock IN, zero-cost allowed) → edit/delete subsidy or single delivery (single-row edit via `?di=`; delete blocked when consumed) |
 | **Requisitions / RIS** (`RequisitionController`, 1690 lines) | Create description-level request (no stock linked) → approve/dispatch against **exact** stock records (`processApproval`) → edit/correct/delete, per-dispatch edit/delete, signatories, print (Appendix 63) |
 | **Stock Transfers** (`StockTransferController`, 1045 lines) | Two-step: plan (`store`, `quantity_requested`, dest slot pre-created) → dispatch (`processDispatch`, `quantity` moved, `transfer_out/in` cards) → edit (delta) / delete (blocker-checked) |
 | **Reservations** (`ReservationController`, multi-item) | Soft-lock stock (`reservation_items`, no qty change, no cards) → approve → ready → deploy **only via RIS dispatch with `reservation_item_id`** → cancel/expire/delete |
@@ -69,28 +72,28 @@ DATABASE_SCHEMA, BUSINESS_RULES, WORKFLOWS, SECURITY, KNOWN_ISSUES, etc. — rea
 ## 5. Database architecture
 
 - **57 migrations.** **No soft deletes anywhere** (no `deleted_at`, no `SoftDeletes` trait). **No native ENUMs** — all statuses are plain strings with app-level constants.
-- **Key tables:** `warehouses` · `user_warehouse` (composite PK, no timestamps) · `suppliers` · `item_categories` · `item_catalog_items` (unique `category+name`) · `items` (central stock) · `delivery_subsidies` · `delivery_subsidy_items` (`qty_delivered` cumulative) · `deliveries` · `delivery_items` (per-item DR, ENGAS) · `requisitions` (`ris_number` user ref + `ris_code` system id, both unique) · `requisition_items` (**cost columns dropped** in `2026_08_24_210730` — costs live only on dispatches) · `requisition_dispatch_items` (exact `item_id`, per-dispatch DR/costs, `reservation_item_id`, `dispatch_item_id` link from stock cards) · `stock_transfers` (+ subsidy snapshot columns surviving delete) · `stock_transfer_items` (`quantity_requested` planned vs `quantity` dispatched) · `reservations` (legacy single-item cols kept nullable) · `reservation_items` (authoritative lines) · `stock_card_entries` · `system_notifications` · `report_snapshots` · 3 audit-log tables (subsidy logs use `nullOnDelete` so delete-audits outlive the subsidy; transfer logs snapshot `transfer_number`) · Laravel `sessions/cache/jobs` tables.
-- **Dropped/removed:** Spatie permission tables, `password_reset_tokens`, `users.email_verified_at`, `delivery_subsidies.is_archived`, `requisition_dispatch_items.warehouse_id` (warehouse derived via `item`), `requisition_items.unit_cost/engas/dr/expiry`.
+- **Key tables:** `warehouses` · `user_warehouse` (composite PK, no timestamps) · `suppliers` · `item_categories` · `item_catalog_items` (unique `category+name`) · `items` (central stock) · `delivery_subsidies` · `delivery_subsidy_items` (`qty_delivered` cumulative) · `deliveries` · `delivery_items` (per-item DR, ENGAS) · `requisitions` (`ris_number` user ref + `ris_code` system id, both unique) · `requisition_items` (**cost columns dropped** in `2026_08_24_210730` — costs live only on dispatches) · `requisition_dispatch_items` (exact `item_id`, per-dispatch DR/costs, `reservation_item_id`, `dispatch_item_id` link from stock cards) · `stock_transfers` (+ subsidy snapshot columns surviving delete) · `stock_transfer_items` (`quantity_requested` planned vs `quantity` dispatched) · `reservations` (legacy single-item cols kept nullable) · `reservation_items` (authoritative lines) · `stock_card_entries` · `system_notifications` · `report_snapshots` · 3 audit-log tables (**views + viewer routes + delete-path writes removed** in `a4db5e2`; tables/models/migrations remain, non-delete writes remain — do not re-add delete-path writes; tests assert absence) · Laravel `sessions/cache/jobs` tables.
+- **Dropped/removed:** Spatie permission tables, `password_reset_tokens`, `users.email_verified_at`, `delivery_subsidies.is_archived`, `requisition_dispatch_items.warehouse_id` (warehouse derived via `item`), `requisition_items.unit_cost/engas/dr/expiry`, `delivery_subsidies/audit-log` + `requisitions/audit-log` routes/views/controller methods.
 - **FK behavior that matters:** `items.warehouse_id` **cascade**; `delivery_subsidy_items.item_id` / `requisition_items.item_id` **nullOnDelete**; `stock_transfer_items.item_id/destination_item_id` **cascade**; `stock_card_entries.item_id` **cascade** but `dispatch_item_id` **nullOnDelete**; `reservations`/`reservation_items` cascade to warehouse/item; `stock_transfers.transferred_by` **cascade** (deleting a user deletes their transfers — flag).
 - **Indexes:** unique `stock_number/ris_number/ris_code/transfer_number/dr_number/subsidy_code/reservation_number`; composites `items(warehouse,is_active,category)`, `items(warehouse,unit,category,unit_cost)`, `items(source_subsidy,warehouse)`; `sce(item,entry_date,id)`, `sce(reference_type,reference_id)`; `notif(user,is_read,created_at)`.
 - **Seeders:** only `DatabaseSeeder` (4 warehouses `RX-MO/CFA/RC/YC`, 4 users incl. `admin`, 2 suppliers). Categories seeded via migration.
 
 ## 6. Important models
 
-`Item` (identity, `findOrCreateByUnitCost`, `generateStockNumber` via `GET_LOCK`, `available_quantity = quantity − reserved`, auto `is_active` by qty) · `DeliverySubsidy` (`updateDeliveryStatus`, boot `SUB-000001`) · `DeliverySubsidyItem` (per-warehouse+cost dispatch summary accessors) · `Delivery/DeliveryItem` (ENGAS total derived) · `Requisition` (`updateFulfilmentStatus` recomputes `quantity_issued` from dispatch sums, `generateRisNumber` via `GET_LOCK RIS-YYYYMM`, `warehouseNames/Ids` from dispatches) · `RequisitionItem` (no costs — see §5) · `RequisitionDispatchItem` (**cost source of truth**) · `StockTransfer` (`updateTransferStatus`, `generateTransferNumber` via lock) · `StockTransferItem` (requested vs dispatched) · `Reservation/ReservationItem` (UPPERCASE statuses; `reservedQuantityForItem` sums **full** `reserved_quantity` for ACTIVE+PARTIALLY_DEPLOYED — conservative over-lock after partial deploy) · `StockCardEntry` (`recalculateBalancesForItem`: chronological replay in own transaction; receipt sets running cost) · `User` (role helpers; `admin/WM→null` = all warehouses) · `ItemCategory` (cached `allActive`, string-key join to items — **no DB FK**) · `ItemCatalogItem` · `Warehouse/Supplier/SystemNotification/ReportSnapshot`/3 audit models.
+`Item` (identity, `findOrCreateByUnitCost`, `generateStockNumber` via `GET_LOCK`, `available_quantity = quantity − reserved`, auto `is_active` by qty) · `DeliverySubsidy` (`updateDeliveryStatus`, boot `SUB-000001`) · `DeliverySubsidyItem` (per-warehouse+cost dispatch summary accessors) · `Delivery/DeliveryItem` (ENGAS total derived) · `Requisition` (`updateFulfilmentStatus` recomputes `quantity_issued` from dispatch sums, `generateRisNumber` via `GET_LOCK RIS-YYYYMM`, `warehouseNames/Ids` from dispatches, **`getCompletionDateAttribute`** = max dispatch `created_at`, gated: null unless status approved + remaining≈0) · `RequisitionItem` (no costs — see §5) · `RequisitionDispatchItem` (**cost source of truth**) · `StockTransfer` (`updateTransferStatus`, `generateTransferNumber` via lock) · `StockTransferItem` (requested vs dispatched) · `Reservation/ReservationItem` (UPPERCASE statuses; `reservedQuantityForItem` sums **full** `reserved_quantity` for ACTIVE+PARTIALLY_DEPLOYED — conservative over-lock after partial deploy; `updateOverallStatus` falls back to READY when all lines reverted to ACTIVE on a stale DEPLOYED/PARTIALLY header, e.g. consuming RIS deleted) · `StockCardEntry` (`recalculateBalancesForItem`: chronological replay in own transaction; receipt sets running cost) · `User` (role helpers; `admin/WM→null` = all warehouses) · `ItemCategory` (cached `allActive`, string-key join to items — **no DB FK**) · `ItemCatalogItem` · `Warehouse/Supplier/SystemNotification/ReportSnapshot`/3 audit models.
 Missing inverses (do not assume): `ItemCatalogItem` has no `requisitionItems` relation; `StockCardEntry` has no `dispatchItem()` relation despite the FK.
 
 ## 7. Important controllers
 
-`DeliverySubsidyController` (subsidy+delivery lifecycle, BFS `transferLineageItemIds` on delete, `downstreamUsageWarning`) · `RequisitionController` (exact-record issuance, reservation credit-back, fulfilment recompute) · `StockTransferController` (two-step transfer, `spreadDeltaAcrossEntries` newest-first, `destroyBlockers`) · `ReservationController` (lock-checked create, state machine, dispatch-prefill APIs) · `ReportController` (RPCI/RSMI/Balance + exports + snapshots) · `DashboardController` (dual dashboard, reservation stats, chart) · `StockCardController` (reads + PHP FIFO view) · `Item/Category/Catalog/Supplier/Warehouse/User/Notification/Auth` as §4.
+`DeliverySubsidyController` (subsidy+delivery lifecycle, BFS `transferLineageItemIds` on delete, `subsidyDeletionBlockers` hard block, single-row shipment edit via `?di=`, `destroyDelivery` blocked by RIS/transfer/reservation use) · `RequisitionController` (exact-record issuance, reservation credit-back + dispatch guards, fulfilment recompute, cancel-safe reversals) · `StockTransferController` (two-step transfer, `spreadDeltaAcrossEntries` newest-first, `destroyBlockers`, over-remaining dispatches **rejected**) · `ReservationController` (lock-checked create, state machine, dispatch-prefill APIs) · `ReportController` (RPCI/RSMI + search + Requested/Issued/Outstanding cols, Balance + reservedMap, exports, snapshots) · `DashboardController` (dual dashboard, 4×4 stat rows with per-item `<details>` dropdowns, bar chart) · `StockCardController` (reads + PHP FIFO view) · `Item/Category/Catalog/Supplier/Warehouse/User/Notification/Auth` as §4.
 Only service: `DeliverySubsidyCascadeService` (transfer-chain-aware cost/RIS/supplier propagation; `cascadeUnitCost` is **stale** — still writes dropped `requisition_items.unit_cost`, use `cascadeItemCost`).
 
 ## 8. Route structure
 
-Single `routes/web.php` (~106 routes + `/up` health). Global `web` = `EnsureUserIsActive` + `NoCache` (authed GETs use `private,no-cache,must-revalidate` — bfcache-safe). Route order is correct (statics before wildcards). Key map: see `AGENTS.md` table. Deltas found in audit:
-- Transfers edit/update/delete use **`admin`** (allows WM) with controller `canWrite()` (admin-only) as the real gate — tighten route to `admin.write`.
+Single `routes/web.php` (~106 routes + `/up` health; the two `audit-log` viewer routes were deleted in `a4db5e2` — see AGENTS.md table). Global `web` = `EnsureUserIsActive` + `NoCache` (authed GETs use `private,no-cache,must-revalidate` — bfcache-safe). Route order is correct (statics before wildcards). Key map: see `AGENTS.md` table. Deltas found in audit:
+- Transfers edit/update/delete routes are `admin.write` (admin-only), matching the
+  controller `canWrite()` enforcement.
 - Reservation approve/ready/cancel + destroy-item are `auth`-only routes gated by controller `canWrite()` = **admin-only**, contradicting `User::canApprove()` (which advertises WM/head/custodian). RIS dispatch is the only place `canApprove` actually opens doors.
-- `POST /reports/*/snapshot` are `auth`-only with **no role check** — read-only `center_staff` can write snapshots.
 - `POST /logout` sits **outside** the `auth` group. `welcome.blade.php` references a **nonexistent `register` route** (latent 500 if rendered).
 - View-vs-submit splits confuse approvers: `GET delivery`/`GET transfers/dispatch` allow head/custodian but their POSTs are `admin.create` (403 on submit); RIS dispatch *correction* is admin-only while dispatch itself allows approvers.
 - `AuthController` non-admin intended-URL allowlist is incomplete (bookmarks → 403 instead of clean redirect; not a bypass).
@@ -107,19 +110,21 @@ SUBSIDY request (no stock) → DELIVERY dispatch (stock IN via findOrCreate, rec
 
 ## 10. Subsidy flow
 
-`store` (validates request lines only; `dr_number = ris_number` + `-N` loop, **no lock — race**; header `warehouse_id=null,total=0`; `SUB-` code via boot) → `storeDelivery` (per-line warehouse/cost/DR required only for remaining lines; DSI **locked + remaining rechecked**; stock via `findOrCreateByUnitCost` then **exact item re-locked**; `warehouse_id` set **only on first dispatch**; `unit_cost/ris_number` **overwritten** on shared record; receipt card `reference=per-item DR`; `total=Σamount`; status pending/partial/fully_delivered) → `updateDelivery` (same-item delta **no availability check**, decreases `max(0,…)`-clamped; cross-warehouse reverses+recreates; `cascadeItemCost`; cards moved; both items recalculated) → `destroyDelivery` (clamped reversal) → `update` (no deliveries = full rebuild; else correction-only, delivered lines locked `≥qty_delivered`, RIS/supplier/DR frozen) → `destroy` (flags transfers `deleted`, clamped reversals, snapshots `deleted`, deletes cards/deliveries/lines, hard-deletes zero-qty unreferenced items, recalcs; `downstreamUsageWarning` is per-item queries — N+1).
+`store` (validates request lines only; `dr_number = ris_number` + `-N` loop, **no lock — race**; header `warehouse_id=null,total=0`; `SUB-` code via boot) → `storeDelivery` (per-line warehouse/cost/DR required only for remaining lines; DSI **locked + remaining rechecked**; stock via `findOrCreateByUnitCost` then **exact item re-locked**; `warehouse_id` set **only on first dispatch**; `unit_cost/ris_number` **overwritten** on shared record; receipt card `reference=per-item DR`; `total=Σamount`; status pending/partial/fully_delivered; **zero costs allowed** for donated goods — `nullable|min:0`, blank→null) → `updateDelivery` (same-item delta **no availability check**, decreases `max(0,…)`-clamped; cross-warehouse reverses+recreates with over-stock guard; `cascadeItemCost` only when `newQty>0` (zero-qty edit preserves shared cost basis); cards moved; both items recalculated; scoped single-row edit via `?di=`) → `destroyDelivery` (clamped reversal; **blocked** with error if consumed by RIS issue/transfer/reservation) → `update` (no deliveries = full rebuild; else correction-only, delivered lines locked `≥qty_delivered`, RIS/supplier/DR frozen) → `destroy` (**hard block**: any RIS issuance, transfer movement, or reservation lock on lineage stock refuses with named blockers; planned-only transfers don't block and are flagged `deleted`) — otherwise flags transfers `deleted`, clamped reversals, snapshots `deleted`, deletes cards/deliveries/lines, hard-deletes zero-qty unreferenced items, recalcs.
 
 ## 11. RIS flow
 
-`store` (catalog lines only; unit from any same-description stock for display; **no stock check, no cost, no reservation link**; `intended_requisition_id` never written — dead link; `RIS-YYYYMM-NNNN` via lock + `RIS-000001` boot) → `processApproval` (**exact-record** `lockForUpdate`, no FIFO fallback; `stillNeeded` guard; `available = physical − reserved` **+ credit-back** of linked reservation line; creates dispatch with per-line costs/DR, deducts, issues card with `dispatch_item_id`, `deployed+=` under lock, `quantity_issued` cache, fulfilment pending/partially_approved/approved) → `updateDispatch` (reverse-old/apply-new; availability formula **ignores reservations** — inconsistent with create; card moved; deployed delta) → `destroyDispatch` (restores exact record, deletes by `dispatch_item_id`, reverses deployed) → `update`/`correct` (dispatched lines `≥issued`, no catalog change; never touch dispatches) → `destroy` (reverses to exact records, deletes issue cards, reverses deployed).
+`store` (catalog lines only; unit from any same-description stock for display; **no stock check, no cost, no reservation link**; `intended_requisition_id` never written — dead link; `RIS-YYYYMM-NNNN` via lock + `RIS-000001` boot) → `processApproval` (**exact-record** `lockForUpdate`, no FIFO fallback; `stillNeeded` guard; `available = physical − reserved` **+ credit-back** of linked reservation line; **dispatch guards** (`a4db5e2`): line description must match stock description, reservation must be ACTIVE on an active header and `wanted ≤ remaining`; creates dispatch with per-line costs/DR, deducts, issues card with `dispatch_item_id`, `deployed+=` under lock, `quantity_issued` cache, fulfilment pending/partially_approved/approved) → `updateDispatch` (reverse-old/apply-new; availability formula **ignores reservations** — inconsistent with create; **cannot move a reservation-linked dispatch to a different `item_id`**; card moved; deployed delta) → `destroyDispatch` (restores exact record, deletes by `dispatch_item_id`, reverses deployed; **cancel-safe**: CANCELLED/EXPIRED parent → line CANCELLED, never ACTIVE) → `update`/`correct` (dispatched lines `≥issued`, no catalog change, **`status` not mass-assignable** — recomputed; never touch dispatches) → `destroy` (reverses to exact records, deletes issue cards, reverses deployed; cancel-safe rule). Derived **`completion_date`** (max dispatch `created_at`, null unless approved + fully fulfilled) drives index "Date Fully Delivered" + Days Elapsed vs now. Show page simplified (`4afed31`): 6-col lines with Complete/Pending/Partial statuses + per-line breakdown with Available-Stocks col.
+
+**Delivery confirmation** (delivery updater workflow): per-line `delivered_at/delivered_by/delivery_notes` stamped by `confirmDelivery` / cleared by `unconfirmDelivery` (`auth`-only routes, `canConfirmDelivery()` = admin/WM/updater, locked row, transacted). Touches nothing else — no stock, costs, DR, fulfilment. Notifies all active admins + WMs (actor excluded); last open line triggers an explicit "RIS Fully Delivered" notice. RIS-level state derived via `isDeliveryConfirmed()` (all lines stamped, ≥1 line). UI: Delivery card + per-line Confirm/Withdraw on `requisitions/show`.
 
 ## 12. Reservation flow
 
-`store` (exact item locked; `available = qty − reservedQuantityForItem`; cost/expiry **snapshotted**; header PENDING, lines ACTIVE, `RES-000001` via lock) → `approve` PENDING→RESERVED → `markReady` →READY_FOR_REQUISITION → consumed via RIS dispatch `reservation_item_id` (`deployed+=`, ACTIVE→PARTIALLY_DEPLOYED→DEPLOYED; header all-deployed→DEPLOYED etc.) → `cancel`/`expire` (scheduled `reservations:expire` 00:05) → `destroy` (admin, refused if any `deployed>0`). RIS-side prefill APIs (`active`, `{id}/items` with `max_deployable=min(remaining, physical−reserved)`, `for-dispatch?description=` with full identity) are frontend-only — **creation has no reservation link**. Gaps: **no check that `reservation_item_id` matches dispatched `item_id`/warehouse**; **no over-deploy check vs `remaining`**; credit-back read **unlocked**; `reservedQuantityForItem` over-locks after partial deploy (sums full reserved, not net). Rule: `AVAILABLE = ON_HAND − RESERVED`; reserved stock is invisible to non-reservation dispatches.
+`store` (exact item locked; `available = qty − reservedQuantityForItem`; cost/expiry **snapshotted**; header PENDING, lines ACTIVE, `RES-000001` via lock) → `approve` PENDING→RESERVED → `markReady` →READY_FOR_REQUISITION → consumed via RIS dispatch `reservation_item_id` (`deployed+=`, ACTIVE→PARTIALLY_DEPLOYED→DEPLOYED; header all-deployed→DEPLOYED etc.; **reversal fix**: all-lines-ACTIVE on a stale DEPLOYED/PARTIALLY header falls back to READY, e.g. consuming RIS deleted; PENDING/RESERVED/CANCELLED/EXPIRED untouched) → `cancel`/`expire` (scheduled `reservations:expire` 00:05) → `destroy` (admin, refused if any `deployed>0`). RIS-side prefill APIs (`active`, `{id}/items` with `max_deployable=min(remaining, physical−reserved)`, `for-dispatch?description=` with full identity) are frontend-only — **creation has no reservation link**. Remaining gaps: credit-back read **unlocked**; `reservedQuantityForItem` over-locks after partial deploy (sums full reserved, not net). Fixed in `a4db5e2`: reservation↔dispatch description match enforced, ACTIVE + `remaining` checks on deploy, no item-switch for linked dispatches. Rule: `AVAILABLE = ON_HAND − RESERVED`; reserved stock is invisible to non-reservation dispatches.
 
 ## 13. Stock transfer flow
 
-`store` (validates `from≠to`, item∈source, `qty ≤ physical` on an **unlocked read ignoring reservations — TOCTOU**; `TRF-YYYY-NNNN` via lock; subsidy link + snapshots; dest slot pre-created via `findOrCreateByUnitCost`; `requested=qty, quantity=0`; no move, no cards) → `processDispatch` (`dispatchQty=min(submitted,remaining)` **silent cap**; source+dest locked; `source=max(0,−qty)` **no availability check**, dest+=; `transfer_out/in` cards `reference=transfer_number`; status pending/partial/completed) → `update` (real both-side guards; `spreadDeltaAcrossEntries` newest-first; dest `unit_cost` overwritten; **ENGAS not editable here**) → `destroy` (`destroyBlockers` refuses if any later dest card exists; else reverses with locks, `max(0,…)` on dest). Costs inherit source cost/ENGAS/expiry at creation.
+`store` (validates `from≠to`, item∈source, `qty ≤ physical` on an **unlocked read ignoring reservations — TOCTOU**; `TRF-YYYY-NNNN` via lock; subsidy link + snapshots; dest slot pre-created via `findOrCreateByUnitCost`; `requested=qty, quantity=0`; no move, no cards; `unit_cost` allows 0 for donated goods) → `processDispatch` (STI **locked**; `submitted>remaining` **rejected** with validation error — no more silent `min()` cap; `<=0` skipped; source+dest locked; `source=max(0,−qty)` **no availability check**, dest+=; `transfer_out/in` cards `reference=transfer_number`; status pending/partial/completed) → `update` (real both-side guards; `spreadDeltaAcrossEntries` newest-first; dest `unit_cost` overwritten; **ENGAS not editable here**) → `destroy` (`destroyBlockers` refuses if any later dest card exists; else reverses with locks, `max(0,…)` on dest). Costs inherit source cost/ENGAS/expiry at creation.
 
 ## 14. Stock card flow
 
@@ -127,7 +132,7 @@ Written **only** by real movements: delivery receipt (`reference=per-item DR`, `
 
 ## 15. Inventory Balance logic
 
-`ReportController@inventoryBalance` (+export), **admin/WM only**. Read-only: `is_active + quantity>0` items with filters, eager warehouse, **one row per stock record (never merged)**, PHP groups warehouse→category→description with per-name `Σqty`, `Σqty×unit_cost`, grand total. **Physical only (reservations ignored); ENGAS shown per row, never totaled; full table into memory (no pagination — scale risk).** Dashboard ≠ Balance: dashboard aggregates + reservation stats + charts; Balance is the auditable ledger view. Do not change Balance unless explicitly instructed.
+`ReportController@inventoryBalance` (+export), **admin/WM only**. Read-only: `is_active + quantity>0` items with filters, eager `warehouse + sourceSubsidy`, **one row per stock record (never merged)**, single grouped `reservedMap(item_id→Σ reserved)` for ACTIVE lines (no per-row query), PHP groups warehouse→category→description with per-name `Σqty`, `Σqty×unit_cost`, grand total. **Physical only (reservations ignored); ENGAS shown per row, never totaled; full table into memory (no pagination — scale risk).** Dashboard ≠ Balance: dashboard aggregates + reservation stats + charts; Balance is the auditable ledger view. Do not change Balance unless explicitly instructed.
 
 ## 16. Warehouse logic
 
@@ -139,7 +144,7 @@ Every `items` row belongs to exactly one `warehouse_id`. Header `warehouse_id` o
 
 ## 18. Cost calculation rules
 
-`items.unit_cost` (current) + `engas_unit_cost` (nullable); delivery lines carry both + `engas_total = qty×engas` (server-computed); dispatch rows are the **sole** RIS cost store (per-dispatch DR/cost/expiry); transfer lines carry `unit_cost` only; RSMI recap uses weighted-average costs per dispatched stock_no. Cost edits on deliveries propagate via `DeliverySubsidyCascadeService::cascadeItemCost` (dispatch snapshots + transfer chain). `items.quantity` model cast is **integer** while DB is `decimal(15,4)` — fractional precision is truncated in PHP.
+`items.unit_cost` (current) + `engas_unit_cost` (nullable); **zero allowed for donated goods** — validations are `nullable|min:0` (blank→null, explicit 0 stays 0) on deliveries, shipment edits, transfers; delivery lines carry both + `engas_total = qty×engas` (server-computed); dispatch rows are the **sole** RIS cost store (per-dispatch DR/cost/expiry); transfer lines carry `unit_cost` only; RSMI recap uses weighted-average costs per dispatched stock_no. Totals/sums must use **`!==null`** checks (0 is a real cost, not missing). Zero-qty delivery edits preserve the shared cost basis (cost/ENGAS/cascade skipped when `newQty≈0`). Cost edits on deliveries propagate via `DeliverySubsidyCascadeService::cascadeItemCost` (dispatch snapshots + transfer chain). `items.quantity` model cast is **integer** while DB is `decimal(15,4)` — fractional precision is truncated in PHP.
 
 ## 19. Quantity calculation rules
 
@@ -154,12 +159,13 @@ Every `items` row belongs to exactly one `warehouse_id`. Header `warehouse_id` o
 | `supply_custodian` | scoped | N | N | Y | N | dispatch RIS, no correction |
 | `center_head` | scoped | N | N | Y | N | approve, no dispatch submit |
 | `center_staff` | scoped | N (+explicit blocks) | N | N | N | read-only (but can write report snapshots — §8 gap) |
+| `delivery_updater` | **all** (view-only breadth, no admin powers) | N | N | N | N | confirms delivered dispatch lines + auto-notifies admins/WMs; see §11 |
 
 `Gate 'admin-only'` defined, never used. Balance/RPCI-export need `hasAdminAccess` (admin/WM). `canApprove` = admin/WM/head/custodian.
 
 ## 21. UI conventions
 
-Sole layout `layouts/app.blade.php` (~1615 lines, inline CSS/JS): sidebar 190px (Core/Inventory/Procurement/Reports/Admin sections, off-canvas ≤1024px) → 40px sticky topbar (title, warehouse pill, notif bell) → 12px page content. Conventions: 11px compact tables + hover + sticky modal theads + mobile card-mode via `data-label`; full-screen `.modal-overlay/.modal-shell/.modal-body(scroll)/.modal-footer` (+480–640px small + 460px subsidy-detail variants); `.form-control/.form-row.cols-2/3/4/.form-section-label/.req/.hint`; `.btn(.btn-sm)+variants`, `.badge-*/.alert-*/.card/.stat-card`; global **SS combobox** enhances every `<select>` (portal panel, 100-render cap, `SS.sync/refresh`, `MutationObserver`) + separate autocomplete for description inputs; notifications `fetch(unread)` after 2s + 30s poll; validation via session alerts + `@error/is-invalid` (+ modal reopen on `$errors`); standalone print docs (RIS/ledger/transfer/RPCI/RSMI) with paper-size toolbar + `@media print` chrome-hiding; custom Bootstrap-4 pagination partial used in 11 indexes.
+Sole layout `layouts/app.blade.php` (~1615 lines, inline CSS/JS): sidebar 190px (Core/Inventory/Procurement/Reports/Admin sections, off-canvas ≤1024px) → 40px sticky topbar (title, warehouse pill, notif bell) → 12px page content. Conventions: 11px compact tables + hover + sticky modal theads + mobile card-mode via `data-label`; full-screen `.modal-overlay/.modal-shell/.modal-body(scroll)/.modal-footer` (+480–640px small + 460px subsidy-detail variants); `.form-control/.form-row.cols-2/3/4/.form-section-label/.req/.hint`; `.btn(.btn-sm)+variants`, `.badge-*/.alert-*/.card/.stat-card`; global **SS combobox** enhances every `<select>` (portal panel, 100-render cap, `SS.sync/refresh`, `MutationObserver`) + separate autocomplete for description inputs; notifications `fetch(unread)` after 2s + 30s poll; validation via session alerts + `@error/is-invalid` (+ modal reopen on `$errors`); standalone print docs (RIS/ledger/transfer/RPCI/RSMI) with paper-size toolbar + `@media print` chrome-hiding; custom Bootstrap-4 pagination partial used in 11 indexes. Dashboard stat cards: 4×4 grid (inventory/subsidies/requisitions/reservations) with per-item `<details>` dropdowns + bar chart (was line). Font discipline: inherit base sizes, 13px body / 11px code-labels / 22px big numbers / 32px empty icons — no ad-hoc overrides.
 
 ## 22. Important business rules
 
@@ -171,24 +177,36 @@ Sole layout `layouts/app.blade.php` (~1615 lines, inline CSS/JS): sidebar 190px 
 6. Statuses recomputed, never set manually (subsidy pending/partial/fully_delivered; RIS pending/partially_approved/approved; transfer pending/partial/completed; reservation UPPER/lowercase chains per §6).
 7. Header warehouse fields are legacy; line/dispatch warehouses are authoritative.
 8. DR numbers are per-item (delivery) / per-dispatch (RIS); RIS header DR stays null.
-9. Deletion = reversal (restore exact records, delete cards, recompute) with guards: subsidy traces transfer lineage; transfer refuses on downstream use; reservation refuses if deployed; catalog/category refuse if referenced.
+9. Deletion = reversal (restore exact records, delete cards, recompute) with guards: subsidy traces transfer lineage; `destroyDelivery` refuses when consumed by RIS/transfer/reservation; transfer refuses on downstream use; reservation refuses if deployed; RIS/transfer reversals are cancel-safe (dead headers yield CANCELLED lines, never phantom ACTIVE locks); catalog/category refuse if referenced.
 10. Advisory `GET_LOCK`s for stock/RIS/transfer/reservation numbers; DR-number generation has **no lock**.
 11. `is_active` auto-managed by quantity (placeholder rows have no stock_number).
 
 ## 23. Known bugs/issues
 
-1. `max(0,…)` silent flooring (delivery edit/delete, subsidy delete, transfer dispatch) hides over-draws — prefer reject with message.
-2. Transfer dispatch: no source-availability check, ignores reservations; `min()` silently caps over-dispatch.
+Fixed in this pass (regression-tested in `SecurityHardeningTest` + `DeliveryConfirmationTest`):
+- `/api/transfer-items` now enforces warehouse access (mirrors requisition-items).
+- Snapshot POSTs now require `canCreate()` (admin/WM).
+- `/api/check-username` is admin-only; `/api/check-dr` + `/api/item-stock-card` require `canCreate()`.
+- Stale `cascadeUnitCost`/`walkTransferChain` (wrote dropped column) deleted; stale docblock fixed.
+- Orphaned views deleted (`delivery_subsidies/edit`, `dashboard/_reservation_summary`).
+- Warehouse dashboard `@section`/`@push` imbalance fixed (was leaking an output buffer).
+- Delivery updater read scope made coherent (Items/subsidy-show/reservations/transfers/warehouses all-access read-only).
+- `WarehouseController@index` now unions legacy `warehouse_id` like every other controller.
+
+Remaining:
+1. `max(0,…)` silent flooring (delivery edit/delete, subsidy delete, transfer dispatch source) hides over-draws — prefer reject with message.
+2. Transfer dispatch: no source-availability check, ignores reservations.
 3. Transfer `store` pre-checks unlocked + ignore reservations (TOCTOU).
 4. Dispatch edit availability ignores reservations (inconsistent with create).
-5. No `reservation_item_id ↔ item_id`/warehouse match validation; no over-deploy vs `remaining` check; credit-back read unlocked.
+5. Credit-back read **unlocked** in `processApproval` (description match + ACTIVE + `remaining` checks exist; warehouse match on the linked line still not validated).
 6. `reservedQuantityForItem` over-locks after partial deployment (sums full reserved, not net of deployed).
-7. `cascadeUnitCost` stale — writes dropped `requisition_items.unit_cost`; use `cascadeItemCost`.
-8. Transfer edit cannot change ENGAS.
-9. DR-number generation race (check-then-insert, max 100 tries, no lock); `findOrCreateByUnitCost` find-then-create race.
-10. `items.quantity` int-cast truncates `decimal(15,4)` fractions.
-11. Auth gaps (§8): `/api/transfer-items` + `/api/item-stock-card` lack warehouse checks; `/api/check-dr` leaks existence; description-items aggregates globally; snapshot POSTs role-free; `transferred_by cascade` deletes transfers with users.
-12. `welcome.blade.php` → missing `register` route (latent 500); `POST /logout` outside `auth`.
+7. Transfer edit cannot change ENGAS.
+8. DR-number generation race (check-then-insert, max 100 tries, no lock); `findOrCreateByUnitCost` find-then-create race.
+9. `items.quantity` int-cast truncates `decimal(15,4)` fractions.
+10. Auth gaps: `/api/requisition-description-items` aggregates global stock; `transferred_by cascade` deletes transfers with users; `viewSnapshot` shows null-warehouse snapshots to anyone.
+11. `welcome.blade.php` → missing `register` route (latent 500, guarded + orphaned file); `POST /logout` outside `auth`.
+12. Audit tables/models/migrations remain but viewer + delete-path writes removed — do not treat as usable history; do not re-add without asking.
+13. Latent waste (not bugs): unused passed vars (`$balances` in admin dashboard, `$snapshots` in RPCI/RSMI views); `$items->map` without null-guard in subsidy `_edit_form`; admin dashboard dead `@section('scripts')` wrapper (push still emits).
 
 ## 24. Important dependencies
 
@@ -196,8 +214,8 @@ Sole layout `layouts/app.blade.php` (~1615 lines, inline CSS/JS): sidebar 190px 
 
 ## 25. Testing procedures
 
-- Suite: `tests/Feature/` — **23 tests** covering subsidy deletion reversal, delivery edit, dispatch edit, exact-record issuance, transfer correction/requested-vs-dispatched, subsidy lineage, reservation/RIS isolation, balance report, auth audit.
-- Run: `composer test` (= `config:clear` + `artisan test`) or `php artisan test`. DB safety: tests use their own DB handling — never run `migrate:fresh/db:wipe/truncate` against the dev/prod SQLite file.
+- Suite: `tests/Feature/` — **30 files, 204 passing** (incl. `DeliveryConfirmationTest` with 7 delivery-updater proofs, `SubsidyDeletionBlockTest`, `SecurityHardeningTest` with 5 auth proofs, plus `WarehouseDashboard`, `SubsidyIndexScoping`, `ReservationDispatchGuards`, `ShipmentEditGuards`) covering subsidy deletion reversal, delivery edit, dispatch edit, exact-record issuance, transfer correction/requested-vs-dispatched, subsidy lineage, reservation/RIS isolation + guards, balance report, auth audit.
+- Run: `composer test` (= `config:clear` + `artisan test`) or `php artisan test`. **Test DB is MySQL `wgims_test`** (`phpunit.xml`, NOT the dev database) — ensure MySQL runs it; never run `migrate:fresh/db:wipe/truncate` against the dev/prod database.
 - Manual QA per change: exercise create→dispatch→edit→delete for the touched flow; verify stock cards + balances + reservation availability + warehouse scoping for a non-admin user; check logs (`storage/logs/laravel.log`) + browser console.
 
 ## 26. Things an AI agent MUST NOT do
@@ -217,7 +235,7 @@ Sole layout `layouts/app.blade.php` (~1615 lines, inline CSS/JS): sidebar 190px 
 
 ## 27. Things an AI agent SHOULD reuse
 
-`Item::findOrCreateByUnitCost()` · `generateStockNumber/RisNumber/TransferNumber/ReservationNumber` · `StockCardEntry::recalculateBalancesForItem()` · `updateDeliveryStatus/updateFulfilmentStatus/updateTransferStatus/updateOverallStatus` · `ScopesWarehouse` trait · `DeliverySubsidyCascadeService::cascadeItemCost + recordAudit` · audit-log models · `downstreamUsageWarning/transferLineageItemIds/destroyBlockers` reversal guards · SS combobox + modal/form/table/alert/print conventions (§21) · pagination partial · notification helper · `docs/` (BUSINESS_RULES, WORKFLOWS, DATABASE_SCHEMA, SECURITY, KNOWN_ISSUES) · existing 23 feature tests as behavior specs.
+`Item::findOrCreateByUnitCost()` · `generateStockNumber/RisNumber/TransferNumber/ReservationNumber` · `StockCardEntry::recalculateBalancesForItem()` · `updateDeliveryStatus/updateFulfilmentStatus/updateTransferStatus/updateOverallStatus` · `ScopesWarehouse` trait · `DeliverySubsidyCascadeService::cascadeItemCost + recordAudit` · `subsidyDeletionBlockers/transferLineageItemIds/destroyBlockers` reversal guards · SS combobox + modal/form/table/alert/print conventions (§21) · pagination partial · notification helper · `docs/` (BUSINESS_RULES, WORKFLOWS, DATABASE_SCHEMA, SECURITY, KNOWN_ISSUES) · existing 28 feature tests as behavior specs (incl. guard tests — read them before touching dispatch/transfer/reservation logic).
 
 ## 28. Important files and their responsibilities
 
@@ -238,13 +256,14 @@ Sole layout `layouts/app.blade.php` (~1615 lines, inline CSS/JS): sidebar 190px 
 | `app/Services/DeliverySubsidyCascadeService.php` | Cost/RIS/supplier cascade (use `cascadeItemCost`) |
 | `app/Http/Controllers/Concerns/ScopesWarehouse.php` | Warehouse scoping for every list query |
 | `app/Http/Middleware/Admin*.php` + `EnsureUserIsActive.php` + `NoCache.php` | Role gates, active-check, cache headers |
-| `routes/web.php` | Full route map (~106) |
+| `routes/web.php` | Full route map (~104; audit-log viewer routes deleted) |
 | `resources/views/layouts/app.blade.php` | Sole layout: CSS system, SS combobox, modal/table/form/print patterns |
 | `database/migrations/` (57) | Schema truth (no soft deletes, string statuses) |
-| `tests/Feature/` (23) | Behavior specs for critical flows |
+| `tests/Feature/` (30) | Behavior specs for critical flows |
 | `docs/` | ARCHITECTURE, DATABASE_SCHEMA, BUSINESS_RULES, WORKFLOWS, SECURITY, TESTING_GUIDE, user manual |
 | `AGENTS.md` | Agent rules (read with this file) |
 
 ---
 
-**Gaps marked UNKNOWN — REQUIRES VERIFICATION:** production `DB_CONNECTION` value (repo default is sqlite; confirm host `.env` before any MySQL-specific SQL such as `GET_LOCK` behavior on SQLite); whether global aggregation on `/api/requisition-description-items` is intentional disclosure; whether `center_staff` snapshot-writing is intentional.
+**Gaps marked UNKNOWN — REQUIRES VERIFICATION:** whether global aggregation on `/api/requisition-description-items` is intentional disclosure; whether `center_staff` snapshot-writing is intentional. (Resolved: local `.env` uses MySQL db `wgims` on 127.0.0.1:3306; tests use MySQL `wgims_test`.)
+

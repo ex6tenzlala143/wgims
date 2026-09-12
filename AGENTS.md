@@ -1,6 +1,6 @@
 # WGIMS — AI Agent Instructions
 
-> Deep-audit context: read `WGIMS_AI_CONTEXT.md` (v2, audited 2026-09-08 at HEAD `d4edc9e`)
+> Deep-audit context: read `WGIMS_AI_CONTEXT.md` (v3, audited 2026-09-11 at HEAD `a4db5e2`)
 > before any major change. It contains the full route map, schema, flows, and known gaps.
 > Existing `docs/` (ARCHITECTURE, DATABASE_SCHEMA, BUSINESS_RULES, WORKFLOWS, SECURITY,
 > KNOWN_ISSUES, TESTING_GUIDE) are secondary references.
@@ -25,6 +25,7 @@ Roles (stored in `users.role` column, NOT via Spatie roles):
 - `supply_custodian` — can approve
 - `center_staff` — read-only, cannot create
 - `center_head` — can approve
+- `delivery_updater` — confirms delivered dispatch lines (all warehouses), nothing else
 
 Middleware:
 - `admin` — admin + warehouse_manager (view access)
@@ -36,11 +37,18 @@ Nuances (verified in code — do not assume the middleware tells the whole story
 - Reservation approve/ready/cancel routes are `auth`-only but controllers require
   `canWrite()` = **admin-only**, even though `User::canApprove()` lists WM/head/custodian.
   Only RIS dispatch actually honors `canApprove()`.
-- Transfers edit/update/delete routes use `admin` (allows WM) but controllers enforce
-  `canWrite()` (admin-only). Treat them as admin-only; prefer tightening the route.
-- `POST /reports/*/snapshot` are `auth`-only with no role check (any role can write).
+- Transfers edit/update/delete routes are `admin.write` (admin-only), matching the
+  controller `canWrite()` enforcement.
 - `POST /logout` sits outside the `auth` group. `welcome.blade.php` references a
   nonexistent `register` route (latent 500 if rendered).
+- Audit viewer removed (`a4db5e2`): the `audit-log` routes/views/controller methods and all
+  delete-path audit writes are gone (tests assert absence). Tables/models remain but only
+  non-delete writes exist (`correct()`, non-delete transfer audits). Do not re-add.
+- Delivery confirmation (`confirm/unconfirm-delivery`, `auth`-only) requires
+  `canConfirmDelivery()` = **admin, warehouse_manager, delivery_updater**. It stamps
+  `delivered_at/delivered_by/delivery_notes` on the dispatch line ONLY — never touches
+  stock, costs, DR numbers, or fulfilment status. Notifies all active admins + WMs
+  (actor excluded), with an explicit "fully delivered" notice on the last open line.
 
 ## Critical Models & Relationships
 
@@ -184,8 +192,9 @@ Format: `{WAREHOUSE_CODE}-{CATEGORY_PREFIX}-{NNNN}` (e.g., `GAMC-FOO-0001`)
 ### Cost Rules
 - `unit_cost` — current unit cost on the item record
 - `engas_unit_cost` — ENGAS unit cost (can be null)
+- **Zero is a valid cost** (donated goods): validations are `nullable|min:0`, blank→null. Always use `!==null` checks — `0` means free, null means unknown.
 - Cost data on requisition items was dropped; now lives ONLY on `requisition_dispatch_items`
-- When editing a delivery, cost changes cascade through `DeliverySubsidyCascadeService`
+- When editing a delivery, cost changes cascade through `DeliverySubsidyCascadeService` (skipped on zero-qty edits to preserve the shared cost basis)
 
 ## Route Reference (Key Routes)
 
@@ -210,7 +219,6 @@ Format: `{WAREHOUSE_CODE}-{CATEGORY_PREFIX}-{NNNN}` (e.g., `GAMC-FOO-0001`)
 | /delivery-subsidies/{ds}/deliveries/{d}/edit | GET | delivery_subsidies.edit_delivery | DeliverySubsidyController | admin |
 | /delivery-subsidies/{ds}/deliveries/{d} | PUT | delivery_subsidies.update_delivery | DeliverySubsidyController | admin |
 | /delivery-subsidies/{ds}/deliveries/{d} | DELETE | delivery_subsidies.destroy_delivery | DeliverySubsidyController | admin |
-| /delivery-subsidies/{ds}/audit-log | GET | delivery_subsidies.audit_log | DeliverySubsidyController | admin |
 | /requisitions | GET | requisitions.index | RequisitionController | auth |
 | /requisitions/create | GET | requisitions.create | RequisitionController | admin.create |
 | /requisitions | POST | requisitions.store | RequisitionController | admin.create |
@@ -221,11 +229,12 @@ Format: `{WAREHOUSE_CODE}-{CATEGORY_PREFIX}-{NNNN}` (e.g., `GAMC-FOO-0001`)
 | /requisitions/{r}/edit | GET | requisitions.edit | RequisitionController | admin.write |
 | /requisitions/{r} | PUT | requisitions.update | RequisitionController | admin.write |
 | /requisitions/{r}/correct | PUT | requisitions.correct | RequisitionController | admin.write |
-| /requisitions/{r}/audit-log | GET | requisitions.audit_log | RequisitionController | admin.write |
 | /requisitions/{r} | DELETE | requisitions.destroy | RequisitionController | admin.write |
 | /requisitions/dispatch/{d}/edit-data | GET | requisitions.dispatch_edit_data | RequisitionController | admin.write |
 | /requisitions/dispatch/{d} | PUT | requisitions.dispatch_update | RequisitionController | admin.write |
 | /requisitions/dispatch/{d} | DELETE | requisitions.dispatch_destroy | RequisitionController | admin.write |
+| /requisitions/dispatch/{d}/confirm-delivery | POST | requisitions.dispatch_confirm_delivery | RequisitionController | auth |
+| /requisitions/dispatch/{d}/unconfirm-delivery | POST | requisitions.dispatch_unconfirm_delivery | RequisitionController | auth |
 | /api/requisition-items | GET | requisitions.items_by_warehouse | RequisitionController | auth |
 | /api/requisition-description-items | GET | requisitions.description_items | RequisitionController | auth |
 | /transfers | GET | transfers.index | StockTransferController | auth |
@@ -268,31 +277,38 @@ Format: `{WAREHOUSE_CODE}-{CATEGORY_PREFIX}-{NNNN}` (e.g., `GAMC-FOO-0001`)
 | /api/check-username | GET | users.check_username | UserController | auth |
 | /api/check-dr | GET | ds.check_number | Closure | auth |
 
-> Full map (~106 routes) + deltas: see `WGIMS_AI_CONTEXT.md` §8. Notable gaps:
-> `/api/transfer-items` and `/api/item-stock-card` perform no warehouse-access check;
-> `/api/requisition-description-items` aggregates global stock; snapshot POSTs lack role checks.
+> Full map (~106 routes) + deltas: see `WGIMS_AI_CONTEXT.md` §8. Hardened:
+> `/api/transfer-items` enforces warehouse access (mirrors requisition-items);
+> `POST /reports/*/snapshot` requires `canCreate()`; `/api/check-username` is
+> admin-only; `/api/check-dr` + `/api/item-stock-card` require `canCreate()`.
+> Remaining gaps: `/api/requisition-description-items` aggregates global stock.
 
 ## Edit/Delete/Reversal Rules
 
 ### Delivery Subsidy
 - **No deliveries yet**: Full edit (RIS#, supplier, lines, quantities)
 - **Deliveries exist**: Correction only — header fields (date, place, remarks) + per-line requested quantities. RIS#, supplier, DR# frozen. Lines with deliveries locked to their item.
-- **Delete**: Reverses all delivery quantities, deletes stock cards, marks related transfers as "deleted subsidy", rebuilds balances. Items with qty=0 and no other references are hard-deleted.
+- **Delete**: BLOCKED when any lineage stock was RIS-issued, transfer-moved (qty>0 either side), or reservation-locked — with the blocking RIS/transfer named. Otherwise: reverses all delivery quantities, deletes stock cards, marks planned-only related transfers as "deleted subsidy", rebuilds balances. Items with qty=0 and no other references are hard-deleted.
 
 ### Single Delivery (Shipment)
-- **Edit**: Adjusts quantities, costs, warehouse, DR# per line. Same-item delta applied directly. Cross-warehouse move reverses old receipt and adds to new item. Stock cards reconciled. `qty_delivered` on subsidy line updated.
-- **Delete**: Reverses quantities, decrements `qty_delivered`, deletes stock cards, recalculates subsidy status.
+- **Edit**: Adjusts quantities, costs, warehouse, DR# per line (single-row scoped via `?di=`). Same-item delta applied directly. Cross-warehouse move reverses old receipt and adds to new item (over-stock guarded). Zero-qty edits preserve the shared cost basis (cost/ENGAS/cascade skipped). Stock cards reconciled. `qty_delivered` on subsidy line updated. Zero costs allowed (donated goods).
+- **Delete**: Reverses quantities, decrements `qty_delivered`, deletes stock cards, recalculates subsidy status. **Blocked** if the shipment was consumed by an RIS issue, transfer, or reservation.
 
 ### Requisition (RIS)
-- **Edit**: Header fields + line items. Dispatched lines cannot reduce below issued qty or change catalog item.
+- **Edit**: Header fields + line items. Dispatched lines cannot reduce below issued qty or change catalog item. `status` is recomputed, never mass-assigned.
 - **Correct**: Same as edit but explicitly logged as "correction". Never touches dispatches.
-- **Delete**: Reverses all dispatch quantities to exact stock records, deletes stock cards and dispatch items, recalculates balances.
+- **Delete**: Reverses all dispatch quantities to exact stock records, deletes stock cards and dispatch items, recalculates balances. Cancel-safe: dead (CANCELLED/EXPIRED) reservation parents yield CANCELLED lines, never phantom ACTIVE locks.
 
 ### Dispatch (RequisitionDispatchItem)
-- **Edit**: Reverse old deduction, apply new deduction. Can change warehouse, stock record, qty, cost, DR#. Stock cards moved/updated.
-- **Delete**: Restores quantity to exact stock record, deletes stock card entries, recalculates balances, recomputes RIS fulfilment status.
+- **Edit**: Reverse old deduction, apply new deduction. Can change warehouse, stock record, qty, cost, DR#. Reservation-linked dispatches cannot switch `item_id`. Stock cards moved/updated.
+- **Delete**: Restores quantity to exact stock record, deletes stock card entries, recalculates balances, recomputes RIS fulfilment status. Cancel-safe (see above).
+- **Guards** (`processApproval`/`updateDispatch`): line description must match stock description; reservation must be ACTIVE on an active header with `wanted ≤ remaining`.
+
+### Reservation
+- Reversal fix: when all lines revert to ACTIVE (e.g. consuming RIS deleted), a stale DEPLOYED/PARTIALLY header falls back to READY. PENDING/RESERVED/CANCELLED/EXPIRED headers untouched.
 
 ### Stock Transfer
+- **Dispatch**: over-remaining quantities are now **rejected** (no silent cap). Zero `unit_cost` allowed.
 - **Edit**: Delta applied to source and destination quantities. Guards ensure source has stock and destination has units to return. Stock cards reconciled across all partial dispatches.
 - **Delete**: Only allowed if destination stock not consumed by later transactions. Reverses quantities, deletes stock cards.
 
@@ -350,6 +366,7 @@ All multi-step inventory operations wrapped in `DB::transaction()`.
     `DeliverySubsidyCascadeService::cascadeUnitCost()` — use `cascadeItemCost()`
 14. **Never resolve merge conflicts in inventory views by blindly picking ours/theirs** — merge semantically
 15. **Never change Inventory Balance logic** unless explicitly instructed (Dashboard ≠ Balance)
+16. **Never let delivery confirmation touch stock, costs, DR numbers, or fulfilment status** — it stamps three fields + notifies, nothing else
 
 ## Before Making Any Change
 

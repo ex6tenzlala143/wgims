@@ -23,6 +23,7 @@ class User extends Authenticatable
     const ROLE_CUSTODIAN = 'supply_custodian';
     const ROLE_STAFF = 'center_staff';
     const ROLE_HEAD = 'center_head';
+    const ROLE_DELIVERY_UPDATER = 'delivery_updater';
 
     public function warehouse()
     {
@@ -101,6 +102,21 @@ class User extends Authenticatable
         return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_WAREHOUSE_MANAGER, self::ROLE_HEAD, self::ROLE_CUSTODIAN]);
     }
 
+    public function isDeliveryUpdater(): bool
+    {
+        return $this->role === self::ROLE_DELIVERY_UPDATER;
+    }
+
+    /**
+     * Who may confirm (or un-confirm) that an issued dispatch line was
+     * physically delivered: admins, warehouse managers, and delivery updaters.
+     * This grants NO dispatch/edit/delete powers — only delivery confirmation.
+     */
+    public function canConfirmDelivery(): bool
+    {
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_WAREHOUSE_MANAGER, self::ROLE_DELIVERY_UPDATER]);
+    }
+
     public function getRoleLabel(): string
     {
         return match($this->role) {
@@ -109,6 +125,7 @@ class User extends Authenticatable
             self::ROLE_CUSTODIAN         => 'Supply Custodian',
             self::ROLE_STAFF             => 'Warehouse Staff',
             self::ROLE_HEAD              => 'Warehouse Head',
+            self::ROLE_DELIVERY_UPDATER  => 'Delivery Updater',
             default => ucfirst($this->role),
         };
     }

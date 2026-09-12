@@ -16,9 +16,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * When a Subsidy is deleted/archived its related Stock Transfers must be
- * PRESERVED and visibly flagged — never deleted automatically — so the
- * administrator can review and (deliberately) reverse them.
+ * A Subsidy whose stock has downstream transactions can NEVER be deleted:
+ * executed transfers, RIS issuance, and active reservations all block the
+ * delete with an explanation. Planned-but-undispatched transfers (moved
+ * quantity = 0) do NOT block — they are PRESERVED and visibly flagged so the
+ * administrator can review them.
  */
 class StockTransferSubsidyDeletionMarkingTest extends TestCase
 {
@@ -148,7 +150,7 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
         return compact('whA', 'whB', 'ds', 'transfer', 'sourceItem', 'destItem');
     }
 
-    public function test_deleting_subsidy_preserves_and_marks_related_transfer(): void
+    public function test_subsidy_with_dispatched_transfer_cannot_be_deleted(): void
     {
         $flow = $this->subsidyToTransferFlow('RIS-MARK-DEL', 'DR-MARK-DEL');
         $transfer = $flow['transfer'];
@@ -159,41 +161,49 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
         $this->assertEquals(40, (float) $flow['sourceItem']->fresh()->quantity);
         $this->assertEquals(20, (float) $flow['destItem']->fresh()->quantity);
 
-        // Dispatching the transfer carried the source-subsidy trail to the
-        // destination warehouse's stock record.
-        $destItem = $flow['destItem']->fresh();
-        $this->assertEquals('active', $destItem->source_subsidy_status);
-        $this->assertEquals($flow['ds']->id, (int) $destItem->source_subsidy_id);
-        $this->assertEquals('RIS-MARK-DEL', $destItem->source_subsidy_ris);
-
-        // Delete the subsidy — the transfer must SURVIVE and be flagged.
+        // Delete is REFUSED — the transfer moved this subsidy's stock.
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $flow['ds']))
+            ->assertRedirect()
+            ->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'cannot be deleted')
+                && str_contains($msg, $transfer->transfer_number));
+
+        // Nothing changed: subsidy, stock, and the unflagged transfer survive.
+        $this->assertDatabaseHas('delivery_subsidies', ['id' => $flow['ds']->id]);
+        $this->assertEquals(40, (float) $flow['sourceItem']->fresh()->quantity);
+        $this->assertEquals(20, (float) $flow['destItem']->fresh()->quantity);
+        $this->assertNull($flow['transfer']->fresh()->source_subsidy_status);
+    }
+
+    public function test_subsidy_with_planned_only_transfer_deletes_and_marks_it(): void
+    {
+        $whA = $this->makeWarehouse('Warehouse A', 'WHA');
+        $whB = $this->makeWarehouse('Warehouse B', 'WHB');
+
+        $ds = $this->createSubsidy([['description' => 'Ration Pack', 'quantity' => 60]], 'RIS-MARK-PLAN');
+        $this->dispatch($ds, 'DR-MARK-PLAN', $whA, 60, 250);
+
+        $sourceItem = Item::where('warehouse_id', $whA->id)->where('description', 'Ration Pack')->firstOrFail();
+        // Planned only — never dispatched, so no stock moved.
+        $transfer = $this->createTransfer($whA, $whB, $sourceItem, 20, 250);
+
+        // A planned transfer does NOT block: delete succeeds and flags it.
+        $this->actingAs($this->admin())
+            ->delete(route('delivery_subsidies.destroy', $ds))
             ->assertRedirect(route('delivery_subsidies.index'));
 
-        $this->assertDatabaseMissing('delivery_subsidies', ['id' => $flow['ds']->id]);
+        $this->assertDatabaseMissing('delivery_subsidies', ['id' => $ds->id]);
 
         $transfer = $transfer->fresh();
         $this->assertNotNull($transfer, 'Stock Transfer must NEVER be auto-deleted with its subsidy.');
         $this->assertNull($transfer->delivery_subsidy_id, 'FK is nulled by the delete.');
         $this->assertEquals('deleted', $transfer->source_subsidy_status);
-        $this->assertEquals('RIS-MARK-DEL', $transfer->source_ris_number);
-        $this->assertEquals($flow['ds']->dr_number, $transfer->source_dr_number);
+        $this->assertEquals('RIS-MARK-PLAN', $transfer->source_ris_number);
+        $this->assertEquals($ds->dr_number, $transfer->source_dr_number);
         $this->assertTrue($transfer->isRelatedToDeletedSubsidy());
-        $this->assertEquals('Deleted', $transfer->sourceSubsidyStatusLabel());
 
-        // The subsidy deletion reverses its DELIVERY (the WH A stock it created)
-        // but must NOT touch the transfer's own movement at WH B — that is
-        // exactly what the admin reviews via the preserved, flagged transfer.
-        $this->assertEquals(0, (float) $flow['sourceItem']->fresh()->quantity);
-        $this->assertEquals(20, (float) $flow['destItem']->fresh()->quantity);
-
-        // The destination stock is ALSO flagged — the FROM DELETED SUBSIDY
-        // marker follows the transferred stock to the other warehouse.
-        $this->assertEquals('deleted', $flow['sourceItem']->fresh()->source_subsidy_status);
-        $this->assertTrue($flow['sourceItem']->fresh()->isRelatedToDeletedSubsidy());
-        $this->assertEquals('deleted', $flow['destItem']->fresh()->source_subsidy_status);
-        $this->assertTrue($flow['destItem']->fresh()->isRelatedToDeletedSubsidy());
+        // The delivery reversal still happened (60 → 0); nothing was moved.
+        $this->assertEquals(0, (float) $sourceItem->fresh()->quantity);
 
         // No delete-audit rows are written anymore; the transfer itself keeps
         // the deletion flag and snapshots for review.
@@ -201,7 +211,7 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
             ->where('action', 'subsidy_deleted')->first();
         $this->assertNull($log);
 
-        // Both pages render the review marker.
+        // The review marker renders.
         $this->actingAs($this->admin())
             ->get(route('transfers.show', $transfer->id))
             ->assertOk()
@@ -209,116 +219,99 @@ class StockTransferSubsidyDeletionMarkingTest extends TestCase
             ->assertSee('Ration Pack');
     }
 
-    public function test_transfer_related_to_deleted_subsidy_cannot_be_deleted_while_stock_is_reused(): void
+    public function test_subsidy_with_onward_chain_cannot_be_deleted(): void
     {
         $flow = $this->subsidyToTransferFlow('RIS-MARK-BLOCK', 'DR-MARK-BLOCK');
         $whC  = $this->makeWarehouse('Warehouse C', 'WHC');
 
-        // The transferred stock at WH B is sent ONWARD to WH C — the movement at
-        // WH B now depends on this transfer's arrival.
+        // The transferred stock at WH B is sent ONWARD to WH C.
         $onward = $this->createTransfer($flow['whB'], $whC, $flow['destItem'], 5, 250);
         $this->dispatchTransfer($onward, $flow['destItem'], 5);
 
+        // Delete is REFUSED — the whole chain stays intact.
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $flow['ds']))
-            ->assertRedirect(route('delivery_subsidies.index'));
-        $this->assertEquals('deleted', $flow['transfer']->fresh()->source_subsidy_status);
+            ->assertRedirect()
+            ->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'cannot be deleted'));
 
-        // WH A lost the delivered stock (delivery reversed); WH B holds the
-        // transferred stock minus the 5 already sent onward to WH C.
-        $this->assertEquals(0, (float) $flow['sourceItem']->fresh()->quantity);
+        $this->assertDatabaseHas('delivery_subsidies', ['id' => $flow['ds']->id]);
+        $this->assertEquals(40, (float) $flow['sourceItem']->fresh()->quantity);
         $this->assertEquals(15, (float) $flow['destItem']->fresh()->quantity);
         $this->assertEquals(5, (float) Item::where('warehouse_id', $whC->id)->where('description', 'Ration Pack')->firstOrFail()->quantity);
-
-        // Every hop of the lineage is flagged as FROM DELETED SUBSIDY.
-        $whCItem = Item::where('warehouse_id', $whC->id)->where('description', 'Ration Pack')->firstOrFail();
-        $this->assertEquals('deleted', $whCItem->source_subsidy_status);
-        $this->assertEquals('deleted', $flow['destItem']->fresh()->source_subsidy_status);
-
-        // Deleting the marked transfer must be REFUSED with an explanation…
-        $response = $this->actingAs($this->admin())
-            ->delete(route('transfers.destroy', $flow['transfer']));
-
-        $response->assertRedirect();
-        $response->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'cannot be deleted yet')
-            && str_contains($msg, 'Transfer out'));
-        $this->assertDatabaseHas('stock_transfers', ['id' => $flow['transfer']->id]);
-        $this->assertEquals(0, (float) $flow['sourceItem']->fresh()->quantity);
-        $this->assertEquals(15, (float) $flow['destItem']->fresh()->quantity);
-        $this->assertEquals(5, (float) Item::where('warehouse_id', $whC->id)->where('description', 'Ration Pack')->firstOrFail()->quantity);
-
-        // Once the dependent onward transfer is gone, deletion is allowed.
-        $this->actingAs($this->admin())
-            ->delete(route('transfers.destroy', $onward))
-            ->assertRedirect(route('transfers.index'));
-
-        $this->actingAs($this->admin())
-            ->delete(route('transfers.destroy', $flow['transfer']))
-            ->assertRedirect(route('transfers.index'));
-
-        $this->assertDatabaseMissing('stock_transfers', ['id' => $flow['transfer']->id]);
-        $this->assertEquals(20, (float) $flow['sourceItem']->fresh()->quantity);
-        $this->assertEquals(0, (float) $flow['destItem']->fresh()->quantity);
-        $this->assertEquals(0, (float) Item::where('warehouse_id', $whC->id)->where('description', 'Ration Pack')->firstOrFail()->quantity);
     }
 
-    public function test_deleting_marked_transfer_reverses_stock_without_audit_trail(): void
+    public function test_deleting_marked_planned_transfer_reverses_nothing_and_leaves_no_cards(): void
     {
-        $flow = $this->subsidyToTransferFlow('RIS-MARK-REV', 'DR-MARK-REV');
+        $whA = $this->makeWarehouse('Warehouse A', 'WHA');
+        $whB = $this->makeWarehouse('Warehouse B', 'WHB');
+
+        $ds = $this->createSubsidy([['description' => 'Ration Pack', 'quantity' => 60]], 'RIS-MARK-REV');
+        $this->dispatch($ds, 'DR-MARK-REV', $whA, 60, 250);
+
+        $sourceItem = Item::where('warehouse_id', $whA->id)->where('description', 'Ration Pack')->firstOrFail();
+        // Planned only — the transfer is marked (not blocked) on subsidy delete.
+        $transfer = $this->createTransfer($whA, $whB, $sourceItem, 20, 250);
 
         $this->actingAs($this->admin())
-            ->delete(route('delivery_subsidies.destroy', $flow['ds']))
+            ->delete(route('delivery_subsidies.destroy', $ds))
             ->assertRedirect(route('delivery_subsidies.index'));
+        $this->assertEquals('deleted', $transfer->fresh()->source_subsidy_status);
 
+        // Deleting the marked (never-dispatched) transfer succeeds: nothing
+        // ever moved, so quantities stay 0/0 and no cards remain.
         $this->actingAs($this->admin())
-            ->delete(route('transfers.destroy', $flow['transfer']))
+            ->delete(route('transfers.destroy', $transfer))
             ->assertRedirect(route('transfers.index'));
 
-        // The transferred 20 returns to WH A (the delivery itself is already
-        // gone, so WH A's base stock is only what the reversal brings back);
-        // WH B returns to zero.
-        $this->assertEquals(20, (float) $flow['sourceItem']->fresh()->quantity);
-        $this->assertEquals(0, (float) $flow['destItem']->fresh()->quantity);
+        $this->assertEquals(0, (float) $sourceItem->fresh()->quantity);
 
         // No stock-card movement for the transfer remains.
         $this->assertEquals(0, StockCardEntry::where('reference_type', 'transfer_out')
-            ->where('reference_id', $flow['transfer']->id)->count());
+            ->where('reference_id', $transfer->id)->count());
         $this->assertEquals(0, StockCardEntry::where('reference_type', 'transfer_in')
-            ->where('reference_id', $flow['transfer']->id)->count());
+            ->where('reference_id', $transfer->id)->count());
 
         // No delete-audit rows are written anymore; stock reversal is verified above.
-        $this->assertDatabaseMissing('stock_transfers', ['id' => $flow['transfer']->id]);
+        $this->assertDatabaseMissing('stock_transfers', ['id' => $transfer->id]);
         $this->assertDatabaseMissing('stock_transfer_audit_logs', [
-            'transfer_number' => $flow['transfer']->transfer_number,
+            'transfer_number' => $transfer->transfer_number,
             'action'          => 'reversed_deleted',
         ]);
     }
 
     public function test_transfers_index_filters_related_to_deleted_subsidy(): void
     {
-        $flow = $this->subsidyToTransferFlow('RIS-MARK-FILT', 'DR-MARK-FILT');
+        $whA = $this->makeWarehouse('Warehouse A', 'WHA');
+        $whB = $this->makeWarehouse('Warehouse B', 'WHB');
+
+        $ds = $this->createSubsidy([['description' => 'Ration Pack', 'quantity' => 60]], 'RIS-MARK-FILT');
+        $this->dispatch($ds, 'DR-MARK-FILT', $whA, 60, 250);
+
+        $sourceItem = Item::where('warehouse_id', $whA->id)->where('description', 'Ration Pack')->firstOrFail();
+        // Planned only, so the subsidy delete marks (not blocks) this transfer.
+        $transfer = $this->createTransfer($whA, $whB, $sourceItem, 20, 250);
 
         $this->actingAs($this->admin())
-            ->delete(route('delivery_subsidies.destroy', $flow['ds']))
+            ->delete(route('delivery_subsidies.destroy', $ds))
             ->assertRedirect(route('delivery_subsidies.index'));
 
         // Filter: only the flagged transfer appears.
         $this->actingAs($this->admin())
             ->get(route('transfers.index', ['related_to_deleted_subsidy' => 'yes']))
             ->assertOk()
-            ->assertSee($flow['transfer']->transfer_number)
+            ->assertSee($transfer->transfer_number)
             ->assertSee('RELATED TO DELETED SUBSIDY');
 
         // Inverse filter: it does not appear when excluded.
         $this->actingAs($this->admin())
             ->get(route('transfers.index', ['related_to_deleted_subsidy' => 'no']))
             ->assertOk()
-            ->assertDontSee($flow['transfer']->transfer_number);
+            ->assertDontSee($transfer->transfer_number);
 
         // Search by the original RIS reference finds it too.
         $this->actingAs($this->admin())
             ->get(route('transfers.index', ['q' => 'RIS-MARK-FILT']))
             ->assertOk()
-            ->assertSee($flow['transfer']->transfer_number);
+            ->assertSee($transfer->transfer_number);
     }
 }

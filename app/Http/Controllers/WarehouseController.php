@@ -15,9 +15,12 @@ class WarehouseController extends Controller
         $query = Warehouse::withCount(['users', 'assignedUsers', 'items'])
             ->orderBy('name');
 
-        if (! $user->hasAdminAccess()) {
-            // Non-admin users only see warehouses they are assigned to via the pivot.
-            $assignedIds = $user->warehouses()->pluck('warehouses.id');
+        if (! $user->hasAdminAccess() && ! $user->isDeliveryUpdater()) {
+            // Non-admin users only see assigned warehouses (pivot + legacy column).
+            $assignedIds = $user->warehouses()->pluck('warehouses.id')->map(fn ($id) => (int) $id)->toArray();
+            if ($user->warehouse_id && ! in_array((int) $user->warehouse_id, $assignedIds, true)) {
+                $assignedIds[] = (int) $user->warehouse_id;
+            }
             $query->whereIn('id', $assignedIds);
         }
 

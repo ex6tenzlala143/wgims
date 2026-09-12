@@ -150,6 +150,33 @@
 </div>
 @endif
 
+<!-- Delivery Confirmation (delivery updater workflow) -->
+@php
+    $deliveryTotal     = $requisition->deliveryTotalCount();
+    $deliveryConfirmed = $requisition->deliveryConfirmedCount();
+    $isFullyDelivered  = $requisition->isDeliveryConfirmed();
+@endphp
+@if($deliveryTotal > 0)
+<div class="card" style="margin-bottom:24px">
+    <div class="card-body" style="padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+            <span style="font-weight:700;font-size:14px">
+                <i class="fas fa-truck" style="color:var(--primary);margin-right:6px"></i>
+                Delivery Confirmation
+            </span>
+            <span style="font-size:13px;color:var(--text-muted);margin-left:8px">
+                {{ $deliveryConfirmed }} of {{ $deliveryTotal }} issued line(s) confirmed delivered
+            </span>
+        </div>
+        @if($isFullyDelivered)
+            <span class="badge badge-success" style="font-size:13px"><i class="fas fa-check-circle"></i> Fully Delivered</span>
+        @else
+            <span class="badge badge-warning" style="font-size:13px">{{ $deliveryTotal - $deliveryConfirmed }} line(s) awaiting delivery confirmation</span>
+        @endif
+    </div>
+</div>
+@endif
+
 <!-- Items -->
 <div class="card" style="margin-bottom:24px">
     <div class="card-header"><h3>Requested Items</h3></div>
@@ -278,6 +305,7 @@
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">ENGAS Total</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Cumulative</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Available Stocks</th>
+                        <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Delivery</th>
 @if(auth()->user()->canWrite())
 <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Actions</th>
 @endif
@@ -359,6 +387,42 @@
                                 @endif
                             @else
                                 <span style="color:var(--text-muted);font-size:11px">—</span>
+                            @endif
+                        </td>
+                        <td style="padding:10px 14px;text-align:center">
+                            @if($di->delivered_at)
+                                <span class="badge badge-success"><i class="fas fa-check"></i> Delivered</span>
+                                <div style="font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap">
+                                    {{ $di->delivered_at->format('M d, Y') }}
+                                    @if($di->deliverer)
+                                        · by {{ $di->deliverer->name }}
+                                    @endif
+                                </div>
+                                @if($di->delivery_notes)
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;max-width:220px">{{ $di->delivery_notes }}</div>
+                                @endif
+                                @if(auth()->user()->canConfirmDelivery())
+                                <form action="{{ route('requisitions.dispatch_unconfirm_delivery', $di->id) }}" method="POST" style="margin-top:6px"
+                                      onsubmit="return confirm('Withdraw the delivery confirmation for this line? Admins will NOT be auto-notified of the withdrawal.')">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-outline" title="Withdraw delivery confirmation">
+                                        <i class="fas fa-undo"></i> Withdraw
+                                    </button>
+                                </form>
+                                @endif
+                            @else
+                                <span class="badge badge-secondary">Pending</span>
+                                @if(auth()->user()->canConfirmDelivery())
+                                <form action="{{ route('requisitions.dispatch_confirm_delivery', $di->id) }}" method="POST" style="margin-top:6px">
+                                    @csrf
+                                    <input type="hidden" name="delivered_date" value="{{ now()->format('Y-m-d') }}">
+                                    <input type="text" name="delivery_notes" class="form-control" maxlength="1000"
+                                           placeholder="Notes (optional)" style="font-size:11px;padding:4px 8px;margin-bottom:6px;max-width:220px">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Confirm this line was physically delivered (admins will be notified)">
+                                        <i class="fas fa-truck"></i> Confirm
+                                    </button>
+                                </form>
+                                @endif
                             @endif
                         </td>
                         @if(auth()->user()->canWrite())

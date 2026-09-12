@@ -203,6 +203,38 @@ class Requisition extends Model
         return max(0, $this->totalRequested() - $this->totalIssued());
     }
 
+    /** All dispatch lines across all items (flat collection). */
+    public function allDispatchItems()
+    {
+        $this->loadMissing('items.dispatchItems');
+
+        return $this->items->flatMap(fn ($ri) => $ri->dispatchItems);
+    }
+
+    /** Number of dispatch lines with a recorded delivery confirmation. */
+    public function deliveryConfirmedCount(): int
+    {
+        return $this->allDispatchItems()->whereNotNull('delivered_at')->count();
+    }
+
+    /** Total number of dispatch lines. */
+    public function deliveryTotalCount(): int
+    {
+        return $this->allDispatchItems()->count();
+    }
+
+    /**
+     * True when every issued dispatch line has been confirmed delivered
+     * (and at least one dispatch exists). Purely derived — delivery
+     * confirmation never changes issuance status or stock.
+     */
+    public function isDeliveryConfirmed(): bool
+    {
+        $total = $this->deliveryTotalCount();
+
+        return $total > 0 && $this->deliveryConfirmedCount() >= $total;
+    }
+
     /**
      * Completion date: the actual date of the final dispatch/issuance that
      * made this RIS fully fulfilled (null unless the RIS is completed).

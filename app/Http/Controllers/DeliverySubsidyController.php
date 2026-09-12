@@ -632,6 +632,17 @@ class DeliverySubsidyController extends Controller
     {
         abort_unless(Auth::user()->canWrite(), 403);
 
+        // Hard rule: a subsidy with downstream transactions can never be
+        // deleted. RIS augmentation (issuance), executed stock transfers, and
+        // active reservation locks all block deletion — reversing the receipt
+        // underneath those movements would corrupt them (same rule as single
+        // shipment deletion). Planned-but-undispatched transfers (moved
+        // quantity = 0) do NOT block; they are flagged as before.
+        $blockers = $this->subsidyDeletionBlockers($deliverySubsidy);
+        if (! empty($blockers)) {
+            return back()->with('error', 'This subsidy cannot be deleted because its stock has downstream transactions: ' . implode('; ', array_unique($blockers)) . '. Reverse or resolve those transactions first, then delete this subsidy.');
+        }
+
         $markedTransferCount = 0;
         $lineageIds = [];
         $descendantIds = [];
@@ -761,73 +772,63 @@ class DeliverySubsidyController extends Controller
                 ? "{$markedTransferCount} related stock transfer(s) were preserved and flagged as \"Related to Deleted Subsidy\" for review."
                 : '');
 
-        $warning = $this->downstreamUsageWarning($lineageIds, $descendantIds);
-
         return redirect()->route('delivery_subsidies.index')
-            ->with('success', $success)
-            ->with('warning', $warning);
+            ->with('success', $success);
     }
 
     /**
-     * Build the safety warning for deleted Subsidy stock that has already been
-     * consumed by another transaction: a requisition issue from any lineage item,
-     * or a second+ hop onward transfer of the moved stock. That stock is
-     * preserved — never auto-reversed — and the administrator is told to review
-     * the related transactions first. The flagged direct transfer itself is not
-     * part of the warning: it is the preserved review item the admin already sees.
+     * Downstream transactions that forbid deleting the given Subsidy:
+     * RIS issuance from any lineage item (root deliveries + multi-hop
+     * transfer descendants), executed transfers moving lineage stock
+     * (source or destination side), and active reservation locks.
+     * Returns human-readable blocker notes (empty = safe to delete).
      */
-    private function downstreamUsageWarning(array $lineageIds, array $descendantIds): ?string
+    private function subsidyDeletionBlockers(DeliverySubsidy $deliverySubsidy): array
     {
-        $transferNumbers = [];
-        $requisitionNumbers = [];
+        $rootIds = DeliveryItem::whereHas('delivery', fn ($q) => $q->where('delivery_subsidy_id', $deliverySubsidy->id))
+            ->whereNotNull('item_id')
+            ->distinct()
+            ->pluck('item_id')
+            ->all();
 
-        foreach ($lineageIds as $itemId) {
-            // Stock issued through a requisition dispatch.
-            $requisitionNumbers = array_merge(
-                $requisitionNumbers,
-                RequisitionDispatchItem::where('item_id', $itemId)
-                    ->with('requisitionItem.requisition')
-                    ->get()
-                    ->map(fn ($di) => $di->requisitionItem?->requisition?->ris_number)
-                    ->filter()
-                    ->unique()
-                    ->all()
-            );
+        if (empty($rootIds)) {
+            return [];
         }
 
-        // Stock sent onward to yet another warehouse (2nd+ hop): only transfers
-        // whose SOURCE is a descendant count — the direct root→destination hop
-        // is the transfer the admin already reviews.
-        foreach ($descendantIds as $itemId) {
-            $onward = StockTransferItem::with('transfer')
-                ->where('item_id', $itemId)
-                ->where('quantity', '>', 0)
-                ->get();
+        $lineageIds = $this->transferLineageItemIds($rootIds);
+        $blockers = [];
 
-            foreach ($onward as $sti) {
-                if ($sti->transfer) {
-                    $transferNumbers[] = $sti->transfer->transfer_number;
-                }
+        $risNos = RequisitionDispatchItem::whereIn('item_id', $lineageIds)
+            ->with('requisitionItem.requisition')
+            ->get()
+            ->map(fn ($di) => $di->requisitionItem?->requisition?->ris_number)
+            ->filter()->unique()->values()->all();
+        foreach ($risNos as $n) {
+            $blockers[] = "issued through RIS {$n}";
+        }
+
+        $trfNos = StockTransferItem::where(function ($q) use ($lineageIds) {
+                $q->whereIn('item_id', $lineageIds)
+                  ->orWhereIn('destination_item_id', $lineageIds);
+            })
+            ->where('quantity', '>', 0)
+            ->with('transfer')
+            ->get()
+            ->map(fn ($sti) => $sti->transfer?->transfer_number)
+            ->filter()->unique()->values()->all();
+        foreach ($trfNos as $t) {
+            $blockers[] = "moved by transfer {$t}";
+        }
+
+        foreach ($lineageIds as $itemId) {
+            if (ReservationItem::reservedQuantityForItem((int) $itemId) > 0.0001) {
+                $item = Item::find($itemId);
+                $blockers[] = 'locked by an active reservation (' . ($item->stock_number ?? $item?->description ?? 'stock') . ')';
+                break;
             }
         }
 
-        $transferNumbers = array_values(array_unique($transferNumbers));
-        $requisitionNumbers = array_values(array_unique($requisitionNumbers));
-
-        if (empty($transferNumbers) && empty($requisitionNumbers)) {
-            return null;
-        }
-
-        $parts = [];
-        if ($transferNumbers) {
-            $parts[] = 'transferred onward (' . implode(', ', $transferNumbers) . ')';
-        }
-        if ($requisitionNumbers) {
-            $parts[] = 'issued through a requisition (' . implode(', ', $requisitionNumbers) . ')';
-        }
-
-        return "This stock originated from a deleted Subsidy and has already been " . implode(' and ', $parts)
-            . ". Review the related transactions before reversing — the affected stock has been preserved and flagged, not reversed.";
+        return $blockers;
     }
 
     /**
@@ -1877,7 +1878,7 @@ class DeliverySubsidyController extends Controller
      */
     protected function canAccessDeliverySubsidy(User $user, DeliverySubsidy $deliverySubsidy): bool
     {
-        if ($user->hasAdminAccess()) {
+        if ($user->hasAdminAccess() || $user->isDeliveryUpdater()) {
             return true;
         }
 

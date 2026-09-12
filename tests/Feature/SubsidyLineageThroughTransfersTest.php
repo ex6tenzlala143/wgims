@@ -17,10 +17,11 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Deleting (or archiving) a Subsidy must flag EVERY item that carries its
- * stock — including stock that has been transferred to another warehouse.
- * Lineage is followed through the Stock Transfer chain (destination item links
- * + multi-hop recursion), never identified by warehouse name.
+ * A Subsidy whose stock moved through Stock Transfers can NEVER be deleted —
+ * neither the direct hop nor any multi-hop descendant. Lineage is followed
+ * through the Stock Transfer chain (destination item links + multi-hop
+ * recursion), never identified by warehouse name. The backfill migration
+ * tests below cover pre-existing data independently of deletion.
  */
 class SubsidyLineageThroughTransfersTest extends TestCase
 {
@@ -133,10 +134,10 @@ class SubsidyLineageThroughTransfersTest extends TestCase
 
     /**
      * The exact reported scenario: Subsidy delivers 200 to Warehouse A, 100 is
-     * transferred and dispatched to Warehouse B, then the Subsidy is deleted.
-     * BOTH warehouses' stock (100 each) must be flagged FROM DELETED SUBSIDY.
+     * transferred and dispatched to Warehouse B — the Subsidy can no longer be
+     * deleted. BOTH warehouses' stock (100 each) stays exactly as it was.
      */
-    public function test_deleting_subsidy_marks_transferred_stock_at_destination_warehouse(): void
+    public function test_subsidy_with_transferred_stock_cannot_be_deleted(): void
     {
         $whA = $this->makeWarehouse('GAMC 1', 'GAMC1');
         $whB = $this->makeWarehouse('GAMC 2', 'GAMC2');
@@ -154,37 +155,25 @@ class SubsidyLineageThroughTransfersTest extends TestCase
         $this->assertEquals(100, (float) $sourceItem->fresh()->quantity);
         $this->assertEquals(100, (float) $destItem->fresh()->quantity);
 
-        // The destination carried the lineage at dispatch time — status is 'active' (set by storeDelivery).
+        // The destination carried the lineage at dispatch time.
         $this->assertEquals('active', $destItem->fresh()->source_subsidy_status);
         $this->assertEquals($ds->id, (int) $destItem->fresh()->source_subsidy_id);
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'))
-            ->assertSessionMissing('warning');
+            ->assertRedirect()
+            ->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'cannot be deleted')
+                && str_contains($msg, $transfer->transfer_number));
 
-        $this->assertDatabaseMissing('delivery_subsidies', ['id' => $ds->id]);
+        $this->assertDatabaseHas('delivery_subsidies', ['id' => $ds->id]);
 
-        // WH A stock was reversed (delivery undone) and flagged.
-        $this->assertEquals(0, (float) $sourceItem->fresh()->quantity);
-        $this->assertEquals('deleted', $sourceItem->fresh()->source_subsidy_status);
-        $this->assertTrue($sourceItem->fresh()->isRelatedToDeletedSubsidy());
-
-        // WH B stock is PRESERVED (the transfer movement is never auto-reversed)
-        // but is now flagged as FROM DELETED SUBSIDY too.
+        // Nothing moved: WH A and WH B quantities are intact, transfer unflagged.
+        $this->assertEquals(100, (float) $sourceItem->fresh()->quantity);
         $this->assertEquals(100, (float) $destItem->fresh()->quantity);
-        $this->assertEquals('deleted', $destItem->fresh()->source_subsidy_status);
-        $this->assertTrue($destItem->fresh()->isRelatedToDeletedSubsidy());
-        $this->assertEquals('Deleted', $destItem->fresh()->sourceSubsidyStatusLabel());
-
-        // The marker is visible on WH B's stock card page.
-        $this->actingAs($this->admin())
-            ->get(route('stock_cards.item_history', $destItem->id))
-            ->assertOk()
-            ->assertSee('FROM DELETED SUBSIDY');
+        $this->assertNull($transfer->fresh()->source_subsidy_status);
     }
 
-    public function test_multi_hop_transfers_mark_every_warehouse_in_the_chain(): void
+    public function test_multi_hop_chain_blocks_deletion(): void
     {
         $whA = $this->makeWarehouse('GAMC 1', 'GAMC1');
         $whB = $this->makeWarehouse('GAMC 2', 'GAMC2');
@@ -203,25 +192,23 @@ class SubsidyLineageThroughTransfersTest extends TestCase
 
         $itemC = $this->itemAt($whC);
 
-        // Lineage propagated hop by hop — transfer store() copies the source's 'active' status to destinations.
+        // Lineage propagated hop by hop.
         $this->assertEquals('active', $itemB->fresh()->source_subsidy_status);
         $this->assertEquals('active', $itemC->fresh()->source_subsidy_status);
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'));
+            ->assertRedirect()
+            ->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'cannot be deleted'));
 
-        // Every hop of the chain is flagged.
-        $this->assertEquals('deleted', $itemA->fresh()->source_subsidy_status);
-        $this->assertEquals('deleted', $itemB->fresh()->source_subsidy_status);
-        $this->assertEquals('deleted', $itemC->fresh()->source_subsidy_status);
-
-        // Only the direct transfer (WH A → WH B) counts as the preserved review
-        // item; the onward hop (WH B → WH C) triggers the downstream warning.
-        $this->assertDatabaseHas('stock_transfers', ['id' => $t2->id, 'source_subsidy_status' => 'deleted']);
+        // Every hop of the chain is untouched.
+        $this->assertDatabaseHas('delivery_subsidies', ['id' => $ds->id]);
+        $this->assertEquals(100, (float) $itemA->fresh()->quantity);
+        $this->assertEquals(70, (float) $itemB->fresh()->quantity);
+        $this->assertEquals(30, (float) $itemC->fresh()->quantity);
     }
 
-    public function test_delete_warns_when_transferred_stock_moved_onward(): void
+    public function test_delete_refused_when_transferred_stock_moved_onward(): void
     {
         $whA = $this->makeWarehouse('GAMC 1', 'GAMC1');
         $whB = $this->makeWarehouse('GAMC 2', 'GAMC2');
@@ -240,17 +227,16 @@ class SubsidyLineageThroughTransfersTest extends TestCase
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'))
-            ->assertSessionHas('warning', fn (string $msg) => str_contains($msg, 'transferred onward')
-                && str_contains($msg, $t2->transfer_number)
-                && str_contains($msg, 'preserved and flagged'));
+            ->assertRedirect()
+            ->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'moved by transfer')
+                && str_contains($msg, $t2->transfer_number));
 
-        // The onward-moved stock is preserved, not reversed.
+        // The onward-moved stock is untouched.
         $this->assertEquals(80, (float) $this->itemAt($whB)->fresh()->quantity);
         $this->assertEquals(20, (float) $this->itemAt($whC)->fresh()->quantity);
     }
 
-    public function test_delete_warns_when_transferred_stock_was_issued_to_requisition(): void
+    public function test_delete_refused_when_transferred_stock_was_issued_to_requisition(): void
     {
         $whA = $this->makeWarehouse('GAMC 1', 'GAMC1');
         $whB = $this->makeWarehouse('GAMC 2', 'GAMC2');
@@ -297,13 +283,13 @@ class SubsidyLineageThroughTransfersTest extends TestCase
 
         $this->actingAs($this->admin())
             ->delete(route('delivery_subsidies.destroy', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'))
-            ->assertSessionHas('warning', fn (string $msg) => str_contains($msg, 'issued through a requisition')
+            ->assertRedirect()
+            ->assertSessionHas('error', fn (string $msg) => str_contains($msg, 'issued through RIS')
                 && str_contains($msg, 'RIS-LIN-REQ-1'));
 
-        // The transferred stock was used downstream — preserved, not reversed.
+        // The issued stock is untouched.
         $this->assertEquals(100, (float) $destItem->fresh()->quantity);
-        $this->assertEquals('deleted', $destItem->fresh()->source_subsidy_status);
+        $this->assertDatabaseHas('delivery_subsidies', ['id' => $ds->id]);
     }
 
     public function test_backfill_migration_propagates_snapshot_to_pre_existing_destinations(): void
@@ -359,11 +345,15 @@ class SubsidyLineageThroughTransfersTest extends TestCase
         $this->dispatchTransfer($t1, $itemA, 100);
         $destItem = $this->itemAt($whB);
 
-        // Delete the subsidy the old way (before the lineage fix existed): the
-        // source keeps its 'deleted' snapshot but the FK nulls source_subsidy_id.
-        $this->actingAs($this->admin())
-            ->delete(route('delivery_subsidies.destroy', $ds))
-            ->assertRedirect(route('delivery_subsidies.index'));
+        // Simulate a subsidy deleted the old way (before the hard block
+        // existed): the source keeps its 'deleted' snapshot, the subsidy row
+        // is gone. Route deletion is used nowhere here on purpose.
+        $drNumber = $ds->dr_number;
+        DB::table('items')->where('id', $itemA->id)->update([
+            'source_subsidy_id' => null, 'source_subsidy_ris' => 'RIS-LIN-DEL-SRC',
+            'source_subsidy_dr' => $drNumber, 'source_subsidy_status' => 'deleted',
+        ]);
+        $ds->delete();
 
         $source = $itemA->fresh();
         $this->assertEquals('deleted', $source->source_subsidy_status);

@@ -31,6 +31,7 @@
                     <option value="supply_custodian" {{ request('role')=='supply_custodian'?'selected':'' }}>Supply Custodian</option>
                     <option value="center_head" {{ request('role')=='center_head'?'selected':'' }}>Warehouse Head</option>
                     <option value="center_staff" {{ request('role')=='center_staff'?'selected':'' }}>Warehouse Staff</option>
+                    <option value="delivery_updater" {{ request('role')=='delivery_updater'?'selected':'' }}>Delivery Updater</option>
                 </select>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
                 <a href="{{ route('users.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>

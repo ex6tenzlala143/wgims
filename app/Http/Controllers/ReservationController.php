@@ -21,7 +21,7 @@ class ReservationController extends Controller
         $user  = Auth::user();
         $query = Reservation::with(['items.item', 'items.warehouse', 'creator']);
 
-        if (! $user->hasAdminAccess()) {
+        if (! $user->hasAdminAccess() && ! $user->isDeliveryUpdater()) {
             $assignedIds = $this->getUserWarehouseIds($user) ?? [];
             if (empty($assignedIds)) {
                 $query->whereRaw('1 = 0');
@@ -172,7 +172,7 @@ class ReservationController extends Controller
     {
         $user = Auth::user();
 
-        if (! $user->hasAdminAccess()) {
+        if (! $user->hasAdminAccess() && ! $user->isDeliveryUpdater()) {
             $assignedIds = $this->getUserWarehouseIds($user) ?? [];
             $hasAccess   = $reservation->items()
                 ->whereIn('warehouse_id', $assignedIds)

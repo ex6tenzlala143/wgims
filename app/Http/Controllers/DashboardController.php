@@ -212,6 +212,13 @@ class DashboardController extends Controller
         // ── Warehouse user dashboard ──────────────────────────────────────
         $warehouseIds = $this->getUserWarehouseIds($user);
 
+        // All-scope non-admins (delivery updater) see every active warehouse
+        // instead of the "no warehouse assigned" page.
+        if ($warehouseIds === null) {
+            $warehouseIds = Warehouse::where('is_active', true)->pluck('id')
+                ->map(fn ($id) => (int) $id)->toArray();
+        }
+
         if (empty($warehouseIds)) {
             return view('dashboard.no_warehouse');
         }

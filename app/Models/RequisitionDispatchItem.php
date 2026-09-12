@@ -16,6 +16,9 @@ class RequisitionDispatchItem extends Model
         'dr_number',
         'created_by',
         'reservation_item_id',
+        'delivered_at',
+        'delivered_by',
+        'delivery_notes',
     ];
 
     protected $casts = [
@@ -23,6 +26,7 @@ class RequisitionDispatchItem extends Model
         'unit_cost'        => 'float',
         'engas_unit_cost'  => 'float',
         'expiration_date'  => 'date',
+        'delivered_at'     => 'datetime',
     ];
 
     public function requisitionItem()
@@ -43,5 +47,15 @@ class RequisitionDispatchItem extends Model
     public function reservationItem()
     {
         return $this->belongsTo(ReservationItem::class);
+    }
+
+    public function deliverer()
+    {
+        return $this->belongsTo(User::class, 'delivered_by');
+    }
+
+    public function isDelivered(): bool
+    {
+        return $this->delivered_at !== null;
     }
 }
