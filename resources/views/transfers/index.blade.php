@@ -69,6 +69,7 @@
             <thead>
                 <tr>
                     <th>Transfer #</th>
+                    <th>Reference</th>
                     <th>Date</th>
                     <th>From</th>
                     <th>To</th>
@@ -98,15 +99,24 @@
                             </span>
                         </div>
                         @endif
-                        @if($transfer->source_ris_number)
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap">
-                            RIS: {{ $transfer->sourceSubsidyReference() }}
+                    </td>
+                    <td>
+                        @php
+                            $risRef = $transfer->sourceSubsidyReference();
+                            $subCode = $transfer->sourceSubsidyCode();
+                        @endphp
+                        @if($risRef)
+                        <div style="font-size:11px;color:var(--text-muted);white-space:nowrap">
+                            RIS: {{ $risRef }}
                         </div>
                         @endif
-                        @if($transfer->source_subsidy_code)
+                        @if($subCode)
                         <div style="font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap">
-                            <code style="font-weight:700;color:var(--primary)">{{ $transfer->sourceSubsidyCode() }}</code>
+                            <code style="font-weight:700;color:var(--primary)">{{ $subCode }}</code>
                         </div>
+                        @endif
+                        @if(!$risRef && !$subCode)
+                        <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
                     <td style="white-space:nowrap">{{ $transfer->transfer_date->format('M d, Y') }}</td>
@@ -160,7 +170,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">
+                    <td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted)">
                         <i class="fas fa-exchange-alt" style="font-size:32px;margin-bottom:8px;display:block;opacity:0.3"></i>
                         No transfers found.
                     </td>

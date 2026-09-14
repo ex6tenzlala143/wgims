@@ -69,7 +69,8 @@
          <table>
             <thead>
                 <tr>
-                    <th>RIS No. / Subsidy ID</th>
+                    <th>Subsidy ID</th>
+                    <th>RIS No.</th>
                     <th>Date</th>
                     <th>Supplier</th>
                     @if(auth()->user()->hasAdminAccess())<th>Warehouse</th>@endif
@@ -90,12 +91,11 @@
                     $barColor   = $pct >= 100 ? 'var(--success)' : ($pct > 0 ? 'var(--primary)' : '#e2e8f0');
                 @endphp
                 <tr>
+                    <td style="white-space:nowrap">
+                        <code style="font-size:11px;color:var(--primary)">{{ $subsidy->subsidy_code }}</code>
+                    </td>
                     <td>
                         <div style="white-space:nowrap"><strong>{{ $subsidy->ris_number }}</strong></div>
-                        <div style="white-space:nowrap">
-                            <span style="font-size:11px;color:var(--text-muted)">Subsidy ID:</span>
-                            <code style="font-size:11px;color:var(--primary)">{{ $subsidy->subsidy_code }}</code>
-                        </div>
                     </td>
                                         <td style="white-space:nowrap">{{ $subsidy->date ? $subsidy->date->format('M d, Y') : '-' }}</td>                    <td>{{ $subsidy->supplier->name ?? '-' }}</td>
                     @if(auth()->user()->hasAdminAccess())
@@ -157,7 +157,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-file-invoice" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No delivery/subsidy records found.
                 </td></tr>

@@ -105,6 +105,8 @@ Route::middleware(['auth', 'updater.restricted'])->group(function () {
     Route::post('/reservations/{reservation}/ready', [ReservationController::class, 'markReady'])->name('reservations.ready');
     Route::post('/reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])->name('reservations.cancel');
     Route::middleware('admin.write')->group(function () {
+        Route::get('/reservations/{reservation}/edit', [ReservationController::class, 'edit'])->name('reservations.edit');
+        Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])->name('reservations.update');
         Route::delete('/reservations/{reservation}', [ReservationController::class, 'destroy'])->name('reservations.destroy');
         Route::delete('/reservations/{reservation}/items/{reservationItem}', [ReservationController::class, 'destroyItem'])->name('reservations.items.destroy');
     });

@@ -84,8 +84,8 @@
                 </div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
                     <i class="fas fa-info-circle"></i>
-                    Reservation must be <strong>approved</strong> before reserved quantities become locked.
-                    Items remain visible in stock but are protected from normal requisitions once approved.
+                    Reservations are <strong>automatically approved</strong> on creation.
+                    Items remain visible in stock but are protected from normal requisitions once reserved.
                 </div>
                 <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
                     <i class="fas fa-save"></i> Create Reservation

@@ -105,11 +105,12 @@ class ReservationController extends Controller
 
                 $reservation = Reservation::create([
                     'reservation_number' => $resNumber,
-                    'status'             => Reservation::STATUS_PENDING,
+                    'status'             => Reservation::STATUS_RESERVED,
                     'purpose'            => $request->purpose,
                     'notes'              => $request->notes,
                     'expires_at'         => $request->expires_at,
                     'created_by'         => $user->id,
+                    'approved_by'        => $user->id,
                 ]);
 
                 foreach ($request->items as $idx => $line) {
@@ -158,7 +159,7 @@ class ReservationController extends Controller
             });
 
             return redirect()->route('reservations.index')
-                ->with('success', "Reservation {$reservation->reservation_number} created successfully.");
+                ->with('success', "Reservation {$reservation->reservation_number} created and approved successfully.");
 
         } catch (ValidationException $e) {
             throw $e;
@@ -194,9 +195,275 @@ class ReservationController extends Controller
         return view('reservations.show', compact('reservation'));
     }
 
+    /**
+     * Admin: show the edit form for a reservation (header + lines).
+     * Blocked for terminal statuses — use Cancel instead to release stock.
+     */
+    public function edit(Reservation $reservation)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+
+        if (in_array($reservation->status, [
+            Reservation::STATUS_DEPLOYED,
+            Reservation::STATUS_CANCELLED,
+            Reservation::STATUS_EXPIRED,
+        ])) {
+            return redirect()->route('reservations.show', $reservation)
+                ->with('error', 'This reservation cannot be edited because it is ' . strtolower($reservation->status_label) . '.');
+        }
+
+        $reservation->load(['items.item', 'items.warehouse']);
+        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
+
+        return view('reservations.edit', compact('reservation', 'warehouses'));
+    }
+
+    /**
+     * Admin: update reservation header (purpose/notes/expires) and lines.
+     *
+     * Lines may be edited (warehouse/item/quantity), added, or removed:
+     *   - new quantity cannot go below already deployed_quantity
+     *   - identity (warehouse/item) cannot change once deployed_quantity > 0
+     *   - removed lines must have deployed_quantity == 0
+     *   - increases are checked against unreserved stock
+     *     (physical minus other active locks) under row locks
+     *   - line status is recomputed (ACTIVE / PARTIALLY_DEPLOYED / DEPLOYED)
+     */
+    public function update(Request $request, Reservation $reservation)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+
+        if (in_array($reservation->status, [
+            Reservation::STATUS_DEPLOYED,
+            Reservation::STATUS_CANCELLED,
+            Reservation::STATUS_EXPIRED,
+        ])) {
+            return back()->with('error', 'This reservation cannot be edited because it is ' . strtolower($reservation->status_label) . '.');
+        }
+
+        $request->validate([
+            'purpose'    => 'nullable|string|max:500',
+            'notes'      => 'nullable|string',
+            'expires_at' => 'nullable|date|after:today',
+            'items'      => 'required|array|min:1',
+            'items.*.id' => 'nullable|integer|exists:reservation_items,id',
+            'items.*.warehouse_id' => 'required|integer|exists:warehouses,id',
+            'items.*.item_id' => 'required|integer|exists:items,id',
+            'items.*.reserved_quantity' => 'required|numeric|min:1',
+        ]);
+
+        try {
+            DB::transaction(function () use ($request, $reservation) {
+                // Lock all existing lines of this reservation
+                $lines = ReservationItem::where('reservation_id', $reservation->id)
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                $submitted = array_values($request->items);
+                $submittedIds = collect($submitted)
+                    ->pluck('id')
+                    ->filter(fn ($v) => ! empty($v))
+                    ->map(fn ($v) => (int) $v)
+                    ->all();
+
+                // Every submitted id must belong to this reservation
+                foreach ($submitted as $idx => $line) {
+                    if (! empty($line['id']) && ! $lines->has((int) $line['id'])) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.id" => 'One of the submitted items does not belong to this reservation.',
+                        ]);
+                    }
+                    if (! empty($line['id'])) {
+                        $ri = $lines[(int) $line['id']];
+                        if ($ri->status === ReservationItem::STATUS_CANCELLED) {
+                            throw ValidationException::withMessages([
+                                "items.{$idx}.id" => 'This item was cancelled and can no longer be edited.',
+                            ]);
+                        }
+                    }
+                }
+
+                // Removed lines: existed before but omitted now — only when
+                // nothing was ever deployed from them.
+                $removedIds = $lines->keys()->diff($submittedIds)->all();
+                foreach ($removedIds as $removedId) {
+                    $ri = $lines[$removedId];
+                    if ((float) $ri->deployed_quantity > 0.0001) {
+                        throw ValidationException::withMessages([
+                            'items' => "Cannot remove \"{$ri->item?->description}\" — {$ri->deployed_quantity} unit(s) were already deployed through a RIS. Reduce its quantity to the deployed amount instead.",
+                        ]);
+                    }
+                }
+
+                // Validate identity + floors for submitted lines
+                $targets = []; // idx => ['ri' (nullable), 'item', 'qty', 'deployed']
+                foreach ($submitted as $idx => $line) {
+                    $ri = ! empty($line['id']) ? $lines[(int) $line['id']] : null;
+                    $deployed = $ri ? (float) $ri->deployed_quantity : 0.0;
+                    $newQty = (float) $line['reserved_quantity'];
+                    $warehouseId = (int) $line['warehouse_id'];
+                    $itemId = (int) $line['item_id'];
+
+                    if ($newQty < $deployed - 0.0001) {
+                        $label = $ri?->item?->description ?? 'this item';
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.reserved_quantity" =>
+                                "Cannot set \"{$label}\" below its deployed quantity (" . number_format($deployed) . ').',
+                        ]);
+                    }
+
+                    $item = Item::whereKey($itemId)->lockForUpdate()->first();
+                    if (! $item || (int) $item->warehouse_id !== $warehouseId) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.item_id" => 'Selected item does not belong to the selected warehouse.',
+                        ]);
+                    }
+
+                    // Deployed lines are pinned to their original stock record
+                    if ($ri && $deployed > 0.0001) {
+                        if ((int) $ri->item_id !== $itemId || (int) $ri->warehouse_id !== $warehouseId) {
+                            throw ValidationException::withMessages([
+                                "items.{$idx}.item_id" => 'Warehouse / item cannot be changed once part of the reservation was deployed (deployed ' . number_format($deployed) . '). Adjust the quantity instead.',
+                            ]);
+                        }
+                    }
+
+                    $targets[$idx] = ['ri' => $ri, 'item' => $item, 'qty' => $newQty, 'deployed' => $deployed];
+                }
+
+                // Combined availability per stock record across the FINAL state.
+                // oldActive = this reservation's current ACTIVE locks per item;
+                // newActive = final ACTIVE locks per item (fully-deployed lines
+                // release their lock and count 0).
+                $oldActiveByItem = [];
+                foreach ($lines as $ri) {
+                    if (in_array($ri->status, ReservationItem::ACTIVE_STATUSES, true)) {
+                        $oldActiveByItem[$ri->item_id] = ($oldActiveByItem[$ri->item_id] ?? 0) + (float) $ri->reserved_quantity;
+                    }
+                }
+
+                $newActiveByItem = [];
+                foreach ($targets as $t) {
+                    $willBeActive = $t['qty'] > $t['deployed'] + 0.0001 || $t['deployed'] <= 0.0001;
+                    if ($willBeActive) {
+                        $itemId = $t['item']->id;
+                        $newActiveByItem[$itemId] = ($newActiveByItem[$itemId] ?? 0) + $t['qty'];
+                    }
+                }
+
+                $involvedItemIds = collect(array_merge(array_keys($oldActiveByItem), array_keys($newActiveByItem)))
+                    ->map(fn ($v) => (int) $v)->unique()->values()->all();
+                // Lock every involved stock row in a stable order (some are
+                // already locked above — re-locking is a no-op within the txn).
+                $itemsById = [];
+                foreach (collect($involvedItemIds)->sort()->all() as $itemId) {
+                    $locked = Item::whereKey($itemId)->lockForUpdate()->first();
+                    if ($locked) {
+                        $itemsById[$itemId] = $locked;
+                    }
+                }
+                // Also ensure target items resolved earlier are in the map
+                foreach ($targets as $t) {
+                    $itemsById[$t['item']->id] = $itemsById[$t['item']->id] ?? $t['item'];
+                }
+
+                foreach ($newActiveByItem as $itemId => $newActive) {
+                    $oldActive = (float) ($oldActiveByItem[$itemId] ?? 0);
+                    if ($newActive > $oldActive + 0.0001) {
+                        $item = $itemsById[$itemId] ?? Item::whereKey($itemId)->lockForUpdate()->first();
+                        if (! $item) {
+                            throw ValidationException::withMessages([
+                                'items' => 'One of the reserved stock records no longer exists.',
+                            ]);
+                        }
+                        $totalLocked = (float) ReservationItem::reservedQuantityForItem($itemId);
+                        $lockedByOthers = $totalLocked - $oldActive;
+                        $maxAllowed = (float) $item->quantity - $lockedByOthers;
+
+                        if ($newActive > $maxAllowed + 0.0001) {
+                            throw ValidationException::withMessages([
+                                'items' =>
+                                    "Insufficient stock for \"{$item->description}\": combined request " . number_format($newActive)
+                                    . ' exceeds available ' . number_format(max(0, $maxAllowed))
+                                    . ' (physical ' . number_format($item->quantity)
+                                    . ', locked by others ' . number_format(max(0, $lockedByOthers)) . '). No changes were saved.',
+                            ]);
+                        }
+                    }
+                }
+
+                // Apply header + line updates
+                $reservation->update([
+                    'purpose'    => $request->purpose,
+                    'notes'      => $request->notes,
+                    'expires_at' => $request->expires_at ?: null,
+                ]);
+
+                // Delete removed lines (all verified deployed == 0)
+                if (! empty($removedIds)) {
+                    ReservationItem::where('reservation_id', $reservation->id)
+                        ->whereIn('id', $removedIds)
+                        ->delete();
+                }
+
+                foreach ($targets as $t) {
+                    /** @var ReservationItem|null $ri */
+                    $ri = $t['ri'];
+                    $item = $t['item'];
+                    $newQty = $t['qty'];
+                    $deployed = $t['deployed'];
+
+                    $newLineStatus = $deployed <= 0.0001
+                        ? ReservationItem::STATUS_ACTIVE
+                        : ($newQty <= $deployed + 0.0001
+                            ? ReservationItem::STATUS_DEPLOYED
+                            : ReservationItem::STATUS_PARTIALLY_DEPLOYED);
+
+                    $snapshot = [
+                        'reserved_quantity' => $newQty,
+                        'status'            => $newLineStatus,
+                        'item_id'           => $item->id,
+                        'warehouse_id'      => $item->warehouse_id,
+                        'unit_cost'         => $item->unit_cost,
+                        'engas_unit_cost'   => $item->engas_unit_cost,
+                        'expiration_date'   => $item->expiration_date?->format('Y-m-d'),
+                    ];
+
+                    if ($ri) {
+                        $ri->update($snapshot);
+                    } else {
+                        ReservationItem::create(array_merge($snapshot, [
+                            'reservation_id'    => $reservation->id,
+                            'deployed_quantity' => 0,
+                        ]));
+                    }
+                }
+
+                $reservation->refresh()->updateOverallStatus();
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()
+                ->with('error', 'The reservation could not be updated. No changes were made. Please try again.');
+        }
+
+        return redirect()->route('reservations.show', $reservation)
+            ->with('success', 'Reservation updated successfully.');
+    }
+
     public function approve(Reservation $reservation)
     {
         abort_unless(Auth::user()->canWrite(), 403);
+
+        // Reservations are auto-approved on creation — this endpoint is kept
+        // for legacy PENDING records. Already-approved ones are a no-op.
+        if ($reservation->status === Reservation::STATUS_RESERVED) {
+            return back()->with('success', 'Reservation is already approved.');
+        }
 
         if ($reservation->status !== Reservation::STATUS_PENDING) {
             return back()->with('error', 'Only PENDING reservations can be approved.');

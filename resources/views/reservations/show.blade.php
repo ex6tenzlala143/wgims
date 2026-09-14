@@ -16,13 +16,11 @@
         </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-        @if(auth()->user()->canWrite() && $reservation->status === 'PENDING')
-        <form action="{{ route('reservations.approve', $reservation) }}" method="POST" style="display:inline">
-            @csrf
-            <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Approve</button>
-        </form>
+        @if(auth()->user()->canWrite() && !in_array($reservation->status, ['DEPLOYED','CANCELLED','EXPIRED']))
+        <a href="{{ route('reservations.edit', $reservation) }}" class="btn btn-secondary">
+            <i class="fas fa-edit"></i> Edit
+        </a>
         @endif
-
         @if(auth()->user()->canWrite() && $reservation->status === 'RESERVED')
         <form action="{{ route('reservations.ready', $reservation) }}" method="POST" style="display:inline">
             @csrf

@@ -56,8 +56,9 @@
         <table>
             <thead>
                 <tr>
+                    <th>Date Created</th>
                     <th>Reservation No.</th>
-                    <th>Items</th>
+                    <th style="text-align:center">No. of Items Reserved</th>
                     <th>Warehouses</th>
                     <th style="text-align:right">Total Reserved</th>
                     <th style="text-align:right">Total Deployed</th>
@@ -77,7 +78,6 @@
                     $totalDeployed  = $resItems->sum('deployed_quantity');
                     $totalRemaining = max(0, $totalReserved - $totalDeployed);
                     $whNames        = $resItems->map(fn($i) => $i->warehouse?->name)->filter()->unique()->implode(', ');
-                    $itemDescs      = $resItems->map(fn($i) => $i->item?->description)->filter()->unique()->take(3);
                     $badgeClass     = match($reservation->status) {
                         'PENDING'              => 'badge-warning',
                         'RESERVED'             => 'badge-info',
@@ -99,28 +99,16 @@
                     };
                 @endphp
                 <tr>
+                    <td style="white-space:nowrap">
+                        {{ $reservation->created_at->format('M d, Y') }}
+                    </td>
                     <td>
                         <strong style="color:var(--primary)">
                             {{ $reservation->reservation_number ?? '#' . $reservation->id }}
                         </strong>
-                        <div style="font-size:11px;color:var(--text-muted)">
-                            {{ $reservation->created_at->format('M d, Y') }}
-                        </div>
                     </td>
-                    <td>
-                        <div style="font-size:12px">
-                            @foreach($itemDescs as $desc)
-                                <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="{{ $desc }}">
-                                    {{ $desc }}
-                                </div>
-                            @endforeach
-                            @if($resItems->count() > 3)
-                                <div style="font-size:11px;color:var(--text-muted)">+{{ $resItems->count() - 3 }} more</div>
-                            @endif
-                        </div>
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
-                            {{ $resItems->count() }} item(s)
-                        </div>
+                    <td style="text-align:center;font-weight:600">
+                        {{ number_format($resItems->count()) }}
                     </td>
                     <td>{{ $whNames ?: '—' }}</td>
                     <td style="text-align:right;font-weight:600">{{ number_format($totalReserved) }}</td>
@@ -129,7 +117,7 @@
                         {{ $totalRemaining > 0 ? number_format($totalRemaining) : '✓' }}
                     </td>
                     <td><span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span></td>
-                    <td>{{ \Illuminate\Support\Str::limit($reservation->purpose, 30) }}</td>
+                    <td style="white-space:normal;min-width:180px;max-width:300px">{{ $reservation->purpose ?: '—' }}</td>
                     <td>{{ $reservation->creator->name ?? '—' }}</td>
                     <td>
                         @if($reservation->expires_at)
@@ -140,16 +128,22 @@
                             <span style="color:var(--text-muted)">—</span>
                         @endif
                     </td>
-                    <td>
+                    <td style="white-space:nowrap">
                         <a href="{{ route('reservations.show', $reservation) }}"
                            class="btn btn-sm btn-outline btn-icon" title="View">
                             <i class="fas fa-eye"></i>
                         </a>
+                        @if(auth()->user()->canWrite() && !in_array($reservation->status, ['DEPLOYED','CANCELLED','EXPIRED']))
+                        <a href="{{ route('reservations.edit', $reservation) }}"
+                           class="btn btn-sm btn-secondary btn-icon" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        @endif
                     </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted)">
+                    <td colspan="12" style="text-align:center;padding:40px;color:var(--text-muted)">
                         <i class="fas fa-clipboard-list" style="font-size:32px;margin-bottom:8px;display:block"></i>
                         No reservations found.
                     </td>

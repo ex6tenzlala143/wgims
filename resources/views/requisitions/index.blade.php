@@ -54,8 +54,8 @@
         <table>
              <thead>
                   <tr>
-                    <th>RIS No. / RIS ID</th>
-                    <th>DR No.</th>
+                    <th>RIS ID</th>
+                    <th>RIS No.</th>
                     <th>Date Fully Delivered</th>
                     <th>Days Elapsed</th>
                     <th>Warehouse</th>
@@ -85,9 +85,7 @@
                  <tr>
                     <td>
                         <div style="line-height:1.6">
-                            <div style="font-weight:600;white-space:nowrap">{{ $ris->ris_number }}</div>
                             <div style="display:flex;align-items:baseline;gap:6px;white-space:nowrap">
-                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">RIS ID:</span>
                                 <strong style="color:var(--primary);font-family:monospace">{{ $ris->ris_code ?? $ris->ris_id }}</strong>
                             </div>
                         </div>
@@ -103,20 +101,7 @@
                         @endif
                     </td>
                     <td style="white-space:nowrap">
-                        @php
-                            $drs = $ris->items
-                                ->flatMap(fn($ri) => $ri->dispatchItems->pluck('dr_number'))
-                                ->filter()
-                                ->unique()
-                                ->values();
-                        @endphp
-                        @if($drs->isNotEmpty())
-                            @foreach($drs as $dr)
-                                <code style="font-size:11px">{{ $dr }}</code>@if(!$loop->last)<br>@endif
-                            @endforeach
-                        @else
-                            <span style="color:var(--text-muted);font-size:12px">—</span>
-                        @endif
+                        <strong>{{ $ris->ris_number }}</strong>
                     </td>
                      <td>
                          @if($risDate)
