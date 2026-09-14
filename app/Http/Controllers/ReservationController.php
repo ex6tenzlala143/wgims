@@ -297,11 +297,23 @@ class ReservationController extends Controller
             return back()->with('error', 'A reservation must have at least one item. Cancel the reservation instead.');
         }
 
-        $reservationItem->delete();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($reservation, $reservationItem) {
+            // Re-lock the line inside the transaction so a concurrent deploy
+            // between the checks above and the delete cannot slip through.
+            $locked = \App\Models\ReservationItem::whereKey($reservationItem->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ((float) $locked->deployed_quantity > 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'item' => 'Cannot remove an item that has already been partially or fully deployed.',
+                ]);
+            }
+            $locked->delete();
 
-        // Recompute the header: removing a line can resolve the reservation
-        // back to fully-deployed (or change nothing) — never leave it stale.
-        $reservation->refresh()->updateOverallStatus();
+            // Recompute the header: removing a line can resolve the reservation
+            // back to fully-deployed (or change nothing) — never leave it stale.
+            $reservation->refresh()->updateOverallStatus();
+        });
 
         return back()->with('success', 'Item removed from reservation.');
     }

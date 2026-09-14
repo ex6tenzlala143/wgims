@@ -660,7 +660,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-WH-SPLIT-1',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 200,
                 'items'              => [[
                     'ds_item_id'         => $line->id,
@@ -739,7 +739,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-LIMIT-1A',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 5,
                 'items'              => [[
                     'ds_item_id'         => $line->id,
@@ -757,7 +757,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-11',
                 'dr_number'          => 'DR-2026-LIMIT-1B',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 20,
                 'items'              => [[
                     'ds_item_id'         => $line->id,
@@ -838,7 +838,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-LIMIT-3A',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 15,
                 'items'              => [
                     [
@@ -875,7 +875,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-11',
                 'dr_number'          => 'DR-2026-LIMIT-3B',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 16,
                 'items'              => [
                     [
@@ -945,7 +945,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-LIMIT-4A',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 5,
                 'items'              => [[
                     'ds_item_id'         => $line->id,
@@ -963,7 +963,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-11',
                 'dr_number'          => 'DR-2026-LIMIT-4B',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 20,
                 'items'              => [
                     [
@@ -1010,7 +1010,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-LIMIT-5A',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 5,
                 'items'              => [[
                     'ds_item_id'         => $line->id,
@@ -1032,7 +1032,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->put(route('delivery_subsidies.update_delivery', [$ds, $delivery]), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-LIMIT-5A',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 21,
                 'items'              => [[
                     'di_id'              => $di->id,
@@ -1071,7 +1071,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-LIMIT-6A',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 15,
                 'items'              => [
                     [
@@ -1130,7 +1130,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
             ->post(route('delivery_subsidies.store_delivery', $ds), [
                 'delivery_date'      => '2026-08-10',
                 'dr_number'          => 'DR-2026-NOREQ-1A',
-                'condition_status'   => 'partial',
+                'condition_status'   => 'good',
                 'quantity_delivered' => 15,
                 'items'              => [
                     [

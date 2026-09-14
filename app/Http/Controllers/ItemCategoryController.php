@@ -86,17 +86,12 @@ class ItemCategoryController extends Controller
 
     public function destroy(ItemCategory $itemCategory)
     {
-        // Prevent deleting a category that has items linked to it
-        if ($itemCategory->items()->exists()) {
-            return redirect()->route('item_categories.index')
-                ->with('error', "Cannot delete \"{$itemCategory->label}\" — it has items assigned to it. Deactivate it instead.");
-        }
-
-        $label = $itemCategory->label;
-        $itemCategory->delete();
-
+        // Categories are permanent: they must never be deleted (history and
+        // account-code references depend on them). Deactivate instead.
+        // The route is kept so direct DELETE requests get this clean error
+        // instead of a 404.
         return redirect()->route('item_categories.index')
-            ->with('success', "Category \"{$label}\" deleted.");
+            ->with('error', "Category \"{$itemCategory->label}\" cannot be deleted. Deactivate it instead.");
     }
 
     public function toggleActive(ItemCategory $itemCategory)

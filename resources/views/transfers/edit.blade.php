@@ -100,8 +100,11 @@
                             @foreach($transfer->items as $idx => $line)
                             <input type="hidden" name="items[{{ $idx }}][sti_id]" value="{{ $line->id }}">
                             <tr>
-                                <td>
-                                    <strong>{{ $line->sourceItem->description }}</strong>
+<td>
+<strong>{{ $line->sourceItem->description }}</strong>
+@if($line->reservationItem)
+<div style="margin-top:3px"><span class="badge badge-warning">Reserved{{ $line->reservationItem->reservation?->reservation_number ? ' ' . $line->reservationItem->reservation->reservation_number : '' }}</span></div>
+@endif
                                     @if($line->sourceItem->stock_number)
                                     <div style="font-size:11px"><code>{{ $line->sourceItem->stock_number }}</code></div>
                                     @endif

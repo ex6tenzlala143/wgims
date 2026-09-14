@@ -35,33 +35,24 @@ class DatabaseSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        // Warehouse users
-        User::firstOrCreate(['username' => 'custodian1'], [
-            'name'         => 'Juan dela Cruz',
-            'email'        => 'custodian@wgims.com',
-            'password'     => Hash::make('Password@1'),
-            'role'         => 'supply_custodian',
-            'warehouse_id' => $mainWarehouse->id,
-            'is_active'    => true,
-        ]);
+            // Warehouse users
+            User::firstOrCreate(['username' => 'manager1'], [
+                'name'         => 'Warehouse Manager',
+                'email'        => 'manager@wgims.com',
+                'password'     => Hash::make('Password@1'),
+                'role'         => 'warehouse_manager',
+                'warehouse_id' => $mainWarehouse->id,
+                'is_active'    => true,
+            ]);
 
-        User::firstOrCreate(['username' => 'warehousehead1'], [
-            'name'         => 'Maria Santos',
-            'email'        => 'head@wgims.com',
-            'password'     => Hash::make('Password@1'),
-            'role'         => 'center_head', // DB value stored as center_head
-            'warehouse_id' => $mainWarehouse->id,
-            'is_active'    => true,
-        ]);
-
-        User::firstOrCreate(['username' => 'staff1'], [
-            'name'         => 'Pedro Reyes',
-            'email'        => 'staff@wgims.com',
-            'password'     => Hash::make('Password@1'),
-            'role'         => 'center_staff', // DB value stored as center_staff
-            'warehouse_id' => $mainWarehouse->id,
-            'is_active'    => true,
-        ]);
+            User::firstOrCreate(['username' => 'updater1'], [
+                'name'         => 'Delivery Updater',
+                'email'        => 'updater@wgims.com',
+                'password'     => Hash::make('Password@1'),
+                'role'         => 'delivery_updater',
+                'warehouse_id' => $mainWarehouse->id,
+                'is_active'    => true,
+            ]);
 
         // Sample suppliers
         $suppliers = [

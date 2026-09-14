@@ -59,6 +59,10 @@
                 by {{ $requisition->approver->name ?? '-' }}
             </div>
             @endif
+            <div style="margin-top:16px;background:#f7fafc;border-radius:8px;padding:10px;font-size:13px">
+                <div style="color:var(--text-muted)">Requested Items</div>
+                <div style="font-weight:700;font-size:18px">{{ $requisition->items->count() }}</div>
+            </div>
             @php $subSnapshot = $requisition->deletedSubsidySnapshot(); @endphp
             @if($subSnapshot)
             <div style="margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:8px">

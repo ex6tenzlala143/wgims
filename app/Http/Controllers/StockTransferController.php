@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\ScopesWarehouse;
 use App\Models\DeliverySubsidy;
 use App\Models\Item;
+use App\Models\Reservation;
+use App\Models\ReservationItem;
 use App\Models\StockCardEntry;
 use App\Models\StockTransfer;
 use App\Models\StockTransferAuditLog;
@@ -112,13 +114,7 @@ class StockTransferController extends Controller
     {
         $user = Auth::user();
 
-        if ($user->role === User::ROLE_STAFF) {
-            abort(403);
-        }
-
-        if ($user->isCenterUser() && ! $this->userCanAccessWarehouse($user, (int) $request->from_warehouse_id)) {
-            abort(403);
-        }
+        abort_unless($user->canCreate(), 403);
 
         $request->validate([
             'from_warehouse_id' => 'required|exists:warehouses,id',
@@ -129,6 +125,7 @@ class StockTransferController extends Controller
             'items.*.item_id'   => 'required|exists:items,id',
             'items.*.quantity'  => 'required|integer|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0',
+            'items.*.reservation_item_id' => 'nullable|integer|exists:reservation_items,id',
         ], [
             'to_warehouse_id.different' => 'Source warehouse and destination warehouse must be different.',
         ]);
@@ -136,20 +133,98 @@ class StockTransferController extends Controller
         $fromWarehouse = Warehouse::findOrFail($request->from_warehouse_id);
         $toWarehouse   = Warehouse::findOrFail($request->to_warehouse_id);
 
-        // Validate items belong to source warehouse
-        foreach ($request->items as $line) {
-            $sourceItem = Item::find($line['item_id']);
-            if (! $sourceItem || (int) $sourceItem->warehouse_id !== (int) $request->from_warehouse_id) {
+        // Validate items belong to source warehouse, and enforce the chosen
+        // stock source per line: normal lines may only use UNRESERVED stock
+        // (physical minus active locks); reserved lines must name a live
+        // reservation lock on that exact stock record with enough remaining.
+        foreach ($request->items as $idx => $line) {
+            $sourceItem = Item::whereKey($line['item_id'] ?? null)
+                ->where('warehouse_id', $request->from_warehouse_id)
+                ->lockForUpdate()
+                ->first();
+            if (! $sourceItem) {
                 return back()->withInput()->with(
                     'error',
-                    "Item \"{$sourceItem?->description}\" does not belong to the selected source warehouse."
+                    'One of the selected items does not belong to the selected source warehouse.'
                 );
             }
-            if ((float) $line['quantity'] > $sourceItem->quantity) {
-                return back()->withInput()->with(
-                    'error',
-                    "Insufficient stock for \"{$sourceItem->description}\": requested {$line['quantity']}, available {$sourceItem->quantity}."
-                );
+            $wanted    = (float) $line['quantity'];
+            $resItemId = ! empty($line['reservation_item_id']) ? (int) $line['reservation_item_id'] : null;
+
+            if ($resItemId) {
+                $resItem = ReservationItem::whereKey($resItemId)->lockForUpdate()->first();
+                $resOk = $resItem
+                    && in_array($resItem->status, ReservationItem::ACTIVE_STATUSES, true)
+                    && (int) $resItem->item_id === (int) $sourceItem->id
+                    && (int) $resItem->warehouse_id === (int) $request->from_warehouse_id
+                    && $resItem->reservation
+                    && in_array($resItem->reservation->status, Reservation::ACTIVE_STATUSES, true);
+                if (! $resOk) {
+                    return back()->withInput()->with(
+                        'error',
+                        "The selected reservation for \"{$sourceItem->description}\" is no longer active on that stock record."
+                    );
+                }
+                $remaining = (float) $resItem->reserved_quantity - (float) $resItem->deployed_quantity;
+                if ($wanted > $remaining + 0.0001) {
+                    return back()->withInput()->with(
+                        'error',
+                        "Insufficient reserved stock for \"{$sourceItem->description}\": requested {$line['quantity']}, remaining reserved " . number_format(max(0, $remaining)) . '.'
+                    );
+                }
+            } else {
+                $locked    = Reservation::reservedQuantityForItem($sourceItem->id);
+                $available = (float) $sourceItem->quantity - (float) $locked;
+                if ($wanted > $available + 0.0001) {
+                    return back()->withInput()->with(
+                        'error',
+                        "Insufficient unreserved stock for \"{$sourceItem->description}\": requested {$line['quantity']}, physical " . number_format($sourceItem->quantity) . ', reserved ' . number_format($locked) . ', available ' . number_format(max(0, $available)) . '. Choose reserved stock to use a reservation lock instead.'
+                    );
+                }
+            }
+        }
+
+        // Multi-line guard: two lines may name the same stock record or the
+        // same reservation lock. Each line can pass on its own while their
+        // combined total over-draws. Reject the combined over-request here.
+        $normalTotals = [];
+        $reservedTotals = [];
+        $labelByItem = [];
+        foreach ($request->items as $line) {
+            $itemId = (int) ($line['item_id'] ?? 0);
+            $wanted = (float) ($line['quantity'] ?? 0);
+            $resItemId = ! empty($line['reservation_item_id']) ? (int) $line['reservation_item_id'] : null;
+            if ($itemId > 0 && $wanted > 0) {
+                $labelByItem[$itemId] = $labelByItem[$itemId] ?? (Item::whereKey($itemId)->value('description') ?? "item #{$itemId}");
+                if ($resItemId) {
+                    $reservedTotals[$resItemId] = ($reservedTotals[$resItemId] ?? 0) + $wanted;
+                } else {
+                    $normalTotals[$itemId] = ($normalTotals[$itemId] ?? 0) + $wanted;
+                }
+            }
+        }
+        foreach ($normalTotals as $itemId => $total) {
+            $sourceItem = Item::whereKey($itemId)->where('warehouse_id', $request->from_warehouse_id)->first();
+            if ($sourceItem) {
+                $available = (float) $sourceItem->quantity - (float) Reservation::reservedQuantityForItem($sourceItem->id);
+                if ($total > $available + 0.0001) {
+                    return back()->withInput()->with(
+                        'error',
+                        "Insufficient unreserved stock for \"{$labelByItem[$itemId]}\": combined request " . number_format($total) . ' exceeds available ' . number_format(max(0, $available)) . ' across ' . count($request->items) . ' line(s).'
+                    );
+                }
+            }
+        }
+        foreach ($reservedTotals as $resItemId => $total) {
+            $resItem = ReservationItem::whereKey($resItemId)->first();
+            if ($resItem) {
+                $remaining = (float) $resItem->reserved_quantity - (float) $resItem->deployed_quantity;
+                if ($total > $remaining + 0.0001) {
+                    return back()->withInput()->with(
+                        'error',
+                        "Insufficient reserved stock for \"{$labelByItem[(int) $resItem->item_id]}\": combined request " . number_format($total) . ' exceeds remaining reserved ' . number_format(max(0, $remaining)) . '.'
+                    );
+                }
             }
         }
 
@@ -235,6 +310,7 @@ class StockTransferController extends Controller
                         'stock_transfer_id'   => $transfer->id,
                         'item_id'             => $sourceItem->id,
                         'destination_item_id' => $destItem->id,
+                        'reservation_item_id' => ! empty($line['reservation_item_id']) ? (int) $line['reservation_item_id'] : null,
                         'quantity_requested'  => (int) $line['quantity'],
                         'quantity'            => 0,
                         'unit_cost'           => $unitCost,
@@ -278,9 +354,7 @@ class StockTransferController extends Controller
     {
         $user = Auth::user();
 
-        if ($user->role === User::ROLE_STAFF) {
-            abort(403);
-        }
+        abort_unless($user->canCreate(), 403);
 
         if (! $user->hasAdminAccess() && ! $this->userCanAccessWarehouse($user, $transfer->from_warehouse_id)) {
             abort(403);
@@ -291,7 +365,7 @@ class StockTransferController extends Controller
                 ->with('error', 'This transfer is already fully completed.');
         }
 
-        $transfer->load(['fromWarehouse', 'toWarehouse', 'items.sourceItem', 'items.destinationItem']);
+        $transfer->load(['fromWarehouse', 'toWarehouse', 'items.sourceItem', 'items.destinationItem', 'items.reservationItem.reservation']);
 
         return view('transfers.dispatch', compact('transfer'));
     }
@@ -303,9 +377,7 @@ class StockTransferController extends Controller
     {
         $user = Auth::user();
 
-        if ($user->role === User::ROLE_STAFF) {
-            abort(403);
-        }
+        abort_unless($user->canCreate(), 403);
 
         if (! $user->hasAdminAccess() && ! $this->userCanAccessWarehouse($user, $transfer->from_warehouse_id)) {
             abort(403);
@@ -373,6 +445,46 @@ class StockTransferController extends Controller
                         continue;
                     }
 
+                    // Enforce the line's chosen stock source against LOCKED rows.
+                    // Normal lines move only unreserved stock; reserved lines
+                    // consume the linked reservation lock (deployed += moved).
+                    $linkedResItem = $sti->reservation_item_id
+                        ? ReservationItem::whereKey($sti->reservation_item_id)->lockForUpdate()->first()
+                        : null;
+
+                    if ($sti->reservation_item_id && ! $linkedResItem) {
+                        throw ValidationException::withMessages([
+                            'items' => "The reservation linked to \"{$sourceItem->description}\" no longer exists.",
+                        ]);
+                    }
+
+                    if ($linkedResItem) {
+                        $resOk = in_array($linkedResItem->status, ReservationItem::ACTIVE_STATUSES, true)
+                            && (int) $linkedResItem->item_id === (int) $sourceItem->id
+                            && (int) $linkedResItem->warehouse_id === (int) $transfer->from_warehouse_id
+                            && $linkedResItem->reservation
+                            && in_array($linkedResItem->reservation->status, Reservation::ACTIVE_STATUSES, true);
+                        if (! $resOk) {
+                            throw ValidationException::withMessages([
+                                'items' => "The reservation linked to \"{$sourceItem->description}\" is no longer active on that stock record.",
+                            ]);
+                        }
+                        $resRemaining = (float) $linkedResItem->reserved_quantity - (float) $linkedResItem->deployed_quantity;
+                        if ($dispatchQty > $resRemaining + 0.0001) {
+                            throw ValidationException::withMessages([
+                                'items' => "Cannot move {$dispatchQty} reserved units of \"{$sourceItem->description}\": only " . number_format(max(0, $resRemaining)) . " remains reserved.",
+                            ]);
+                        }
+                    } else {
+                        $locked    = Reservation::reservedQuantityForItem($sourceItem->id);
+                        $available = (float) $sourceItem->quantity - (float) $locked;
+                        if ($dispatchQty > $available + 0.0001) {
+                            throw ValidationException::withMessages([
+                                'items' => "Insufficient unreserved stock for \"{$sourceItem->description}\": moving {$dispatchQty}, physical " . number_format($sourceItem->quantity) . ', reserved ' . number_format($locked) . ', available ' . number_format(max(0, $available)) . '.',
+                            ]);
+                        }
+                    }
+
                 // Move stock
                 $newSourceQty = max(0, $sourceItem->quantity - $dispatchQty);
                 $newDestQty   = $destItem->quantity + $dispatchQty;
@@ -397,6 +509,19 @@ class StockTransferController extends Controller
 
                 // Accumulate dispatched quantity
                 $sti->increment('quantity', $dispatchQty);
+
+                // A reserved line consumes its reservation lock as the stock
+                // moves (same deploy semantics as an RIS issuance).
+                if ($linkedResItem) {
+                    $newDeployed = (float) $linkedResItem->deployed_quantity + $dispatchQty;
+                    $linkedResItem->update([
+                        'deployed_quantity' => $newDeployed,
+                        'status'            => $newDeployed >= (float) $linkedResItem->reserved_quantity - 0.0001
+                            ? ReservationItem::STATUS_DEPLOYED
+                            : ReservationItem::STATUS_PARTIALLY_DEPLOYED,
+                    ]);
+                    $linkedResItem->reservation?->updateOverallStatus();
+                }
 
                 // Stock card: transfer_out at source
                 StockCardEntry::create([
@@ -489,7 +614,7 @@ class StockTransferController extends Controller
             }
         }
 
-        $transfer->load(['fromWarehouse', 'toWarehouse', 'transferredBy', 'items.sourceItem', 'items.destinationItem']);
+        $transfer->load(['fromWarehouse', 'toWarehouse', 'transferredBy', 'items.sourceItem', 'items.destinationItem', 'items.reservationItem.reservation']);
 
         return view('transfers.show', compact('transfer'));
     }
@@ -510,7 +635,7 @@ class StockTransferController extends Controller
             }
         }
 
-        $transfer->load(['fromWarehouse', 'toWarehouse', 'transferredBy', 'items.sourceItem', 'items.destinationItem']);
+        $transfer->load(['fromWarehouse', 'toWarehouse', 'transferredBy', 'items.sourceItem', 'items.destinationItem', 'items.reservationItem.reservation']);
 
         return view('transfers.print', compact('transfer'));
     }
@@ -537,22 +662,35 @@ class StockTransferController extends Controller
             ->orderBy('description')
             ->get(['id', 'description', 'unit', 'category', 'unit_cost', 'engas_unit_cost', 'quantity', 'stock_number', 'expiration_date']);
 
-        return response()->json($items->map(function ($i) {
+        // Active reservation locks per record in ONE query (normal transfers
+        // may only use quantity minus this lock).
+        $lockedMap = $items->isNotEmpty()
+            ? ReservationItem::whereIn('item_id', $items->pluck('id'))
+                ->whereIn('status', ReservationItem::ACTIVE_STATUSES)
+                ->groupBy('item_id')
+                ->selectRaw('item_id, SUM(reserved_quantity) as total_locked')
+                ->pluck('total_locked', 'item_id')
+            : collect();
+
+        return response()->json($items->map(function ($i) use ($lockedMap) {
             $expiryFormatted = $i->expiration_date ? $i->expiration_date->format('M d, Y') : '—';
             $engasDisplay = $i->engas_unit_cost !== null 
                 ? '₱' . number_format($i->engas_unit_cost, 2) 
                 : '—';
             
             // Build enhanced display text for dropdown option
+            $locked    = (float) ($lockedMap[$i->id] ?? 0);
+            $available = max(0, (float) $i->quantity - $locked);
             $displayText = sprintf(
-                "%s\nQty: %s · ₱%s · ENGAS ₱%s · Exp: %s",
+                "%s\nQty: %s (avail %s) · ₱%s · ENGAS ₱%s · Exp: %s",
                 $i->description,
                 number_format($i->quantity, 0),
+                number_format($available, 0),
                 number_format($i->unit_cost, 2),
                 $engasDisplay,
                 $expiryFormatted
             );
-            
+
             return [
                 'id'             => $i->id,
                 'description'    => $i->description,
@@ -564,6 +702,8 @@ class StockTransferController extends Controller
                 'engas_unit_cost' => $i->engas_unit_cost,
                 'engas_formatted' => $engasDisplay,
                 'quantity'       => $i->quantity,
+                'reserved_quantity'  => $locked,
+                'available_quantity' => $available,
                 'stock_number'   => $i->stock_number,
                 'expiration_date' => $i->expiration_date?->format('Y-m-d'),
                 'expiry_formatted' => $expiryFormatted,
@@ -578,7 +718,7 @@ class StockTransferController extends Controller
     {
         abort_unless(Auth::user()->canWrite(), 403);
 
-        $transfer->load(['fromWarehouse', 'toWarehouse', 'transferredBy', 'items.sourceItem', 'items.destinationItem']);
+        $transfer->load(['fromWarehouse', 'toWarehouse', 'transferredBy', 'items.sourceItem', 'items.destinationItem', 'items.reservationItem.reservation']);
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
 
         // Per-line upper bound for the corrected quantity: the source warehouse
@@ -653,6 +793,7 @@ class StockTransferController extends Controller
                     $sti = StockTransferItem::with(['sourceItem', 'destinationItem'])
                         ->where('id', $line['sti_id'])
                         ->where('stock_transfer_id', $transfer->id)
+                        ->lockForUpdate()
                         ->firstOrFail();
 
                     $oldQtyRequested = (int) $sti->quantity_requested;
@@ -681,9 +822,25 @@ class StockTransferController extends Controller
                     }
 
                     // ── Integrity guards ────────────────────────────────────
-                    // Increasing: the SOURCE warehouse must physically hold the
-                    // extra units — never pull phantom stock into the ledger.
-                    if ($delta > 0 && $sourceItem->quantity < $delta) {
+                    // Increasing: the SOURCE must hold the extra units as
+                    // UNRESERVED stock (physical minus active locks) — normal
+                    // lines must never eat into reservation locks. Reserved
+                    // lines are checked against their own lock below.
+                    $isReservedLine = ! empty($sti->reservation_item_id);
+                    if ($delta > 0 && ! $isReservedLine) {
+                        $lockedForGuard = \App\Models\Reservation::reservedQuantityForItem($sourceItem->id);
+                        $availableForGuard = (float) $sourceItem->quantity - (float) $lockedForGuard;
+                        if ($availableForGuard < $delta - 0.0001) {
+                            throw ValidationException::withMessages([
+                                "items.{$idx}.quantity" =>
+                                    "Cannot correct \"{$sourceItem->description}\" from {$oldQty} to {$newQty} units: "
+                                    ."the source warehouse ({$transfer->fromWarehouse?->name}) only has "
+                                    .number_format(max(0, $availableForGuard)).' unreserved unit(s) available (physical '
+                                    .number_format($sourceItem->quantity).', reserved '
+                                    .number_format($lockedForGuard).'). No changes were saved.',
+                            ]);
+                        }
+                    } elseif ($delta > 0 && $sourceItem->quantity < $delta) {
                         throw ValidationException::withMessages([
                             "items.{$idx}.quantity" =>
                                 "Cannot correct \"{$sourceItem->description}\" from {$oldQty} to {$newQty} units: "
@@ -722,6 +879,43 @@ class StockTransferController extends Controller
                             $sourceItem->source_subsidy_status,
                             $sourceItem->source_subsidy_code
                         );
+                    }
+
+                    // ── Reservation-linked lines move their lock with the ────
+                    // correction: increases consume remaining lock (live lock
+                    // required), decreases always return to it.
+                    $linkedResItem = $sti->reservation_item_id
+                        ? ReservationItem::whereKey($sti->reservation_item_id)->lockForUpdate()->first()
+                        : null;
+                    if ($sti->reservation_item_id && $linkedResItem) {
+                        if ($delta > 0.0001) {
+                            $resLive = in_array($linkedResItem->status, ReservationItem::ACTIVE_STATUSES, true)
+                                && $linkedResItem->reservation
+                                && in_array($linkedResItem->reservation->status, Reservation::ACTIVE_STATUSES, true);
+                            if (! $resLive) {
+                                throw ValidationException::withMessages([
+                                    "items.{$idx}.quantity" =>
+                                        "Cannot increase the transfer: the linked reservation is no longer active.",
+                                ]);
+                            }
+                            $resRemaining = (float) $linkedResItem->reserved_quantity - (float) $linkedResItem->deployed_quantity;
+                            if ($delta > $resRemaining + 0.0001) {
+                                throw ValidationException::withMessages([
+                                    "items.{$idx}.quantity" =>
+                                        'Cannot increase the transfer: only ' . number_format(max(0, $resRemaining)) . ' remains reserved.',
+                                ]);
+                            }
+                        }
+                        $newDeployed = max(0, (float) $linkedResItem->deployed_quantity + $delta);
+                        $linkedResItem->update([
+                            'deployed_quantity' => $newDeployed,
+                            'status'            => $newDeployed <= 0
+                                ? ReservationItem::STATUS_ACTIVE
+                                : ($newDeployed < (float) $linkedResItem->reserved_quantity - 0.0001
+                                    ? ReservationItem::STATUS_PARTIALLY_DEPLOYED
+                                    : ReservationItem::STATUS_DEPLOYED),
+                        ]);
+                        $linkedResItem->reservation?->updateOverallStatus();
                     }
 
                     // ── Update the transfer line (ID/history preserved) ─────
@@ -966,6 +1160,28 @@ class StockTransferController extends Controller
                     if ($destItem) {
                         $newQty = max(0, $destItem->quantity - $dispatched);
                         $destItem->update(['quantity' => $newQty]);
+                    }
+
+                    // A reservation-linked line returns its consumed lock when
+                    // the transfer is deleted (mirrors the RIS destroy path).
+                    if ($sti->reservation_item_id && $dispatched > 0) {
+                        $resItem = ReservationItem::whereKey($sti->reservation_item_id)->lockForUpdate()->first();
+                        if ($resItem) {
+                            $newDeployed = max(0, (float) $resItem->deployed_quantity - $dispatched);
+                            $parentDead  = in_array($resItem->reservation?->status, [
+                                Reservation::STATUS_CANCELLED,
+                                Reservation::STATUS_EXPIRED,
+                            ], true);
+                            $resItem->update([
+                                'deployed_quantity' => $newDeployed,
+                                'status'            => $newDeployed <= 0
+                                    ? ($parentDead ? ReservationItem::STATUS_CANCELLED : ReservationItem::STATUS_ACTIVE)
+                                    : ($newDeployed < (float) $resItem->reserved_quantity - 0.0001
+                                        ? ReservationItem::STATUS_PARTIALLY_DEPLOYED
+                                        : ReservationItem::STATUS_DEPLOYED),
+                            ]);
+                            $resItem->reservation?->updateOverallStatus();
+                        }
                     }
                 }
 

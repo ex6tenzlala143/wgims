@@ -33,8 +33,8 @@ class SecurityHardeningTest extends TestCase
         $admin = $this->makeUser('secadmin', 'admin');
         $wm = $this->makeUser('secwm', 'warehouse_manager');
         $updater = $this->makeUser('secupdater', 'delivery_updater');
-        $staff = $this->makeUser('secstaff', 'center_staff');
-        $assigned = $this->makeUser('secassigned', 'center_staff');
+        $staff = $this->makeUser('secstaff', 'delivery_updater');
+        $assigned = $this->makeUser('secassigned', 'delivery_updater');
         $whA = Warehouse::create(['name' => 'Sec A', 'code' => 'SECA', 'place' => null, 'is_active' => true]);
         $whB = Warehouse::create(['name' => 'Sec B', 'code' => 'SECB', 'place' => null, 'is_active' => true]);
         $assigned->warehouses()->sync([$whA->id]);
@@ -73,13 +73,14 @@ class SecurityHardeningTest extends TestCase
     {
         ['admin' => $admin, 'staff' => $staff, 'assigned' => $assigned, 'whA' => $whA, 'whB' => $whB] = $this->world();
 
-        // Unassigned staff cannot enumerate another warehouse's stock.
+        // Delivery updaters are restricted to dashboard + requisitions, so the
+        // transfers module (pages and APIs) is forbidden regardless of any
+        // pivot assignment. Per-warehouse hasWarehouse() checks inside the
+        // controller remain as defense-in-depth.
         $this->actingAs($staff)->getJson(route('transfers.items_for_warehouse', ['warehouse_id' => $whA->id]))
             ->assertForbidden();
-        // Assigned staff can query their own warehouse…
         $this->actingAs($assigned)->getJson(route('transfers.items_for_warehouse', ['warehouse_id' => $whA->id]))
-            ->assertOk();
-        // …but not someone else's.
+            ->assertForbidden();
         $this->actingAs($assigned)->getJson(route('transfers.items_for_warehouse', ['warehouse_id' => $whB->id]))
             ->assertForbidden();
         // Admin sees all.
@@ -125,19 +126,23 @@ class SecurityHardeningTest extends TestCase
 
     public function test_updater_read_coherence_across_modules(): void
     {
+        // Delivery updater is restricted to dashboard + requisitions only.
         ['updater' => $updater, 'ds' => $ds, 'item' => $item, 'transfer' => $transfer] = $this->world();
 
+        // Allowed: dashboard + requisitions.
         $this->actingAs($updater)->get(route('dashboard'))->assertOk();
-        $this->actingAs($updater)->get(route('items.index'))->assertOk();
-        $this->actingAs($updater)->get(route('items.show', $item))->assertOk();
-        $this->actingAs($updater)->get(route('delivery_subsidies.index'))->assertOk();
-        $this->actingAs($updater)->get(route('delivery_subsidies.show', $ds))->assertOk();
         $this->actingAs($updater)->get(route('requisitions.index'))->assertOk();
-        $this->actingAs($updater)->get(route('reservations.index'))->assertOk();
-        $this->actingAs($updater)->get(route('transfers.index'))->assertOk();
-        $this->actingAs($updater)->get(route('transfers.show', $transfer))->assertOk();
-        $this->actingAs($updater)->get(route('warehouses.index'))->assertOk();
-        $this->actingAs($updater)->get(route('stock_cards.summary'))->assertOk();
+
+        // Blocked: everything else.
+        $this->actingAs($updater)->get(route('items.index'))->assertForbidden();
+        $this->actingAs($updater)->get(route('items.show', $item))->assertForbidden();
+        $this->actingAs($updater)->get(route('delivery_subsidies.index'))->assertForbidden();
+        $this->actingAs($updater)->get(route('delivery_subsidies.show', $ds))->assertForbidden();
+        $this->actingAs($updater)->get(route('reservations.index'))->assertForbidden();
+        $this->actingAs($updater)->get(route('transfers.index'))->assertForbidden();
+        $this->actingAs($updater)->get(route('transfers.show', $transfer))->assertForbidden();
+        $this->actingAs($updater)->get(route('warehouses.index'))->assertForbidden();
+        $this->actingAs($updater)->get(route('stock_cards.summary'))->assertForbidden();
     }
 
     public function test_transfer_mutation_routes_reject_warehouse_manager_up_front(): void

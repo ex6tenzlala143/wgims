@@ -32,16 +32,16 @@ class RequisitionDispatchEditTest extends TestCase
         ]);
     }
 
-    private function staff(): User
+    private function updater(): User
     {
         static $i = 0;
         $i++;
 
         return User::create([
-            'username' => 'de_staff_' . $i,
-            'name'     => 'DE Staff ' . $i,
+            'username' => 'de_upd_' . $i,
+            'name'     => 'DE Updater ' . $i,
             'password' => bcrypt('secret'),
-            'role'     => User::ROLE_STAFF,
+            'role'     => 'delivery_updater',
             'is_active' => true,
         ]);
     }
@@ -425,11 +425,11 @@ class RequisitionDispatchEditTest extends TestCase
         $line = $ris->items()->firstOrFail();
         $disp = $this->dispatch($ris, $item->id, 10, 'DR-ED-9');
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->updater())
             ->getJson(route('requisitions.dispatch_edit_data', $disp->id))
             ->assertForbidden();
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->updater())
             ->putJson(route('requisitions.dispatch_update', $disp->id), [
                 'warehouse_id'    => $wh->id,
                 'item_id'         => $item->id,

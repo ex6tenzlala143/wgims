@@ -33,16 +33,16 @@ class RequisitionCorrectionTest extends TestCase
         ]);
     }
 
-    private function staff(): User
+    private function updater(): User
     {
         static $i = 0;
         $i++;
 
         return User::create([
-            'username' => 'rc_staff_' . $i,
-            'name'     => 'RC Staff ' . $i,
+            'username' => 'rc_upd_' . $i,
+            'name'     => 'RC Updater ' . $i,
             'password' => bcrypt('secret'),
-            'role'     => User::ROLE_STAFF,
+            'role'     => 'delivery_updater',
             'is_active' => true,
         ]);
     }
@@ -399,11 +399,11 @@ class RequisitionCorrectionTest extends TestCase
     {
         [, , , $ris] = $this->completedRis();
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->updater())
             ->getJson(route('requisitions.correction_data', $ris->id))
             ->assertStatus(403);
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->updater())
             ->putJson(route('requisitions.correct', $ris->id), $this->correctPayload($ris))
             ->assertStatus(403);
     }

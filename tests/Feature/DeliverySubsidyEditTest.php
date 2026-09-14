@@ -32,16 +32,16 @@ class DeliverySubsidyEditTest extends TestCase
         ]);
     }
 
-    private function staff(): User
+    private function updater(): User
     {
         static $i = 0;
         $i++;
 
         return User::create([
-            'username' => 'dsc_staff_' . $i,
-            'name'     => 'DSC Staff ' . $i,
+            'username' => 'dsc_upd_' . $i,
+            'name'     => 'DSC Updater ' . $i,
             'password' => bcrypt('secret'),
-            'role'     => User::ROLE_STAFF,
+            'role'     => 'delivery_updater',
             'is_active' => true,
         ]);
     }
@@ -603,11 +603,11 @@ class DeliverySubsidyEditTest extends TestCase
     {
         [, , , $ds] = $this->completedSubsidy();
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->updater())
             ->getJson(route('delivery_subsidies.edit_data', $ds->id))
             ->assertStatus(403);
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->updater())
             ->putJson(route('delivery_subsidies.update', $ds->id), $this->editPayload($ds))
             ->assertStatus(403);
     }

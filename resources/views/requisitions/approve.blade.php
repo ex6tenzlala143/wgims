@@ -74,29 +74,14 @@
 
                     <div class="form-group">
                         <label class="form-label">Source of Items</label>
-                        <div style="display:flex;gap:16px;align-items:center;padding:10px 14px;background:var(--surface-soft);border-radius:8px;border:1px solid var(--border)">
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:500">
-                                <input type="radio"
-                                       name="items[{{ $ri->id }}][source]"
-                                       value="normal"
-                                       id="src-normal-{{ $ri->id }}"
-                                       checked
-                                       onchange="onSourceChange('{{ $ri->id }}', 'normal')"
-                                       style="width:16px;height:16px">
-                                <i class="fas fa-warehouse" style="color:var(--primary)"></i>
-                                Normal Available Stock
-                            </label>
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:500">
-                                <input type="radio"
-                                       name="items[{{ $ri->id }}][source]"
-                                       value="reserved"
-                                       id="src-reserved-{{ $ri->id }}"
-                                       onchange="onSourceChange('{{ $ri->id }}', 'reserved')"
-                                       style="width:16px;height:16px">
-                                <i class="fas fa-lock" style="color:var(--warning)"></i>
-                                Reserved Items
-                            </label>
-                        </div>
+                        <select id="src-select-{{ $ri->id }}"
+                                class="form-control"
+                                style="width:auto;max-width:100%"
+                                data-ss="false"
+                                onchange="onSourceChange('{{ $ri->id }}', this.value)">
+                            <option value="normal" selected>Normal Available Stock</option>
+                            <option value="reserved">Reserved Items</option>
+                        </select>
                     </div>
 
                     {{-- ── Normal Stock panel ───────────────────────────────────────────── --}}

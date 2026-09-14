@@ -312,7 +312,7 @@ class RequisitionController extends Controller
 
             // No warehouse is known at creation time, so notify every approver.
             $approvers = User::where('role', 'admin')
-                ->orWhereIn('role', ['center_head', 'supply_custodian'])
+                ->orWhere('role', User::ROLE_WAREHOUSE_MANAGER)
                 ->get();
 
             $now = now();
@@ -532,6 +532,11 @@ class RequisitionController extends Controller
                     ]);
                 }
             }
+
+            // Recompute fulfilment INSIDE the transaction so lines and header
+            // can never disagree if the request dies between commit and the
+            // old post-commit call.
+            $requisition->updateFulfilmentStatus();
             });
         } catch (ValidationException $e) {
             throw $e;
@@ -1859,8 +1864,8 @@ class RequisitionController extends Controller
     public function updateSignatories(Request $request, Requisition $requisition)
     {
         $user = Auth::user();
-        // Signatories may only be updated by users who can approve (admin, warehouse
-        // manager, center_head, supply_custodian). center_staff are explicitly excluded.
+        // Signatories may only be updated by users who can approve (admin,
+        // warehouse manager).
         abort_unless($user->canApprove(), 403, 'You do not have permission to update signatories.');
         abort_unless($this->userCanAccessRequisition($user, $requisition), 403);
 

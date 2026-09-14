@@ -51,7 +51,6 @@
 <form action="{{ route('delivery_subsidies.store_delivery', $deliverySubsidy->id) }}" method="POST" id="delivery-form">
 @csrf
 <input type="hidden" name="delivery_date"      value="{{ $deliveryDate }}">
-<input type="hidden" name="condition_status"   id="condition-status-hidden" value="good">
 <input type="hidden" name="quantity_delivered" id="qty-delivered-hidden" value="0">
 
 <div class="edit-layout">
@@ -67,11 +66,21 @@
                 </span>
             </div>
             <div class="card-body">
-                <div class="form-row cols-2">
+                <div class="form-row cols-3">
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label">Batch No. <span style="font-size:11px;color:var(--text-muted);font-weight:normal">optional</span></label>
                         <input type="text" name="batch_number" class="form-control"
                                value="{{ old('batch_number') }}" placeholder="Optional">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Condition Status <span class="req">*</span></label>
+                        <select name="condition_status" class="form-control" required>
+                            <option value="good"    {{ old('condition_status', 'good') === 'good'    ? 'selected' : '' }}>Good</option>
+                            <option value="damaged" {{ old('condition_status') === 'damaged' ? 'selected' : '' }}>Damaged</option>
+                        </select>
+                        @error('condition_status')
+                            <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
+                        @enderror
                     </div>
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label">Remarks <span style="font-size:11px;color:var(--text-muted);font-weight:normal">optional</span></label>
@@ -390,12 +399,6 @@ function recalcTotal() {
         if (span) span.textContent = '₱' + (qty * engas)
             .toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     });
-
-    // Set condition_status based on fulfilment: good if complete, partial otherwise
-    const conditionEl = document.getElementById('condition-status-hidden');
-    if (conditionEl) {
-        conditionEl.value = (sum > 0 && cumul >= _totalRequested - epsilon) ? 'good' : 'partial';
-    }
 
     const statusEl = document.getElementById('sidebar-status');
     if (sum <= 0) {

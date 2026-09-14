@@ -87,12 +87,21 @@
                             $physicalQty      = $sti->sourceItem->quantity ?? 0;
                             $reservedQty      = $sti->sourceItem ? \App\Models\ReservationItem::reservedQuantityForItem($sti->sourceItem->id) : 0;
                             $available        = max(0, $physicalQty - $reservedQty);
+                            // Reserved lines draw from their reservation lock, not free stock.
+                            $lineResRemaining = $sti->reservationItem
+                                ? max(0, $sti->reservationItem->reserved_quantity - $sti->reservationItem->deployed_quantity)
+                                : null;
                             $isDone           = $remaining <= 0;
-                            $canDispatch      = min($remaining, $available);
+                            $canDispatch      = $lineResRemaining !== null ? min($remaining, $lineResRemaining) : min($remaining, $available);
                         @endphp
                         <tr style="{{ $isDone ? 'background:#f7fafc;opacity:.6' : '' }}">
                             <td>
                                 <strong>{{ $sti->sourceItem->description ?? '—' }}</strong>
+                                @if($sti->reservationItem)
+                                <div style="margin-top:3px">
+                                    <span class="badge badge-warning">Reserved {{ $sti->reservationItem->reservation?->reservation_number ?? '' }}</span>
+                                </div>
+                                @endif
                                 @if($isDone)
                                     <span class="badge badge-success" style="margin-left:4px">
                                         <i class="fas fa-check"></i> Done
@@ -111,13 +120,22 @@
                                 @endif
                             </td>
                             <td style="text-align:right">
+                                @if($lineResRemaining !== null)
+                                    <span class="{{ $lineResRemaining >= $remaining ? 'badge badge-success' : 'badge badge-danger' }}">
+                                        {{ number_format($lineResRemaining) }}
+                                    </span>
+                                    <div style="font-size:10px;color:var(--warning);margin-top:2px">
+                                        <i class="fas fa-lock"></i> reserved lock
+                                    </div>
+                                @else
                                 <span class="{{ $available >= $remaining ? 'badge badge-success' : 'badge badge-danger' }}">
                                     {{ number_format($available) }}
                                 </span>
                                 @if($reservedQty > 0)
-                                <div style="font-size:10px;color:var(--warning);margin-top:2px">
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:2px">
                                     <i class="fas fa-lock"></i> {{ number_format($reservedQty) }} reserved
                                 </div>
+                                @endif
                                 @endif
                             </td>
                             <td>

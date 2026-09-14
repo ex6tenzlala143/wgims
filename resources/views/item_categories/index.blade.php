@@ -83,7 +83,7 @@
 
                             <button type="button" class="btn btn-sm btn-outline btn-icon"
                                     title="Edit"
-                                    onclick="openEdit(
+                                    onclick="openEditCategoryModal(
                                         {{ $cat->id }},
                                         {{ json_encode($cat->label) }},
                                         {{ json_encode($cat->account_code) }},
@@ -100,20 +100,6 @@
                                     <i class="fas {{ $cat->is_active ? 'fa-eye-slash' : 'fa-eye' }}"></i>
                                 </button>
                             </form>
-
-                            @if($cat->items_count === 0)
-                            <form action="{{ route('item_categories.destroy', $cat->id) }}" method="POST" style="display:inline"
-                                  onsubmit="return confirm('Delete category &quot;{{ $cat->label }}&quot;? This cannot be undone.')">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
-                            @else
-                            <button type="button" class="btn btn-sm btn-danger btn-icon" disabled title="Has items — cannot delete">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                            @endif
                         </div>
                     </td>
                 </tr>
@@ -122,33 +108,32 @@
         </table>
     </div>
     @endif
-
-    <div class="card-footer" style="font-size:12px;color:var(--text-muted)">
-        <i class="fas fa-info-circle"></i>
-        Manage the <strong>item names</strong> (description + account code) available under each category — they appear in the searchable
-        item dropdown of the New Delivery/Subsidy form. Categories with existing inventory items cannot be deleted — deactivate them instead.
-    </div>
 </div>
 
-{{-- ── Edit form (hidden by default, shown via JS) ───────────────────────── --}}
-<div id="edit-card" style="display:none">
-    <div class="card" style="margin-top:24px;border:2px solid var(--primary)">
-        <div class="card-header" style="background:#f0f9ff">
-            <h3 style="color:var(--primary)"><i class="fas fa-edit"></i> Edit Category</h3>
-            <button type="button" onclick="cancelEdit()" class="btn btn-sm btn-secondary">
-                <i class="fas fa-times"></i> Cancel
-            </button>
+{{-- ── Edit Category Modal ──────────────────────────────────────────────── --}}
+<div class="modal-overlay" id="editCategoryModal" aria-hidden="true">
+    <div class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="editCategoryTitle" style="max-width:480px;height:auto;max-height:min(80vh,520px)">
+        <div class="modal-header">
+            <h2 id="editCategoryTitle"><i class="fas fa-edit"></i> Edit Category</h2>
+            <button type="button" class="modal-close" onclick="closeEditCategoryModal()">&times;</button>
         </div>
-        <div class="card-body">
-            <form action="" method="POST" id="edit-form">
-                @csrf @method('PUT')
+        <form action="" method="POST" id="edit-category-form">
+            @csrf @method('PUT')
+            <input type="hidden" name="category_id" id="edit-category-id">
+            <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">Category Label <span class="req">*</span></label>
                     <input type="text" name="label" id="edit-label" class="form-control" required>
+                    @error('label')
+                        <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
+                    @enderror
                 </div>
                 <div class="form-group">
                     <label class="form-label">Account Code <span class="req">*</span></label>
                     <input type="text" name="account_code" id="edit-account-code" class="form-control" required>
+                    @error('account_code')
+                        <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
+                    @enderror
                 </div>
                 <div class="form-group">
                     <label class="form-label">Sort Order</label>
@@ -160,9 +145,12 @@
                         Active (visible in dropdowns)
                     </label>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEditCategoryModal()">Cancel</button>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Changes</button>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -468,22 +456,31 @@ document.getElementById('addItemForm').addEventListener('submit', function(e) {
     });
 });
 
-function openEdit(id, label, accountCode, sortOrder, isActive) {
-    const form = document.getElementById('edit-form');
-    form.action = editRouteBase + '/' + id;
+function openEditCategoryModal(id, label, accountCode, sortOrder, isActive) {
+    const modal = document.getElementById('editCategoryModal');
+    document.getElementById('edit-category-form').action = editRouteBase + '/' + id;
 
+    document.getElementById('edit-category-id').value = id;
     document.getElementById('edit-label').value = label;
     document.getElementById('edit-account-code').value = accountCode;
     document.getElementById('edit-sort-order').value = sortOrder;
     document.getElementById('edit-is-active').checked = isActive;
 
-    document.getElementById('edit-card').style.display = '';
-    document.getElementById('edit-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
 }
 
-function cancelEdit() {
-    document.getElementById('edit-card').style.display = 'none';
+function closeEditCategoryModal() {
+    const modal = document.getElementById('editCategoryModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
 }
+
+document.getElementById('editCategoryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditCategoryModal();
+});
 
 function openEditItemModal(catId, itemId, name, isActive) {
     const modal = document.getElementById('editItemModal');
@@ -581,11 +578,25 @@ function deleteItem(itemId, itemName) {
     });
 }
 
-@if($errors->has('name') || $errors->has('account_code'))
+@if($errors->has('name'))
 (function() {
     const catId = Number('{{ old('item_category_id', '') }}');
     if (catId) {
         openViewItemsModal(catId);
+    }
+})();
+@endif
+@if($errors->has('label'))
+(function() {
+    const catId = Number('{{ old('category_id', '') }}');
+    if (catId) {
+        openEditCategoryModal(
+            catId,
+            {!! json_encode(old('label', '')) !!},
+            {!! json_encode(old('account_code', '')) !!},
+            Number('{{ old('sort_order', 0) }}'),
+            {{ old('is_active') ? 'true' : 'false' }}
+        );
     }
 })();
 @endif

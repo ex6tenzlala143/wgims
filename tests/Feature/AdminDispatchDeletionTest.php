@@ -50,9 +50,7 @@ class AdminDispatchDeletionTest extends TestCase
 
     private function adminUser(): User   { return $this->user(User::ROLE_ADMIN); }
     private function wmUser(): User      { return $this->user(User::ROLE_WAREHOUSE_MANAGER); }
-    private function custodianUser(): User { return $this->user(User::ROLE_CUSTODIAN); }
-    private function staffUser(): User   { return $this->user(User::ROLE_STAFF); }
-    private function headUser(): User    { return $this->user(User::ROLE_HEAD); }
+    private function updaterUser(): User { return $this->user('delivery_updater'); }
 
     private function makeWarehouse(string $name, string $code): Warehouse
     {
@@ -278,7 +276,7 @@ $this->assertNull($log);
         $disp2 = $this->dispatch($ris, $item->id, 10, 'DR-DD-5');
         $this->assertEquals(90, (float) $item->fresh()->quantity);
 
-        foreach ([$this->wmUser(), $this->custodianUser(), $this->staffUser(), $this->headUser()] as $roleUser) {
+        foreach ([$this->wmUser(), $this->updaterUser()] as $roleUser) {
             $this->actingAs($roleUser)->deleteJson(route('requisitions.dispatch_destroy', $disp2->id))
                 ->assertStatus(403);
             // Even direct URL access with any verb is denied server-side

@@ -63,6 +63,18 @@ class AuthController extends Controller
                     return redirect($dashboard);
                 }
 
+                // Delivery updaters live on dashboard + requisitions only —
+                // never bounce them into a module they can no longer open.
+                if ($user->isDeliveryUpdater()) {
+                    $isUpdaterOk = $intendedPath === '/'
+                        || $intendedPath === '/requisitions'
+                        || str_starts_with($intendedPath, '/requisitions/')
+                        || str_starts_with($intendedPath, '/notifications');
+                    if (! $isUpdaterOk) {
+                        return redirect($dashboard);
+                    }
+                }
+
                 return redirect($intended);
             }
 

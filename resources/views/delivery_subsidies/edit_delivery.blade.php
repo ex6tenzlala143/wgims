@@ -65,10 +65,10 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Condition Status <span class="req">*</span></label>
+                            @php $editCond = strtolower(old('condition_status', $delivery->condition_status ?? 'good')); if ($editCond === 'partial') $editCond = 'good'; @endphp
                             <select name="condition_status" class="form-control" required>
-                                <option value="good"    {{ old('condition_status', $delivery->condition_status) === 'good'    ? 'selected' : '' }}>Good</option>
-                                <option value="damaged" {{ old('condition_status', $delivery->condition_status) === 'damaged' ? 'selected' : '' }}>Damaged</option>
-                                <option value="partial" {{ old('condition_status', $delivery->condition_status) === 'partial' ? 'selected' : '' }}>Partial</option>
+                                <option value="good"    {{ $editCond === 'good'    ? 'selected' : '' }}>Good</option>
+                                <option value="damaged" {{ $editCond === 'damaged' ? 'selected' : '' }}>Damaged</option>
                             </select>
                         </div>
                         <div class="form-group">

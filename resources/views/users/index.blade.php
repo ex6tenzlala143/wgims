@@ -28,9 +28,6 @@
                     <option value="">All Roles</option>
                     <option value="admin" {{ request('role')=='admin'?'selected':'' }}>Administrator</option>
                     <option value="warehouse_manager" {{ request('role')=='warehouse_manager'?'selected':'' }}>Warehouse Manager</option>
-                    <option value="supply_custodian" {{ request('role')=='supply_custodian'?'selected':'' }}>Supply Custodian</option>
-                    <option value="center_head" {{ request('role')=='center_head'?'selected':'' }}>Warehouse Head</option>
-                    <option value="center_staff" {{ request('role')=='center_staff'?'selected':'' }}>Warehouse Staff</option>
                     <option value="delivery_updater" {{ request('role')=='delivery_updater'?'selected':'' }}>Delivery Updater</option>
                 </select>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filter</button>
@@ -58,7 +55,7 @@
                     <td><strong>{{ $user->name }}</strong></td>
                     <td>{{ $user->email ?? '-' }}</td>
                     <td>
-                        <span class="badge {{ $user->role == 'admin' ? 'badge-danger' : ($user->role == 'warehouse_manager' ? 'badge-warning' : ($user->role == 'center_head' ? 'badge-primary' : 'badge-secondary')) }}">
+                        <span class="badge {{ $user->role == 'admin' ? 'badge-danger' : ($user->role == 'warehouse_manager' ? 'badge-warning' : 'badge-secondary') }}">
                             {{ $user->getRoleLabel() }}
                         </span>
                     </td>

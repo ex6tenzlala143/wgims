@@ -142,10 +142,7 @@ class DeliverySubsidyController extends Controller
     {
         $user = Auth::user();
 
-        // Center staff cannot create delivery/subsidies
-        if ($user->role === \App\Models\User::ROLE_STAFF) {
-            abort(403);
-        }
+        abort_unless($user->canCreate(), 403);
 
         return view('delivery_subsidies.create', $this->createFormData($user));
     }
@@ -1006,7 +1003,7 @@ class DeliverySubsidyController extends Controller
             'delivery_date'      => 'required|date',
             'dr_number'          => 'nullable|string|max:100',
             'batch_number'       => 'nullable|string|max:100',
-            'condition_status'   => 'required|string|in:good,damaged,partial',
+            'condition_status'   => 'required|string|in:good,damaged',
             'quantity_delivered' => 'required|integer|min:1',
             'items'              => 'required|array',
         ];
@@ -1053,11 +1050,6 @@ class DeliverySubsidyController extends Controller
                 ->first();
             if (! $dsItem) {
                 return back()->withInput()->with('error', 'Invalid item reference in submission.');
-            }
-
-            // Non-admin users may only dispatch items to warehouses they belong to
-            if ($user->isCenterUser() && ! $this->userCanAccessWarehouse($user, (int) $line['warehouse_id'])) {
-                abort(403, 'You cannot dispatch items to that warehouse.');
             }
 
             $remaining = (float) $dsItem->quantity - (float) $dsItem->qty_delivered;
@@ -1368,7 +1360,7 @@ class DeliverySubsidyController extends Controller
             'delivery_date'      => 'required|date',
             'dr_number'          => 'nullable|string|max:100',
             'batch_number'       => 'nullable|string|max:100',
-            'condition_status'   => 'required|string|in:good,damaged,partial',
+            'condition_status'   => 'required|string|in:good,damaged',
             'remarks'            => 'nullable|string|max:1000',
             'items'              => 'required|array|min:1',
             'items.*.di_id'              => 'required|exists:delivery_items,id',

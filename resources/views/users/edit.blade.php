@@ -36,9 +36,6 @@
                     <select name="role" id="role" class="form-control" required onchange="toggleCenter()">
                         <option value="admin" {{ old('role', $user->role)=='admin'?'selected':'' }}>Administrator</option>
                         <option value="warehouse_manager" {{ old('role', $user->role)=='warehouse_manager'?'selected':'' }}>Warehouse Manager</option>
-                        <option value="supply_custodian" {{ old('role', $user->role)=='supply_custodian'?'selected':'' }}>Supply Custodian</option>
-                        <option value="center_head" {{ old('role', $user->role)=='center_head'?'selected':'' }}>Warehouse Head</option>
-                        <option value="center_staff" {{ old('role', $user->role)=='center_staff'?'selected':'' }}>Warehouse Staff</option>
                         <option value="delivery_updater" {{ old('role', $user->role)=='delivery_updater'?'selected':'' }}>Delivery Updater</option>
                     </select>
                 </div>
@@ -109,7 +106,7 @@
 <script>
 function toggleCenter() {
     const role = document.getElementById('role').value;
-    document.getElementById('warehouse-group').style.display = (role === 'admin' || role === 'warehouse_manager' || role === 'delivery_updater') ? 'none' : '';
+    document.getElementById('warehouse-group').style.display = (role === 'delivery_updater') ? '' : 'none';
 }
 toggleCenter();
 

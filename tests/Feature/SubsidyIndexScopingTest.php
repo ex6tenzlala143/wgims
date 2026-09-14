@@ -18,6 +18,9 @@ class SubsidyIndexScopingTest extends TestCase
     {
         $whA = Warehouse::create(['name' => 'WHA', 'code' => 'WHA', 'place' => null, 'is_active' => true]);
         $whB = Warehouse::create(['name' => 'WHB', 'code' => 'WHB', 'place' => null, 'is_active' => true]);
+        // NOTE: uses a legacy scoped role string on purpose — delivery_updater
+        // is intentionally unscoped (all warehouses), so warehouse scoping can
+        // only be exercised with a non-privileged scoped identity.
         $staff = User::create(['username' => 'scope_staff', 'name' => 'S', 'password' => bcrypt('secret'), 'role' => 'center_staff', 'is_active' => true]);
         $staff->warehouses()->attach($whA->id);
         $supplier = Supplier::create(['name' => 'S', 'is_active' => true]);

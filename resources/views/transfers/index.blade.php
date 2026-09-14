@@ -63,13 +63,7 @@
         <a href="{{ route('transfers.index', request()->except(['q', 'page'])) }}">Clear search</a>
     </div>
     @endif
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h3><i class="fas fa-exchange-alt"></i> Transfer Records</h3>
-        <span style="font-size:13px;color:var(--text-muted)">{{ $transfers->total() }} record(s)</span>
-    </div>
+    
     <div class="table-wrapper">
         <table>
             <thead>

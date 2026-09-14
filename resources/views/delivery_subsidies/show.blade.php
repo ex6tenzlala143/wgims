@@ -274,6 +274,8 @@
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Stock No.</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Warehouse</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Expiration</th>
+                        <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Condition Status</th>
+                        <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Remarks</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Qty This Shipment</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Cumulative</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Unit Cost</th>
@@ -323,6 +325,25 @@
                             @php $shipExp = $row['di']->item?->expiration_date; @endphp
                             @if($shipExp)
                                 <span style="white-space:nowrap">{{ $shipExp->format('M d, Y') }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        <td style="padding:10px 14px;text-align:center">
+                            @php $shipCond = strtolower($row['di']->condition ?? $row['delivery']->condition_status ?? ''); @endphp
+                            @if($shipCond === 'good' || $shipCond === 'partial')
+                                <span class="badge badge-success">Good</span>
+                            @elseif($shipCond === 'damaged')
+                                <span class="badge badge-danger">Damaged</span>
+                            @elseif($shipCond !== '')
+                                <span class="badge badge-warning">{{ ucfirst($shipCond) }}</span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        <td style="padding:10px 14px;text-align:center;max-width:180px">
+                            @if(!empty($row['delivery']->remarks))
+                                <span title="{{ $row['delivery']->remarks }}" style="display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">{{ $row['delivery']->remarks }}</span>
                             @else
                                 <span style="color:var(--text-muted)">—</span>
                             @endif
@@ -386,6 +407,8 @@
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
                         <td colspan="5" style="padding:10px 20px">Total Delivered</td>
+                        <td></td>
+                        <td></td>
                         <td style="padding:10px 14px;text-align:center;color:var(--success)">
                             {{ number_format($poi->qty_delivered) }}
                         </td>

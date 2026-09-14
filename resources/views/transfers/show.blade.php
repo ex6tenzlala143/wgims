@@ -12,7 +12,7 @@
         </div>
     </div>
     <div style="display:flex;gap:8px">
-        @if($transfer->status !== 'completed' && auth()->user()->role !== \App\Models\User::ROLE_STAFF)
+        @if($transfer->status !== 'completed' && auth()->user()->canCreate())
         <a href="{{ route('transfers.dispatch', $transfer) }}" class="btn btn-success">
             <i class="fas fa-paper-plane"></i>
             {{ $transfer->status === 'partial' ? 'Dispatch Remaining' : 'Dispatch Items' }}
@@ -254,6 +254,7 @@
                     <th>Description</th>
                     <th>Unit</th>
                     <th>Category</th>
+                    <th>Source</th>
                     <th>Source Stock #</th>
                     <th>Dest. Stock #</th>
                     <th style="text-align:right">Qty Planned</th>
@@ -285,6 +286,13 @@
                     </td>
                     <td>{{ $line->sourceItem->unit }}</td>
                     <td>{{ $line->sourceItem->getCategoryLabel() }}</td>
+                    <td>
+                        @if($line->reservationItem)
+                            <span class="badge badge-warning" title="Drawn from reservation {{ $line->reservationItem->reservation?->reservation_number }} (remaining {{ number_format(max(0, $line->reservationItem->reserved_quantity - $line->reservationItem->deployed_quantity)) }})">Reserved{{ $line->reservationItem->reservation?->reservation_number ? ' ' . $line->reservationItem->reservation->reservation_number : '' }}</span>
+                        @else
+                            <span class="badge badge-secondary">Normal</span>
+                        @endif
+                    </td>
                     <td>
                         @if($line->sourceItem->stock_number)
                         <span class="badge badge-secondary">{{ $line->sourceItem->stock_number }}</span>

@@ -87,7 +87,7 @@ class ReportController extends Controller
         // For non-admins with multiple warehouses, store null as warehouse_id
         // (the snapshot covers all their assigned warehouses)
         $snapshotWarehouseId = $request->warehouse_id
-            ?? ($user->isCenterUser() ? $user->warehouse_id : null);
+            ?? null;
 
         ReportSnapshot::create([
             'report_type' => 'rpci',
@@ -420,7 +420,7 @@ class ReportController extends Controller
 
         ReportSnapshot::create([
             'report_type' => 'rsmi',
-            'warehouse_id' => $request->warehouse_id ?? ($user->isCenterUser() ? $user->warehouse_id : null),
+            'warehouse_id' => $request->warehouse_id ?? null,
             'period_month' => $request->period_month,
             'serial_number' => $request->serial_number,
             'data' => json_encode($data),

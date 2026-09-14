@@ -75,10 +75,11 @@
                             <table class="line-items-table" id="transfer-items-table">
                                 <thead>
                                     <tr>
-                                        <th style="width:45%">Item <span class="hint">(with stock details)</span></th>
-                                        <th style="width:18%">Qty to Transfer</th>
-                                        <th style="width:18%">Unit Cost</th>
-                                        <th style="width:15%">Total</th>
+                                        <th style="width:30%">Item <span class="hint">(with stock details)</span></th>
+                                        <th style="width:22%">Source</th>
+                                        <th style="width:15%">Qty to Transfer</th>
+                                        <th style="width:15%">Unit Cost</th>
+                                        <th style="width:14%">Total</th>
                                         <th style="width:4%"></th>
                                     </tr>
                                 </thead>
@@ -87,7 +88,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr>
-                                        <td colspan="3" style="text-align:right;font-weight:600;padding:12px 16px;background:#f8fafc">Grand Total:</td>
+                                        <td colspan="4" style="text-align:right;font-weight:600;padding:12px 16px;background:#f8fafc">Grand Total:</td>
                                         <td style="font-weight:700;padding:12px 16px;background:#f8fafc" id="transfer-grand-total">₱0.00</td>
                                         <td style="background:#f8fafc"></td>
                                     </tr>
@@ -331,6 +332,15 @@ function populateTransferItemSelect(selectEl) {
     if (!selectEl) return;
     const currentVal = selectEl.value;
     const isDisabled = selectEl.disabled;
+    // Filter the list by this row's chosen stock source: normal mode shows
+    // only records with unreserved stock; reserved mode shows only records
+    // carrying an active reservation lock.
+    let rowSource = 'normal';
+    const m = selectEl.name ? selectEl.name.match(/\[(\d+)\]/) : null;
+    if (m) {
+        const srcSel = document.getElementById(`transfer-source-${m[1]}`);
+        if (srcSel && srcSel.value === 'reserved') rowSource = 'reserved';
+    }
     // Clear and rebuild with proper <option> elements
     selectEl.innerHTML = '';
     const ph = document.createElement('option');
@@ -338,14 +348,23 @@ function populateTransferItemSelect(selectEl) {
     ph.textContent = '— Select Item —';
     selectEl.appendChild(ph);
     (transferSourceItems || []).forEach(item => {
+        const locked = parseFloat(item.reserved_quantity) || 0;
+        const avail = (item.available_quantity !== undefined && item.available_quantity !== null)
+            ? parseFloat(item.available_quantity) : parseFloat(item.quantity);
+        if (rowSource === 'reserved') {
+            if (!(locked > 0)) return; // reserved mode: locked records only
+        } else {
+            if (!(avail > 0)) return;  // normal mode: hide fully-locked records
+        }
         const opt = document.createElement('option');
         opt.value = item.id;
         // Use enhanced display text from API
         opt.textContent = item.display_text || item.description;
         opt.dataset.unit = item.unit;
+        opt.dataset.description = item.description;
         opt.dataset.unitCost = item.unit_cost;
         opt.dataset.engasUnitCost = item.engas_unit_cost || 'null';
-        opt.dataset.available = item.quantity;
+        opt.dataset.available = (item.available_quantity !== undefined && item.available_quantity !== null) ? item.available_quantity : item.quantity;
         selectEl.appendChild(opt);
     });
     // Restore value only if it still exists in the new list
@@ -377,6 +396,19 @@ function addTransferRow() {
             <select name="items[${idx}][item_id]" class="transfer-item-select form-control" required onchange="onTransferItemChange(this, ${idx})" data-placeholder="— Select Item —">
                 <option value="">— Select Item —</option>
             </select>
+        </td>
+        <td data-label="Source">
+            <select class="form-control transfer-source-select" id="transfer-source-${idx}" onchange="onTransferSourceChange(${idx})">
+                <option value="normal">Normal stocks</option>
+<option value="reserved">Reserved items</option>
+</select>
+<div id="transfer-res-wrap-${idx}" style="display:none">
+<select name="items[${idx}][reservation_item_id]" id="transfer-res-${idx}" class="form-control" style="margin-top:6px" onchange="onTransferReservationChange(${idx})">
+                <option value="">— Select Reservation —</option>
+            </select>
+            <input type="hidden" id="transfer-resmax-${idx}" value="">
+            <div id="transfer-res-hint-${idx}" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+        </div>
         </td>
         <td data-label="Qty to Transfer">
             <input type="number" name="items[${idx}][quantity]" id="transfer-qty-${idx}"
@@ -432,6 +464,116 @@ function onTransferItemChange(sel, idx) {
     // Auto-fill unit cost
     document.getElementById(`transfer-cost-${idx}`).value = opt.dataset.unitCost || '';
     recalcTransferRow(idx);
+    // Changing the item resets any picked reservation for this row
+    const resSel = document.getElementById(`transfer-res-${idx}`);
+    if (resSel) { resSel.value = ''; }
+    const resMax = document.getElementById(`transfer-resmax-${idx}`);
+    if (resMax) { resMax.value = ''; }
+    const srcSel = document.getElementById(`transfer-source-${idx}`);
+    if (srcSel && srcSel.value === 'reserved') {
+        loadTransferReservations(idx);
+    } else {
+        const hint = document.getElementById(`transfer-res-hint-${idx}`);
+        if (hint) hint.textContent = '';
+    }
+}
+
+// Source choice per row: normal (unreserved) stock vs a reservation lock.
+// Switching re-filters the item dropdown (normal hides fully-locked
+// records, reserved shows only locked ones) and resets the row, since the
+// previous item may not exist under the new source.
+function onTransferSourceChange(idx) {
+    const srcSel = document.getElementById(`transfer-source-${idx}`);
+    const resSel = document.getElementById(`transfer-res-${idx}`);
+    const resWrap = document.getElementById(`transfer-res-wrap-${idx}`);
+    const hint = document.getElementById(`transfer-res-hint-${idx}`);
+    const resMax = document.getElementById(`transfer-resmax-${idx}`);
+    if (!srcSel || !resSel) return;
+    // Re-filter the item list for the new source (normal hides fully-locked
+    // records, reserved shows only locked ones) and reset the row.
+    const itemSel = document.querySelector(`select[name="items[${idx}][item_id]"]`);
+    if (itemSel) {
+        itemSel.value = '';
+        populateTransferItemSelect(itemSel);
+        onTransferItemChange(itemSel, idx);
+    }
+    if (srcSel.value === 'reserved') {
+        if (resWrap) resWrap.style.display = '';
+        // The searchable wrapper needs correct bounds: enhance after visible.
+        if (window.SS && typeof window.SS.refresh === 'function') window.SS.refresh(resWrap || resSel.parentNode);
+        if (resSel.ss && typeof resSel.ss.sync === 'function') resSel.ss.sync();
+        loadTransferReservations(idx);
+    } else {
+        if (resWrap) resWrap.style.display = 'none';
+        resSel.value = '';
+        if (resSel.ss && typeof resSel.ss.sync === 'function') resSel.ss.sync();
+        if (resMax) resMax.value = '';
+        if (hint) hint.textContent = '';
+    }
+}
+
+// Load active reservation locks for the row's exact stock record from the
+// source warehouse (same picker RIS dispatch uses).
+function loadTransferReservations(idx) {
+    const itemSel = document.querySelector(`select[name="items[${idx}][item_id]"]`);
+    const resSel = document.getElementById(`transfer-res-${idx}`);
+    const hint = document.getElementById(`transfer-res-hint-${idx}`);
+    const resMax = document.getElementById(`transfer-resmax-${idx}`);
+    if (!itemSel || !resSel) return;
+    const opt = itemSel.options[itemSel.selectedIndex];
+    const fromSelect = document.getElementById('from_warehouse_id');
+    const fromInput  = document.querySelector('input[name="from_warehouse_id"]');
+    const warehouseId = (fromSelect && fromSelect.value) || (fromInput && fromInput.value) || '';
+    const itemId = itemSel.value || '';
+    const desc = (opt && opt.dataset.description) || (opt && opt.textContent ? opt.textContent.split('\n')[0].trim() : '');
+
+    resSel.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '— Select Reservation —';
+    resSel.appendChild(ph);
+    if (resMax) resMax.value = '';
+    if (!itemId || !desc) {
+        if (hint) hint.textContent = 'Select an item first.';
+        return;
+    }
+    if (hint) hint.textContent = 'Loading reservations…';
+    fetch(`{{ route('reservations.api.for_dispatch') }}?description=${encodeURIComponent(desc)}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+        credentials: 'same-origin'
+    })
+        .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function (data) {
+            const rows = (Array.isArray(data) ? data : []).filter(function (it) {
+                return String(it.item_id) === String(itemId)
+                    && (!warehouseId || String(it.warehouse_id) === String(warehouseId));
+            });
+            rows.forEach(function (it) {
+                const o = document.createElement('option');
+                o.value = it.reservation_item_id;
+                o.textContent = it.display_label || (it.reservation_number + ' · Remaining: ' + it.remaining_quantity);
+                o.dataset.remaining = it.remaining_quantity;
+                resSel.appendChild(o);
+            });
+            if (hint) hint.textContent = rows.length ? '' : 'No active reservation locks on this stock record.';
+        })
+        .catch(function () {
+            if (hint) hint.textContent = 'Failed to load reservations.';
+        });
+}
+
+function onTransferReservationChange(idx) {
+    const resSel = document.getElementById(`transfer-res-${idx}`);
+    const resMax = document.getElementById(`transfer-resmax-${idx}`);
+    const hint = document.getElementById(`transfer-res-hint-${idx}`);
+    if (!resSel) return;
+    const opt = resSel.options[resSel.selectedIndex];
+    const remaining = opt && opt.dataset.remaining ? parseFloat(opt.dataset.remaining) : NaN;
+    if (resMax) resMax.value = isNaN(remaining) ? '' : remaining;
+    if (hint) hint.textContent = (!isNaN(remaining)) ? ('Reserved remaining: ' + remaining) : '';
 }
 
 function recalcTransferRow(idx) {
@@ -469,10 +611,23 @@ document.getElementById('transfer-form').addEventListener('submit', function(e) 
     
     document.querySelectorAll('[id^="transfer-qty-"]').forEach(qtyEl => {
         const idx = qtyEl.id.replace('transfer-qty-', '');
-        const avail = parseFloat(document.getElementById(`transfer-avail-${idx}`)?.value) || 0;
         const qty   = parseFloat(qtyEl.value) || 0;
+        const srcSel = document.getElementById(`transfer-source-${idx}`);
+        if (srcSel && srcSel.value === 'reserved') {
+            const resSel = document.getElementById(`transfer-res-${idx}`);
+            const resMax = parseFloat(document.getElementById(`transfer-resmax-${idx}`)?.value);
+            if (!resSel || !resSel.value) {
+                alert('Choose a reservation to draw reserved stock from for one of the items.');
+                valid = false;
+            } else if (!isNaN(resMax) && qty > resMax) {
+                alert(`Quantity exceeds the remaining reserved stock (${resMax}) for one of the items.`);
+                valid = false;
+            }
+            return;
+        }
+        const avail = parseFloat(document.getElementById(`transfer-avail-${idx}`)?.value) || 0;
         if (qty > avail) {
-            alert(`Quantity exceeds available stock (${avail}) for one of the items.`);
+            alert(`Quantity exceeds available (unreserved) stock (${avail}) for one of the items.`);
             valid = false;
         }
     });

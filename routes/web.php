@@ -26,7 +26,7 @@ Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'updater.restricted'])->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -75,7 +75,7 @@ Route::middleware('auth')->group(function () {
 
     // ── Requisitions ──────────────────────────────────────────────────────────
     Route::get('/requisitions',                                   [RequisitionController::class, 'index'])->name('requisitions.index');
-    // Create/store require at least warehouse manager role (center_staff cannot create)
+    // Create/store require at least warehouse manager role
     Route::middleware('admin.create')->group(function () {
         Route::get('/requisitions/create',                        [RequisitionController::class, 'create'])->name('requisitions.create');
         Route::post('/requisitions',                              [RequisitionController::class, 'store'])->name('requisitions.store');
@@ -121,10 +121,13 @@ Route::middleware('auth')->group(function () {
         // Requisition edit endpoints
         Route::get('/requisitions/{requisition}/edit',            [RequisitionController::class, 'edit'])->name('requisitions.edit');
         Route::put('/requisitions/{requisition}',                 [RequisitionController::class, 'update'])->name('requisitions.update');
-        Route::put('/requisitions/{requisition}/signatories',     [RequisitionController::class, 'updateSignatories'])->name('requisitions.update_signatories');
         Route::get('/requisitions/{requisition}/correction-data', [RequisitionController::class, 'correctionData'])->name('requisitions.correction_data');
         Route::put('/requisitions/{requisition}/correct',         [RequisitionController::class, 'correct'])->name('requisitions.correct');
     });
+
+    // Signatories: controller enforces canApprove() (admin + warehouse manager)
+    // plus warehouse access, so it stays outside admin.write.
+    Route::put('/requisitions/{requisition}/signatories',     [RequisitionController::class, 'updateSignatories'])->name('requisitions.update_signatories');
     
     // Delete — admin only (admin.write already restricts to admin)
     Route::middleware('admin.write')->group(function () {

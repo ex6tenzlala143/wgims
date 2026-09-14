@@ -343,7 +343,7 @@ class AuthSecurityAuditTest extends TestCase
         $this->get('/users')->assertOk();
         $this->get('/item-categories')->assertOk();
 
-        $target = $this->makeUser(User::ROLE_STAFF);
+        $target = $this->makeUser('delivery_updater');
         $this->get('/users/'.$target->id.'/edit')->assertOk();
 
         $this->get('/')->assertOk();
@@ -366,7 +366,7 @@ class AuthSecurityAuditTest extends TestCase
         $subsidy = $this->makeSubsidy($wm);
         $transfer = $this->makeTransfer($wm);
         $warehouse = $this->makeWarehouse();
-        $targetUser = $this->makeUser(User::ROLE_STAFF);
+        $targetUser = $this->makeUser('delivery_updater');
         $requisition = $this->makeRequisition($wm);
 
         // Admin-only pages → 403, never 200.
@@ -393,21 +393,29 @@ class AuthSecurityAuditTest extends TestCase
         $this->get('/suppliers')->assertOk();
     }
 
-    public function test_center_roles_are_blocked_from_admin_pages(): void
+    public function test_delivery_updater_is_blocked_from_admin_pages(): void
     {
         $admin = $this->makeUser(User::ROLE_ADMIN);
         $requisition = $this->makeRequisition($admin);
 
-        foreach ([User::ROLE_STAFF, User::ROLE_HEAD, User::ROLE_CUSTODIAN] as $role) {
+        foreach (['delivery_updater'] as $role) {
             $user = $this->makeUser($role);
             $this->actingAs($user);
 
             $this->get('/users')->assertForbidden();
             $this->get('/users/create')->assertForbidden();
             $this->get('/item-categories')->assertForbidden();
-            $this->get('/transfers')->assertOk();
+            // Delivery updater: dashboard + requisitions only.
+            $this->get('/transfers')->assertForbidden();
             $this->get('/requisitions')->assertOk();
-            $this->get('/delivery-subsidies')->assertOk();
+            $this->get('/delivery-subsidies')->assertForbidden();
+            $this->get('/items')->assertForbidden();
+            $this->get('/reservations')->assertForbidden();
+            $this->get('/warehouses')->assertForbidden();
+            $this->get('/stock-cards')->assertForbidden();
+            $this->get('/reports/rpci')->assertForbidden();
+            $this->get('/reports/rsmi')->assertForbidden();
+            $this->get('/suppliers')->assertForbidden();
             $this->get('/')->assertOk();
 
             $this->post('/transfers', [])->assertForbidden();
@@ -469,7 +477,7 @@ class AuthSecurityAuditTest extends TestCase
 
     public function test_deactivated_user_cannot_log_in(): void
     {
-        $user = $this->makeUser(User::ROLE_STAFF, active: false);
+        $user = $this->makeUser('delivery_updater', active: false);
 
         $this->post('/login', [
             'username' => $user->username,
@@ -481,7 +489,7 @@ class AuthSecurityAuditTest extends TestCase
 
     public function test_deactivated_users_active_session_is_terminated(): void
     {
-        $user = $this->makeUser(User::ROLE_STAFF);
+        $user = $this->makeUser('delivery_updater');
         $this->actingAs($user);
         $this->assertAuthenticated();
 

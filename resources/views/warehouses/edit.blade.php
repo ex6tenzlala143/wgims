@@ -65,7 +65,7 @@
                     <td><strong>{{ $u->name }}</strong></td>
                     <td><code>{{ $u->username }}</code></td>
                     <td>
-                        <span class="badge {{ $u->role === 'admin' ? 'badge-danger' : ($u->role === 'center_head' ? 'badge-primary' : 'badge-secondary') }}">
+                        <span class="badge {{ $u->role === 'admin' ? 'badge-danger' : ($u->role === 'warehouse_manager' ? 'badge-warning' : 'badge-secondary') }}">
                             {{ $u->getRoleLabel() }}
                         </span>
                     </td>

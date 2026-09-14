@@ -11,6 +11,7 @@ class StockTransferItem extends Model
         'stock_transfer_id',
         'item_id',
         'destination_item_id',
+        'reservation_item_id',
         'quantity',
         'quantity_requested',
         'unit_cost',
@@ -35,5 +36,10 @@ class StockTransferItem extends Model
     public function destinationItem(): BelongsTo
     {
         return $this->belongsTo(Item::class, 'destination_item_id');
+    }
+
+    public function reservationItem(): BelongsTo
+    {
+        return $this->belongsTo(ReservationItem::class, 'reservation_item_id');
     }
 }

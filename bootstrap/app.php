@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.write'        => \App\Http\Middleware\AdminWriteOnly::class,
             'admin.create'       => \App\Http\Middleware\AdminCreateOnly::class,
             'admin.only.strict'  => \App\Http\Middleware\AdminOnlyStrict::class,
+            'updater.restricted' => \App\Http\Middleware\RestrictDeliveryUpdater::class,
         ]);
 
         // Runs on every web request after the session middleware:

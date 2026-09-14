@@ -17,12 +17,10 @@ class User extends Authenticatable
 
     protected $casts = ['is_active' => 'boolean'];
 
-    // Roles
+    // Roles (supply_custodian / center_staff / center_head were removed;
+    // only admin, warehouse_manager and delivery_updater remain).
     const ROLE_ADMIN = 'admin';
     const ROLE_WAREHOUSE_MANAGER = 'warehouse_manager';
-    const ROLE_CUSTODIAN = 'supply_custodian';
-    const ROLE_STAFF = 'center_staff';
-    const ROLE_HEAD = 'center_head';
     const ROLE_DELIVERY_UPDATER = 'delivery_updater';
 
     public function warehouse()
@@ -86,20 +84,9 @@ class User extends Authenticatable
         return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_WAREHOUSE_MANAGER]);
     }
 
-    // Alias so controllers referencing ->isCenterUser() keep working
-    public function isCenterUser(): bool
-    {
-        return $this->isWarehouseUser();
-    }
-
-    public function isWarehouseUser(): bool
-    {
-        return in_array($this->role, [self::ROLE_CUSTODIAN, self::ROLE_STAFF, self::ROLE_HEAD]);
-    }
-
     public function canApprove(): bool
     {
-        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_WAREHOUSE_MANAGER, self::ROLE_HEAD, self::ROLE_CUSTODIAN]);
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_WAREHOUSE_MANAGER]);
     }
 
     public function isDeliveryUpdater(): bool
@@ -122,9 +109,6 @@ class User extends Authenticatable
         return match($this->role) {
             self::ROLE_ADMIN             => 'Administrator',
             self::ROLE_WAREHOUSE_MANAGER => 'Warehouse Manager',
-            self::ROLE_CUSTODIAN         => 'Supply Custodian',
-            self::ROLE_STAFF             => 'Warehouse Staff',
-            self::ROLE_HEAD              => 'Warehouse Head',
             self::ROLE_DELIVERY_UPDATER  => 'Delivery Updater',
             default => ucfirst($this->role),
         };

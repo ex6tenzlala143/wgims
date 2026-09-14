@@ -40,9 +40,6 @@
                         <option value="">— Select Role —</option>
                         <option value="admin" {{ old('role')=='admin'?'selected':'' }}>Administrator</option>
                         <option value="warehouse_manager" {{ old('role')=='warehouse_manager'?'selected':'' }}>Warehouse Manager</option>
-                        <option value="supply_custodian" {{ old('role')=='supply_custodian'?'selected':'' }}>Supply Custodian</option>
-                        <option value="center_head" {{ old('role')=='center_head'?'selected':'' }}>Warehouse Head</option>
-                        <option value="center_staff" {{ old('role')=='center_staff'?'selected':'' }}>Warehouse Staff</option>
                         <option value="delivery_updater" {{ old('role')=='delivery_updater'?'selected':'' }}>Delivery Updater</option>
                     </select>
                 </div>
@@ -54,7 +51,7 @@
                 <ul id="role-info-list" style="margin-top:6px;padding-left:20px"></ul>
             </div>
 
-            <div class="form-group" id="warehouse-group" style="{{ in_array(old('role'), ['admin', 'warehouse_manager', 'delivery_updater']) ? 'display:none' : '' }}">
+            <div class="form-group" id="warehouse-group" style="{{ old('role')=='delivery_updater' ? '' : 'display:none' }}">
                 <label class="form-label">
                     Warehouse Assignment <span class="req">*</span>
                     <small style="color:var(--text-muted);font-weight:400"> — select one or more; the first selected becomes the primary</small>
@@ -120,17 +117,14 @@
 const roleInfo = {
     admin: { title: 'Administrator', perms: ['Full access to all modules', 'Manage users and warehouses', 'View all warehouses data', 'Approve/delete any record'] },
     warehouse_manager: { title: 'Warehouse Manager', perms: ['Full view/read access across all modules', 'View all warehouses and reports', 'Cannot create, edit, or delete any records'] },
-    supply_custodian: { title: 'Supply Custodian', perms: ['Manage warehouse inventory', 'Create and view Delivery/Subsidies', 'Create and approve RIS', 'View own warehouse data only'] },
-    center_head: { title: 'Warehouse Head', perms: ['View warehouse inventory', 'Create RIS', 'Approve RIS', 'View own warehouse data only'] },
-    center_staff: { title: 'Warehouse Staff', perms: ['View warehouse inventory', 'Create RIS', 'View own warehouse data only'] },
-    delivery_updater: { title: 'Delivery Updater', perms: ['View all warehouses data', 'Confirm delivered dispatch lines (with date + notes)', 'Admins are notified, incl. when an RIS is fully delivered', 'Cannot create, edit, approve, or delete any records'] },
+    delivery_updater: { title: 'Delivery Updater', perms: ['Dashboard + Requisitions only', 'Confirm delivered dispatch lines (with date + notes)', 'Admins are notified, incl. when an RIS is fully delivered', 'Cannot create, edit, approve, or delete any records'] },
 };
 
 function toggleCenter() {
     const role = document.getElementById('role').value;
     const cg = document.getElementById('warehouse-group');
     const ri = document.getElementById('role-info');
-    cg.style.display = (role === 'admin' || role === 'warehouse_manager' || role === 'delivery_updater') ? 'none' : '';
+    cg.style.display = (role === 'delivery_updater') ? '' : 'none';
     if (role && roleInfo[role]) {
         ri.style.display = 'block';
         document.getElementById('role-info-title').textContent = roleInfo[role].title + ' Permissions:';

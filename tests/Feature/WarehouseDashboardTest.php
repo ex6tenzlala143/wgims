@@ -14,6 +14,9 @@ class WarehouseDashboardTest extends TestCase
     public function test_warehouse_dashboard_renders_for_center_user(): void
     {
         $wh = Warehouse::create(['name' => 'WHC', 'code' => 'WHC', 'place' => null, 'is_active' => true]);
+        // NOTE: legacy scoped role string on purpose — delivery_updater is
+        // intentionally unscoped, so the warehouse dashboard (scoped view)
+        // can only be exercised with a non-privileged scoped identity.
         $staff = User::create(['username' => 'dashcenter', 'name' => 'C', 'password' => bcrypt('secret'), 'role' => 'center_staff', 'is_active' => true]);
         $staff->warehouses()->attach($wh->id);
         $this->actingAs($staff)->get(route('dashboard'))->assertOk()->assertSee('Monthly Activity Comparison');

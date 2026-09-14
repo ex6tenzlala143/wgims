@@ -12,7 +12,6 @@
 <div class="page-header">
     <div>
         <h1>Good {{ date('H') < 12 ? 'Morning' : (date('H') < 17 ? 'Afternoon' : 'Evening') }}, {{ auth()->user()->name }}!</h1>
-        <div class="breadcrumb">{{ date('l, F j, Y') }} — {{ $warehouseLabel }}</div>
     </div>
 </div>
 

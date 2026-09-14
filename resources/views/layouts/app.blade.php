@@ -989,6 +989,7 @@
                 <i class="fas fa-th-large"></i> Dashboard
             </a>
 
+            @if(!$navUser->isDeliveryUpdater())
             <div class="nav-section">Inventory</div>
             <a href="{{ route('items.index') }}" class="nav-item {{ request()->routeIs('items*') ? 'active' : '' }}">
                 <i class="fas fa-cubes"></i> Items
@@ -996,9 +997,11 @@
             <a href="{{ route('delivery_subsidies.index') }}" class="nav-item {{ request()->routeIs('delivery_subsidies*') ? 'active' : '' }}">
                 <i class="fas fa-truck-loading"></i> Subsidies
             </a>
+            @endif
             <a href="{{ route('requisitions.index') }}" class="nav-item {{ request()->routeIs('requisitions*') ? 'active' : '' }}">
                 <i class="fas fa-clipboard-check"></i> Requisitions
             </a>
+            @if(!$navUser->isDeliveryUpdater())
             <a href="{{ route('transfers.index') }}" class="nav-item {{ request()->routeIs('transfers*') ? 'active' : '' }}">
                 <i class="fas fa-arrows-alt-h"></i> Stock Transfers
             </a>
@@ -1033,7 +1036,7 @@
                 <i class="fas fa-tags"></i> Item Categories
             </a>
             @endif
-            @if($navUser->hasAdminAccess() || $navUser->isCenterUser() || $navUser->isDeliveryUpdater())
+            @if($navUser->hasAdminAccess())
             <a href="{{ route('warehouses.index') }}" class="nav-item {{ request()->routeIs('warehouses*') ? 'active' : '' }}">
                 <i class="fas fa-warehouse"></i> Warehouses
             </a>
@@ -1042,6 +1045,7 @@
             <a href="{{ route('users.index') }}" class="nav-item {{ request()->routeIs('users*') ? 'active' : '' }}">
                 <i class="fas fa-users-gear"></i> Users
             </a>
+            @endif
             @endif
         </nav>
 
