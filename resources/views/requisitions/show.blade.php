@@ -295,7 +295,8 @@
         @else
             {{-- Dispatch history table --}}
             @php $runningTotal = 0; @endphp
-            <table style="width:100%;border-collapse:collapse">
+            <div class="table-wrapper" style="overflow-x:auto">
+            <table style="width:100%;min-width:1240px;border-collapse:collapse">
                 <thead>
                     <tr style="background:#f0f9ff">
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Date Dispatched</th>
@@ -311,7 +312,7 @@
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Available Stocks</th>
                         <th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Delivery</th>
 @if(auth()->user()->canWrite())
-<th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600">Actions</th>
+<th style="padding:8px 14px;text-align:center;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600;white-space:nowrap">Actions</th>
 @endif
                     </tr>
                 </thead>
@@ -431,6 +432,7 @@
                         </td>
                         @if(auth()->user()->canWrite())
                         <td style="padding:10px 14px;text-align:center;white-space:nowrap">
+                            <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;justify-content:center">
                             @if($di->item)
                             <a href="{{ route('stock_cards.item_history', $di->item->id) }}"
                                class="btn btn-sm btn-outline btn-icon"
@@ -451,6 +453,7 @@
                                     title="Delete this issued item and return its quantity to the originating stock">
                                 <i class="fas fa-trash" style="color:var(--danger)"></i>
                             </button>
+                            </div>
                         </td>
                         @endif
                     </tr>
@@ -488,6 +491,7 @@
                     </tr>
                 </tfoot>
             </table>
+            </div>
         @endif
     </div>
     @endforeach

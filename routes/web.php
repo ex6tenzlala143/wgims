@@ -255,9 +255,15 @@ Route::middleware(['auth', 'updater.restricted'])->group(function () {
             return response()->json(['found' => false, 'stock_number' => null, 'preview' => null]);
         }
 
-        $cost = round((float) $req->input('unit_cost'), 2);
+        // Donated (₱0) lines are legitimate: only a MISSING cost hides the
+        // preview; an explicit zero must still match/preview like any cost.
+        $costInput = $req->input('unit_cost');
+        if ($costInput === null || $costInput === '') {
+            return response()->json(['found' => false, 'stock_number' => null, 'preview' => null]);
+        }
+        $cost = round((float) $costInput, 2);
         $expiryDate = $req->input('expiration_date');
-        if ($cost <= 0) {
+        if ($cost < 0) {
             return response()->json(['found' => false, 'stock_number' => null, 'preview' => null]);
         }
 

@@ -1102,7 +1102,9 @@ class RequisitionController extends Controller
                     // Credit back the reserved quantity of the specific reservation
                     // being consumed — it is available to this RIS.
                     $thisReservation = \App\Models\ReservationItem::whereKey($reservationItemId)->first();
-                    $creditBack = $thisReservation ? (float) $thisReservation->reserved_quantity : 0;
+                    $creditBack = $thisReservation
+                        ? max(0, (float) $thisReservation->reserved_quantity - (float) $thisReservation->deployed_quantity)
+                        : 0;
                     $availableQty = $item->quantity - max(0, $totalReserved - $creditBack);
                 } else {
                     $availableQty = $item->quantity - $totalReserved;
@@ -1367,11 +1369,15 @@ class RequisitionController extends Controller
             abort(403);
         }
 
+        // Costs are mastered by the subsidy shipment and cascade downstream
+        // automatically — the dispatch edit form sends them read-only and the
+        // backend re-derives them from the selected stock record below, so a
+        // tampered unit_cost/engas_unit_cost can never stick.
         $request->validate([
             'warehouse_id'    => 'required|integer|exists:warehouses,id',
             'item_id'         => 'required|integer|exists:items,id',
             'quantity_issued' => 'required|integer|min:1',
-            'unit_cost'       => 'required|numeric|min:0',
+            'unit_cost'       => 'nullable|numeric|min:0',
             'engas_unit_cost' => 'nullable|numeric|min:0',
             'expiration_date' => 'nullable|date',
             'dr_number'       => 'required|string|max:100',
@@ -1392,10 +1398,6 @@ class RequisitionController extends Controller
             $warehouseId = (int) $request->warehouse_id;
             $newItemId   = (int) $request->item_id;
             $newQty      = (int) round((float) $request->quantity_issued);
-            $newUnitCost = round((float) $request->unit_cost, 2);
-            $newEngas    = ($request->engas_unit_cost !== null && $request->engas_unit_cost !== '')
-                ? round((float) $request->engas_unit_cost, 2)
-                : null;
 
             // A non-admin dispatcher can only issue from their own warehouses.
             $allowedIds = $this->getUserWarehouseIds($user);
@@ -1416,6 +1418,13 @@ class RequisitionController extends Controller
                     'item_id' => 'The selected stock record does not belong to the selected warehouse.',
                 ]);
             }
+
+            // Costs always follow the selected stock record (subsidy-mastered).
+            // Any submitted unit_cost/engas_unit_cost is ignored.
+            $newUnitCost = round((float) $newItem->unit_cost, 2);
+            $newEngas    = $newItem->engas_unit_cost !== null
+                ? round((float) $newItem->engas_unit_cost, 2)
+                : null;
 
             // The issued stock must be the requested item (description-level
             // match) — same rule as dispatch creation.
@@ -1464,7 +1473,7 @@ class RequisitionController extends Controller
             // (that lock is being consumed here, not competed with).
             $totalReservedEdit = \App\Models\Reservation::reservedQuantityForItem($newItem->id);
             $creditBackEdit = ($linkedResItem && (int) $linkedResItem->item_id === (int) $newItem->id)
-                ? (float) $linkedResItem->reserved_quantity
+                ? max(0, (float) $linkedResItem->reserved_quantity - (float) $linkedResItem->deployed_quantity)
                 : 0.0;
             $availableOnRecord = max(0, (float) $newItem->quantity
                 + ($oldItemId === $newItemId ? $oldQty : 0.0)

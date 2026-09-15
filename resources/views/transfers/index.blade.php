@@ -64,8 +64,8 @@
     </div>
     @endif
     
-    <div class="table-wrapper">
-        <table>
+    <div class="table-wrapper" style="overflow-x:auto">
+        <table style="min-width:1080px">
             <thead>
                 <tr>
                     <th>Transfer #</th>
@@ -77,7 +77,7 @@
                     <th style="min-width:150px">Transfer Summary</th>
                     <th>Status</th>
                     <th>Transferred By</th>
-                    <th>Actions</th>
+                    <th style="white-space:nowrap">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -147,7 +147,8 @@
                         <span class="badge {{ $transfer->getStatusBadgeClass() }}">{{ $transfer->getStatusLabel() }}</span>
                     </td>
                     <td>{{ $transfer->transferredBy->name }}</td>
-                    <td>
+                    <td style="white-space:nowrap">
+                        <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center">
                         <a href="{{ route('transfers.show', $transfer) }}" class="btn btn-sm btn-outline btn-icon" title="View">
                             <i class="fas fa-eye"></i>
                         </a>
@@ -166,6 +167,7 @@
                             </button>
                         </form>
                         @endif
+                        </div>
                     </td>
                 </tr>
                 @empty

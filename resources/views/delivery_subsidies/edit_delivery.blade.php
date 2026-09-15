@@ -83,7 +83,7 @@
             <div class="card">
                 <div class="card-header">
                     <h3><i class="fas fa-boxes"></i> Item Detail</h3>
-                    <span style="font-size:12px;color:var(--text-muted)">Adjust quantities, unit cost, warehouse, ENGAS unit cost and DR#. Stock levels update automatically.</span>
+                    <span style="font-size:12px;color:var(--text-muted)">Adjust quantities, unit cost, warehouse, ENGAS unit cost, stock number and DR#. Stock levels update automatically.</span>
                 </div>
 
                 <div style="padding:20px 20px 4px">
@@ -222,6 +222,21 @@ value="{{ old("items.{$idx}.unit_cost", $di->unit_cost) }}"
                                        name="items[{{ $idx }}][expiration_date]"
                                        class="form-control"
                                        value="{{ old("items.{$idx}.expiration_date", $di->item?->expiration_date?->format('Y-m-d')) }}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Stock Number</label>
+                                <input type="text"
+                                       name="items[{{ $idx }}][stock_number]"
+                                       class="form-control"
+                                       value="{{ old("items.{$idx}.stock_number", $di->item?->stock_number) }}"
+                                       maxlength="50"
+                                       placeholder="e.g. FFP-002">
+                                <div class="hint" style="margin-top:4px">
+                                    Renames this exact stock record — dispatch, RIS, transfer, reservation, stock card and reports follow automatically.
+                                </div>
+                                @error("items.{$idx}.stock_number")
+                                    <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
+                                @enderror
                             </div>
                         </div>
 

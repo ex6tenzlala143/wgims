@@ -82,7 +82,7 @@ class ReservationController extends Controller
             'items'      => 'required|array|min:1',
             'items.*.warehouse_id'      => 'required|exists:warehouses,id',
             'items.*.item_id'           => 'required|exists:items,id',
-            'items.*.reserved_quantity' => 'required|numeric|min:1',
+            'items.*.reserved_quantity' => 'required|integer|min:1',
         ]);
 
         $user = Auth::user();
@@ -249,7 +249,7 @@ class ReservationController extends Controller
             'items.*.id' => 'nullable|integer|exists:reservation_items,id',
             'items.*.warehouse_id' => 'required|integer|exists:warehouses,id',
             'items.*.item_id' => 'required|integer|exists:items,id',
-            'items.*.reserved_quantity' => 'required|numeric|min:1',
+            'items.*.reserved_quantity' => 'required|integer|min:1',
         ]);
 
         try {

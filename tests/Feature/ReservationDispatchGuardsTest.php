@@ -87,6 +87,38 @@ class ReservationDispatchGuardsTest extends TestCase
         $this->assertEquals(8, $res->items()->firstOrFail()->deployed_quantity);
     }
 
+    public function test_partially_deployed_reservation_locks_only_remainder(): void
+    {
+        // 100 on hand, 10 reserved, 8 deployed → physical 92, locked 2, avail 90.
+        // (Deployed units already left physical stock; locking the full 10
+        // would understate availability as 82.)
+        [$admin, $wh, $catalog, $catalog2, $item, $other] = $this->world();
+        $res = $this->reserve($admin, $wh, $item, 10);
+        $riId = $res->items()->firstOrFail()->id;
+        $this->actingAs($admin)->post(route('reservations.approve', $res))->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('reservations.ready', $res))->assertSessionHasNoErrors();
+
+        $ris = $this->makeRis($admin, $catalog);
+        $line = $ris->items()->firstOrFail()->id;
+        $this->actingAs($admin)->post(route('requisitions.process_approval', $ris), [
+            'approved_by_name' => 'A', 'issued_by_name' => 'B',
+            'items' => [$line => ['warehouse_id' => $wh->id, 'item_id' => $item->id, 'quantity_issued' => 8, 'dr_number' => 'DR-1', 'reservation_item_id' => $riId]],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertEquals(92, (float) $item->fresh()->quantity);
+        $this->assertEquals(2, (float) \App\Models\ReservationItem::reservedQuantityForItem($item->id));
+        $this->assertEquals(90, (float) \App\Models\Reservation::availableQuantityForItem($item->fresh()));
+    }
+
+    public function test_decimal_reservation_quantity_rejected(): void
+    {
+        [$admin, $wh, $catalog, $catalog2, $item, $other] = $this->world();
+        $this->actingAs($admin)->post(route('reservations.store'), [
+            'purpose' => 't', 'items' => [['warehouse_id' => $wh->id, 'item_id' => $item->id, 'reserved_quantity' => 1.5]],
+        ])->assertSessionHasErrors('items.0.reserved_quantity');
+        $this->assertEquals(0, \App\Models\Reservation::count());
+    }
+
     public function test_wrong_description_stock_rejected(): void
     {
         [$admin, $wh, $catalog, $catalog2, $item, $other] = $this->world();

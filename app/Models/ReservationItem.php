@@ -86,9 +86,12 @@ class ReservationItem extends Model
 
     public static function reservedQuantityForItem(int $itemId): float
     {
+        // Locked = REMAINING reserved (reserved − already deployed). Deployed
+        // units were already deducted from physical stock, so counting the
+        // full reserved amount would double-count them against availability.
         return (float) static::where('item_id', $itemId)
             ->whereIn('status', self::ACTIVE_STATUSES)
-            ->sum('reserved_quantity');
+            ->sum(\Illuminate\Support\Facades\DB::raw('GREATEST(reserved_quantity - deployed_quantity, 0)'));
     }
 
     public function scopeActive($query)

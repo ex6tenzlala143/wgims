@@ -172,12 +172,14 @@
                         <input type="number" name="quantity_issued" id="dispatch-qty" class="form-control" min="1" step="1" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Unit Cost <span class="req">*</span></label>
-                        <input type="number" name="unit_cost" id="dispatch-unit-cost" class="form-control" min="0" step="0.01" required>
+                        <label class="form-label">Unit Cost</label>
+                        <input type="number" name="unit_cost" id="dispatch-unit-cost" class="form-control" min="0" step="0.01" readonly tabindex="-1">
+                        <small style="color:var(--text-muted);font-size:11px">Follows the subsidy — edit it in Edit Shipment.</small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">ENGAS Unit Cost</label>
-                        <input type="number" name="engas_unit_cost" id="dispatch-engas" class="form-control" min="0" step="0.01">
+                        <input type="number" name="engas_unit_cost" id="dispatch-engas" class="form-control" min="0" step="0.01" readonly tabindex="-1">
+                        <small style="color:var(--text-muted);font-size:11px">Follows the subsidy — edit it in Edit Shipment.</small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Expiration Date</label>

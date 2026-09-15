@@ -354,7 +354,7 @@ function openViewItemsModal(catId) {
     if (items.length === 0) {
         content.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px">No item names yet. Click <strong>Add Item Name</strong> to create one.</p>';
     } else {
-        let html = '<table style="width:100%;border-collapse:collapse">';
+        let html = '<div style="overflow-x:auto;max-width:100%"><table style="width:100%;min-width:520px;border-collapse:collapse">';
         html += '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Item Name</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Account Code</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Status</th><th style="text-align:right;padding:8px;border-bottom:1px solid #ddd">Actions</th></tr></thead>';
         html += '<tbody>';
         items.forEach(item => {
@@ -368,7 +368,7 @@ function openViewItemsModal(catId) {
             html += '</td>';
             html += '</tr>';
         });
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         content.innerHTML = html;
     }
 

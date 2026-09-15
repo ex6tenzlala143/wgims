@@ -465,4 +465,46 @@ class RequisitionDispatchEditTest extends TestCase
         $this->assertSame('partially_approved', $ris->fresh()->status);
         $this->assertEquals(15, (float) $line->fresh()->quantity_issued);
     }
+
+    public function test_dispatch_edit_ignores_tampered_costs_and_uses_record_costs(): void
+    {
+        // Costs are mastered by the subsidy shipment: the edit endpoint must
+        // store the stock record's costs no matter what is submitted.
+        $wh   = $this->makeWarehouse('Warehouse A', 'WHA');
+        $item = $this->stockItem($wh, 'Food Pack', 100, 700);
+        $item->update(['engas_unit_cost' => 720]);
+        $catalog = $this->makeCatalogItem('Food Pack');
+
+        $ris  = $this->createRis($catalog->id, 20);
+        $disp = $this->dispatch($ris, $item->id, 20, 'DR-ED-11');
+        $disp->update(['engas_unit_cost' => 720]);
+
+        // Same record, tampered costs → stored costs follow the record.
+        $this->editDispatch($disp, [
+            'quantity_issued' => 15,
+            'unit_cost'       => 999,
+            'engas_unit_cost' => 888,
+        ])->assertOk();
+
+        $fresh = $disp->fresh();
+        $this->assertEquals(700, (float) $fresh->unit_cost);
+        $this->assertEquals(720, (float) $fresh->engas_unit_cost);
+        $this->assertEquals(15, (float) $fresh->quantity_issued);
+
+        // Moving records adopts the NEW record's costs, ignoring submitted ones.
+        $other = $this->stockItem($wh, 'Food Pack', 100, 650);
+        $other->update(['engas_unit_cost' => 660]);
+
+        $this->editDispatch($disp, [
+            'item_id'         => $other->id,
+            'quantity_issued' => 10,
+            'unit_cost'       => 1,
+            'engas_unit_cost' => 2,
+        ])->assertOk();
+
+        $moved = $disp->fresh();
+        $this->assertSame($other->id, (int) $moved->item_id);
+        $this->assertEquals(650, (float) $moved->unit_cost);
+        $this->assertEquals(660, (float) $moved->engas_unit_cost);
+    }
 }

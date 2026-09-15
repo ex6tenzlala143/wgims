@@ -1536,6 +1536,7 @@ class DeliverySubsidyController extends Controller
             'items.*.warehouse_id'       => 'exists:warehouses,id',
             'items.*.expiration_date'    => 'nullable|date',
             'items.*.dr_number'          => 'string|max:100',
+            'items.*.stock_number'       => 'nullable|string|max:50',
             // Per-item condition: validated when present; lines without one
             // fall back to the header input (legacy payloads).
             'items.*.condition'          => 'nullable|string|in:good,damaged',
@@ -1617,6 +1618,24 @@ class DeliverySubsidyController extends Controller
             $changedFields = [];
             $finalConditions = [];
 
+            // Stock numbers must stay unique: reject two lines in the same
+            // request claiming one number (case-insensitive).
+            $seenStockNos = [];
+            foreach ($request->items as $idx => $line) {
+                $candidate = trim((string) ($line['stock_number'] ?? ''));
+                if ($candidate === '') {
+                    continue;
+                }
+                $folded = mb_strtolower($candidate);
+                if (isset($seenStockNos[$folded])) {
+                    throw ValidationException::withMessages([
+                        "items.{$idx}.stock_number" =>
+                            "Stock number '{$candidate}' is used by more than one line in this edit.",
+                    ]);
+                }
+                $seenStockNos[$folded] = true;
+            }
+
             foreach ($request->items as $idx => $line) {
                 /** @var DeliveryItem $di */
                 $di = DeliveryItem::with(['deliverySubsidyItem'])
@@ -1637,6 +1656,8 @@ class DeliverySubsidyController extends Controller
                 $newWarehouseId = (int) ($line['warehouse_id'] ?? 0);
                 $newExpiry = ($line['expiration_date'] ?? null) ?: null;
                 $newDr     = trim((string) $line['dr_number']);
+                $newStockNo = trim((string) ($line['stock_number'] ?? ''));
+                $newStockNo = $newStockNo === '' ? null : $newStockNo;
                 // Condition is chosen per dispatched item in the form; legacy
                 // submissions without a per-item value fall back to the header
                 // input, then to the stored line value.
@@ -1654,6 +1675,16 @@ class DeliverySubsidyController extends Controller
 
                 $dsItem = DeliverySubsidyItem::whereKey($di->delivery_subsidy_item_id)->lockForUpdate()->first();
                 $oldItem = Item::whereKey($di->item_id)->lockForUpdate()->first();
+
+                // Snapshot the item's ENGAS BEFORE any in-place update below.
+                // $oldItem and $item are the same record when the warehouse did
+                // not move, so reading engas afterwards would compare the new
+                // value against itself and an ENGAS-only edit would never cascade.
+                $oldEngasPre = $oldItem?->engas_unit_cost !== null ? (float) $oldItem->engas_unit_cost : null;
+                $oldStockNo  = $oldItem?->stock_number;
+                $stockNoChanged = $newStockNo !== null
+                    ? (string) ($oldStockNo ?? '') !== $newStockNo
+                    : false;
 
                 if (! $dsItem) {
                     continue;
@@ -1685,6 +1716,32 @@ class DeliverySubsidyController extends Controller
 
                 $oldItemId = $oldItem ? $oldItem->id : null;
                 $movedWarehouse = $oldItem && $newWarehouseId > 0 && (int) $oldItem->warehouse_id !== $newWarehouseId;
+
+                // ── Stock-number rename guards ──────────────────────────────
+                // The number lives ONLY on the stock record; every downstream
+                // view (dispatch, RIS, transfer, reservation, cards, reports)
+                // reads it live via item_id, so renaming the exact record
+                // synchronizes the whole lineage with no per-table copies.
+                if ($stockNoChanged) {
+                    if ($movedWarehouse && $newQty > 0.0001) {
+                        // A move resolves to a possibly shared merged batch —
+                        // renaming it could relabel unrelated receipts.
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.stock_number" =>
+                                'Change the warehouse and the stock number in separate edits.',
+                        ]);
+                    }
+                    $clash = Item::where('stock_number', $newStockNo)
+                        ->whereNotNull('stock_number')
+                        ->when($oldItemId, fn ($q) => $q->where('id', '!=', $oldItemId))
+                        ->exists();
+                    if ($clash) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.stock_number" =>
+                                "Stock number '{$newStockNo}' is already used by another stock record.",
+                        ]);
+                    }
+                }
 
                 // ── Resolve the item that ends up holding the stock ─────────
                 if ($movedWarehouse && $newQty > 0) {
@@ -1765,6 +1822,9 @@ class DeliverySubsidyController extends Controller
                         if ($newExpiry) {
                             $itemUpdate['expiration_date'] = $newExpiry;
                         }
+                        if ($stockNoChanged) {
+                            $itemUpdate['stock_number'] = $newStockNo;
+                        }
                         $item->update($itemUpdate);
                     }
                 }
@@ -1787,11 +1847,18 @@ class DeliverySubsidyController extends Controller
                 // transfer chain — so reports never show stale values.
                 // Cost changes only cascade while the line still carries
                 // quantity; a full reversal must not rewrite history to zero.
-                $oldEngas = $oldItem?->engas_unit_cost;
                 $costChanged  = $newQty > 0.0001 && abs($oldCost - $newCost) > 0.001;
-                $engasChanged = $newQty > 0.0001 && $newEngas !== null && abs((float) ($oldEngas ?? 0) - $newEngas) > 0.001;
+                $engasChanged = $newQty > 0.0001 && $newEngas !== null && abs((float) ($oldEngasPre ?? 0) - $newEngas) > 0.001;
                 if (abs($delta) > 0.0001 || $costChanged || $engasChanged) {
                     $cascadeSvc->cascadeItemCost($item, $costChanged ? $newCost : $oldCost, $newEngas, $cascadeSummary);
+                    // Warehouse move: downstream rows may still reference the
+                    // old item record — cascade the corrected costs there too.
+                    if ($oldItemId && $oldItemId !== $item->id) {
+                        $oldItemRef = Item::whereKey($oldItemId)->first();
+                        if ($oldItemRef) {
+                            $cascadeSvc->cascadeItemCost($oldItemRef, $costChanged ? $newCost : $oldCost, $newEngas, $cascadeSummary);
+                        }
+                    }
                 }
 
                 // Adjust delivery/subsidy item qty_delivered (never negative).
@@ -1889,6 +1956,12 @@ class DeliverySubsidyController extends Controller
                             'new' => $newValue,
                         ];
                     }
+                }
+                if ($stockNoChanged) {
+                    $changedFields["items.{$idx}.stock_number"] = [
+                        'old' => $oldStockNo,
+                        'new' => $newStockNo,
+                    ];
                 }
             }
 

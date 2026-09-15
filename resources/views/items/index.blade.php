@@ -99,7 +99,7 @@
                         @endif
                     </td>
                     <td style="text-align:right">
-                        @php $reservedQty = \App\Models\ReservationItem::reservedQuantityForItem($item->id); @endphp
+                        @php $reservedQty = ($reservedMap[$item->id] ?? \App\Models\ReservationItem::reservedQuantityForItem($item->id)); @endphp
                         @if($item->quantity <= 0)
                             <span style="color:var(--danger);font-weight:700">{{ number_format($item->quantity) }}</span>
                             <span class="badge badge-danger" style="margin-left:4px">Out of Stock</span>

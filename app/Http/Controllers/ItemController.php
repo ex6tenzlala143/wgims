@@ -26,7 +26,8 @@ class ItemController extends Controller
 
         // Admins can see all items including inactive (out-of-stock) ones.
         // Non-admins only see active items.
-        $query = Item::with('warehouse');
+        // Eager-load sourceSubsidy: the index shows its RIS/DR/code per row.
+        $query = Item::with(['warehouse', 'sourceSubsidy']);
 
         if ($user->hasAdminAccess() || $user->isDeliveryUpdater()) {
             // No is_active filter for admins/managers — they see everything including out-of-stock
@@ -98,10 +99,20 @@ class ItemController extends Controller
                           ->orderBy('description')
                           ->paginate(20);
 
+        // One grouped query for the per-row reserved badges (same
+        // remaining-based semantics as ReservationItem::reservedQuantityForItem).
+        $reservedMap = ReservationItem::whereIn('item_id', $items->pluck('id')->all())
+            ->whereIn('status', ReservationItem::ACTIVE_STATUSES)
+            ->groupBy('item_id')
+            ->selectRaw('item_id, SUM(GREATEST(reserved_quantity - deployed_quantity, 0)) as locked')
+            ->pluck('locked', 'item_id')
+            ->map(fn ($v) => (float) $v)
+            ->all();
+
         if (! isset($warehouses)) {
             $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
         }
-        return view('items.index', compact('items', 'warehouses'));
+        return view('items.index', compact('items', 'warehouses', 'reservedMap'));
     }
 
     public function show(Item $item)

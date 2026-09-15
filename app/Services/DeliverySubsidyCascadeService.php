@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DeliverySubsidyAuditLog;
 use App\Models\Item;
 use App\Models\RequisitionDispatchItem;
+use App\Models\ReservationItem;
 use App\Models\StockCardEntry;
 use App\Models\StockTransferItem;
 use App\Models\Supplier;
@@ -69,6 +70,8 @@ class DeliverySubsidyCascadeService
      *   - RequisitionDispatchItems tied to the item (unit_cost, engas_unit_cost)
      *     (requisition_items has no cost columns since 2026_08_24_210730)
      *   - StockTransferItems where the item is the source (unit_cost)
+     *   - ReservationItems locking the item (unit_cost, engas_unit_cost when
+     *     provided) so reservation displays never show stale costs
      *   - every destination item in the transfer chain (unit_cost,
      *     engas_unit_cost when provided) plus their snapshot rows, recursively
      *
@@ -112,6 +115,11 @@ class DeliverySubsidyCascadeService
 
         $updated = StockTransferItem::where('item_id', $item->id)->update(['unit_cost' => $newCost]);
         $summary['transfer_rows'] = ($summary['transfer_rows'] ?? 0) + $updated;
+
+        // Reservations hold cost snapshots of the exact locked stock record.
+        // A corrected subsidy cost must flow here too (qty locks untouched).
+        $updated = ReservationItem::where('item_id', $item->id)->update($snapshotUpdate);
+        $summary['reservation_rows'] = ($summary['reservation_rows'] ?? 0) + $updated;
     }
 
     /**

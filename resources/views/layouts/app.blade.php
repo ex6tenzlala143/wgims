@@ -83,14 +83,19 @@
             overflow: hidden;
         }
         .sidebar-brand {
-            padding: 9px 12px 8px;
+            height: var(--topbar-height);
+            min-height: var(--topbar-height);
+            max-height: var(--topbar-height);
+            padding: 0 12px;
+            box-sizing: border-box;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             gap: 5px;
             flex-shrink: 0;
+            overflow: hidden;
         }
-        .sidebar-brand img { height: 40px; width: auto; object-fit: contain; }
+        .sidebar-brand img { height: 32px; width: auto; object-fit: contain; }
         .sidebar-brand .brand-text { line-height: 1.25; min-width: 0; }
         .sidebar-brand .brand-text strong { display: block; font-size: 12px; font-weight: 700; color: var(--text); line-height: 1.3; }
 
@@ -156,18 +161,26 @@
         }
         .topbar {
             height: var(--topbar-height);
+            min-height: var(--topbar-height);
+            max-height: var(--topbar-height);
+            box-sizing: border-box;
+            flex-shrink: 0;
             background: var(--surface);
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
+            flex-wrap: nowrap;
             padding: 0 16px;
             gap: 14px;
             position: sticky;
             top: 0;
             z-index: 50;
+            /* NOTE: no overflow:hidden here — the notification dropdown
+               renders below the bar and would be clipped otherwise. Height
+               stays locked via height/min/max + nowrap children. */
         }
         .topbar-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .topbar-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .topbar-actions { display: flex; align-items: center; flex-wrap: nowrap; gap: 12px; flex-shrink: 0; min-width: 0; }
 
         #menu-toggle {
             display: none;
@@ -926,7 +939,7 @@
         body { font-size: 13px; overflow-x: clip; }
 
         /* ── Sidebar + topbar as one system ─────────────────────────────── */
-        .sidebar-brand { padding: 10px 14px; gap: 8px; min-height: var(--topbar-height); }
+        .sidebar-brand { height: var(--topbar-height); min-height: var(--topbar-height); max-height: var(--topbar-height); padding: 0 14px; box-sizing: border-box; gap: 8px; overflow: hidden; }
         .sidebar-brand .brand-text strong { font-size: 13px; letter-spacing: 2px; }
         .nav-section { padding: 12px 18px 4px; }
         .nav-item { padding: 8px 12px; font-size: 12.5px; margin: 2px 10px; }
@@ -949,8 +962,12 @@
         }
 
         /* ── Tables: scannable, consistent, scroll contained ─────────────── */
-        .table-wrapper { overflow-x: auto; border-radius: 0 0 8px 8px; }
+        /* Every data table scrolls horizontally on small screens so nothing   */
+        /* is ever cut off; the last (actions) column never wraps.             */
+        .table-wrapper { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; border-radius: 0 0 8px 8px; }
         .table-wrapper:focus-within { outline: none; }
+        .table-wrapper th:last-child, .table-wrapper td:last-child { white-space: nowrap; }
+        .table-wrapper td:last-child .btn { flex-shrink: 0; }
         table { font-size: 12px; }
         thead th {
             padding: 8px 12px;
@@ -1057,19 +1074,82 @@
         a:hover code,
         a:hover .id-badge { text-decoration: underline; }
 
-        /* ── Laptop breakpoints ──────────────────────────────────────────── */
-        @media (max-width: 1400px) {
+        /* ── Laptop breakpoints (laptop-first, no global zoom) ─────────────── */
+        /* Large desktop keeps defaults. Each step below only compacts spacing,  */
+        /* sizing, and grid flow — never scales the whole app.                   */
+        @media (max-width: 1440px) {
+            :root { --sidebar-width: 196px; }
+            .page-content { padding: 14px 18px 24px; }
             .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
             .quick-nav { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+            .modal-shell, .modal-shell.modal-xl { width: min(1120px, 100%); max-width: min(1120px, 100%); }
+        }
+        /* Common small laptop: 1366x768 / 1440x900 */
+        @media (max-width: 1366px) {
+            :root { --sidebar-width: 184px; --topbar-height: 48px; }
+            body { font-size: 12.5px; }
+            .topbar { padding: 0 14px; gap: 10px; }
+            .topbar-title { font-size: 13px; }
+            .warehouse-label { max-width: 220px; font-size: 10.5px; padding: 3px 8px; }
+            .nav-item { padding: 7px 10px; font-size: 12px; margin: 1px 8px; }
+            .nav-section { padding: 10px 14px 3px; }
+            .page-content { padding: 12px 14px 22px; }
+            .page-header h1 { font-size: 16px; }
+            table { font-size: 11.5px; }
+            thead th { padding: 7px 10px; font-size: 10px; }
+            tbody td { padding: 7px 10px; }
+            .btn { padding: 6px 12px; font-size: 11.5px; min-height: 30px; }
+            .btn-sm { min-height: 26px; }
+            .form-control { min-height: 32px; font-size: 12px; padding: 7px 9px; }
+            .filters-bar .form-control, .filter-row .form-control { min-height: 32px; font-size: 12px; }
+            .filter-row .form-control { flex: 1 1 130px; min-width: 120px; max-width: 220px; }
+            .search-row .search-input { flex: 1 1 200px; max-width: 320px !important; }
+            .search-row .search-input[style] { width: auto !important; }
+            .card-header { padding: 10px 14px; }
+            .card-body { padding: 12px 14px; }
+            .modal-shell { width: min(1020px, calc(100vw - 24px)); max-width: min(1020px, calc(100vw - 24px)); }
+            .modal-shell.modal-xl { width: min(1180px, calc(100vw - 24px)); max-width: min(1180px, calc(100vw - 24px)); }
+            .modal-shell[style] { max-width: min(1180px, calc(100vw - 24px)) !important; }
+            .modal-header { padding: 12px 14px; }
+            .modal-body { padding: 12px 14px; }
+            .stats-grid { gap: 8px; }
+            .stat-value { font-size: 18px; }
+            .ss-panel { max-width: calc(100vw - 16px); }
+        }
+        /* Smaller laptop: 1280x720 / 1024x768 (sidebar still visible) */
+        @media (max-width: 1280px) {
+            :root { --sidebar-width: 172px; }
+            .form-row.cols-4 { grid-template-columns: 1fr 1fr; }
+            .form-row.cols-3 { grid-template-columns: 1fr 1fr; }
+            .stats-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+            .quick-nav { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+            .card-body { padding: 10px 12px; }
+            .modal-body .line-items-table th, .modal-body .line-items-table td { padding: 8px; }
+            .notif-dropdown { width: min(330px, calc(100vw - 24px)); }
         }
         @media (max-width: 1100px) {
             .page-content { padding: 14px 14px 24px; }
             .topbar { padding: 0 14px; gap: 10px; }
+            .form-row.cols-3 { grid-template-columns: 1fr; }
+        }
+        /* Short viewport heights: 768 / 720 — trim vertical chrome */
+        @media (max-height: 800px) {
+            :root { --topbar-height: 46px; }
+            .page-content { padding-top: 10px; }
+            .page-header { margin-bottom: 10px; }
+            .stats-grid, .quick-nav { margin-bottom: 10px; }
+            .modal-shell { max-height: min(94vh, 860px); }
+            .modal-shell[style] { max-height: 94vh !important; }
+            .modal-header { padding: 10px 14px; }
+            .modal-body { padding: 10px 14px; }
+            .modal-footer { padding: 8px 14px; }
         }
         @media (max-width: 640px) {
             .page-content { padding: 12px 12px 20px; }
             .page-header h1 { font-size: 16px; }
             .btn { min-height: 34px; }
+            .form-row.cols-4 { grid-template-columns: 1fr; }
+            .warehouse-label { display: none; }
         }
     </style>
 
@@ -1137,7 +1217,7 @@
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <img src="{{ asset('images/logo.png') }}" alt="DSWD Logo" style="height:34px;width:auto;object-fit:contain;">
+            <img src="{{ asset('images/logo.png') }}" alt="DSWD Logo" style="height:32px;width:auto;object-fit:contain;">
             <div class="brand-text">
                 <strong>W G I M S</strong>
             </div>
