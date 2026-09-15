@@ -223,6 +223,8 @@ class DeliverySubsidyEditTest extends TestCase
 
     public function test_increasing_requested_quantity_on_completed_subsidy_reopens_outstanding(): void
     {
+        // QUANTITY LOCK: increases are no longer allowed — the locked 500 must
+        // be preserved and the attempt rejected, with shipments/inventory intact.
         [$wh, $item, $catalog, $ds] = $this->completedSubsidy();
         $line = $ds->items()->firstOrFail();
         $delivery = Delivery::where('dr_number', 'DR-DSC-1')->firstOrFail();
@@ -230,26 +232,22 @@ class DeliverySubsidyEditTest extends TestCase
 
         $this->updateSubsidy($ds, [
             'items' => [0 => ['quantity' => 600]],
-        ])->assertOk()->assertJson(['redirect' => route('delivery_subsidies.show', $ds->id)]);
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors('items.0.quantity');
 
         $line->refresh();
         $di->refresh();
         $item->refresh();
 
-        // Request corrected, delivery untouched
-        $this->assertEquals(600, (float) $line->quantity);
+        $this->assertEquals(500, (float) $line->quantity);
         $this->assertEquals(500, (float) $line->qty_delivered);
-
-        // Shipment record + inventory + stock cards untouched
         $this->assertEquals(500, (float) $delivery->quantity_delivered);
         $this->assertEquals(500, (float) $di->quantity_delivered);
-        $this->assertSame('DR-DSC-1-A', $di->dr_number);
-        $this->assertEquals(500, (float) $item->quantity);   // stock from delivery, unchanged
+        $this->assertEquals(500, (float) $item->quantity);
 
-        // Status reclassified → partial, 100 outstanding
         $ds->refresh();
-        $this->assertSame('partial', $ds->status);
-        $this->assertEqualsWithDelta(100, (float) $ds->quantity_requested - $ds->totalDelivered(), 0.0001);
+        $this->assertSame('fully_delivered', $ds->status);
+        $this->assertEquals(500, (float) $ds->quantity_requested);
     }
 
     public function test_decreasing_below_delivered_is_rejected_without_changes(): void
@@ -271,7 +269,7 @@ class DeliverySubsidyEditTest extends TestCase
         $this->assertSame(0, DeliverySubsidyAuditLog::where('delivery_subsidy_id', $ds->id)->count());
     }
 
-    public function test_decreasing_to_exact_delivered_keeps_fully_delivered_status(): void
+    public function test_decreasing_requested_quantity_is_rejected_even_above_delivered(): void
     {
         $wh = $this->makeWarehouse('Edit WH 2', 'ESW2');
         $this->makeItem($wh, 'Paper Reams', 250.00);
@@ -290,28 +288,35 @@ class DeliverySubsidyEditTest extends TestCase
         $ds->refresh();
         $this->assertSame('partial', $ds->status);
 
+        // 300 equals what was delivered, but it is below the originally
+        // requested 500 — decreases are never allowed once deliveries exist.
         $this->updateSubsidy($ds, [
             'items' => [0 => ['quantity' => 300]],
-        ])->assertOk();
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors('items.0.quantity');
 
         $line = $ds->items()->firstOrFail();
-        $this->assertEquals(300, (float) $line->quantity);
+        $this->assertEquals(500, (float) $line->quantity);
         $this->assertEquals(300, (float) $line->qty_delivered);
 
         $ds->refresh();
-        $this->assertSame('fully_delivered', $ds->status);
-        $this->assertEqualsWithDelta(0, (float) $ds->quantity_requested - $ds->totalDelivered(), 0.0001);
+        $this->assertSame('partial', $ds->status);
+
+        // No audit log entry for the rejected change
+        $this->assertSame(0, DeliverySubsidyAuditLog::where('delivery_subsidy_id', $ds->id)->count());
     }
 
     public function test_audit_log_records_who_old_and_new_values(): void
     {
+        // QUANTITY LOCK: header date/remarks edits are logged; quantities are
+        // never logged as changed because they can never change.
         [$wh, $item, $catalog, $ds] = $this->completedSubsidy();
         $user = $this->admin();
 
         $this->actingAs($user)
             ->putJson(route('delivery_subsidies.update', $ds->id), $this->editPayload($ds, [
-                'date'  => '2026-08-02',
-                'items' => [0 => ['quantity' => 650]],
+                'date'    => '2026-08-02',
+                'remarks' => 'audit check',
             ]))
             ->assertOk();
 
@@ -325,12 +330,10 @@ class DeliverySubsidyEditTest extends TestCase
         $this->assertSame('2026-08-01', $changes['date']['old']);
         $this->assertSame('2026-08-02', $changes['date']['new']);
         $line = $ds->items()->firstOrFail();
-        $this->assertSame('500', (string) $changes["items.{$line->id}.quantity"]['old']);
-        $this->assertSame('650', (string) $changes["items.{$line->id}.quantity"]['new']);
-        $this->assertSame('500', (string) $changes['quantity_requested']['old']);
-        $this->assertSame('650', (string) $changes['quantity_requested']['new']);
-        $this->assertSame('fully_delivered', $changes['status']['old']);
-        $this->assertSame('partial', $changes['status']['new']);
+        $this->assertArrayNotHasKey("items.{$line->id}.quantity", $changes);
+        $this->assertArrayNotHasKey('quantity_requested', $changes);
+        $this->assertEquals(500, (float) $line->fresh()->quantity);
+        $this->assertEquals(500, (float) $ds->fresh()->quantity_requested);
     }
 
     public function test_audit_log_records_item_change_on_undelivered_line(): void
@@ -415,15 +418,21 @@ class DeliverySubsidyEditTest extends TestCase
 
     public function test_ris_number_is_frozen_once_deliveries_exist(): void
     {
+        // RIS NO. IS A CORRECTABLE DOCUMENT NUMBER: it remains editable after
+        // deliveries. Links use the permanent Subsidy ID, so nothing breaks.
         [, , , $ds] = $this->completedSubsidy();
+        $subsidyId = $ds->id;
+        $subsidyCode = $ds->subsidy_code;
 
         $this->updateSubsidy($ds, [
-            'ris_number' => 'RIS-TAMPERED-999',
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors('ris_number');
+            'ris_number' => 'RIS-DSC-1-CORRECTED',
+        ])->assertOk();
 
         $ds->refresh();
-        $this->assertSame('RIS-DSC-1', $ds->ris_number);
+        $this->assertSame('RIS-DSC-1-CORRECTED', $ds->ris_number);
+        $this->assertSame($subsidyId, $ds->id);
+        $this->assertSame($subsidyCode, $ds->subsidy_code);
+        $this->assertEquals(500, (float) $ds->quantity_requested);
     }
 
     public function test_supplier_is_frozen_once_deliveries_exist(): void
@@ -469,6 +478,8 @@ class DeliverySubsidyEditTest extends TestCase
 
     public function test_full_edit_without_deliveries_updates_identity_and_lines(): void
     {
+        // QUANTITY LOCK: identity + descriptive fields remain editable without
+        // deliveries, but quantity (20) and the line set are preserved.
         $wh  = $this->makeWarehouse('Edit WH 4', 'ESW4');
         $this->makeItem($wh, 'Rice', 50.00, 200);
         $cat = $this->makeCatalogItem('Rice');
@@ -477,6 +488,7 @@ class DeliverySubsidyEditTest extends TestCase
         $ds = $this->createSubsidy([
             ['description' => 'Rice', 'quantity' => 20],
         ], 'RIS-DSC-4', $cat->id);
+        $lineId = $ds->items()->firstOrFail()->id;
 
         $this->updateSubsidy($ds, [
             'ris_number'  => 'RIS-DSC-4-RENAMED',
@@ -484,15 +496,15 @@ class DeliverySubsidyEditTest extends TestCase
             'status'      => 'pending',
             'items'       => [
                 0 => [
-                    'dsi_id'          => null,
+                    'dsi_id'          => $lineId,
                     'item_id'         => null,
                     'catalog_item_id' => $cat->id,
                     'account_code'    => '50101010',
                     'description'     => 'Rice',
                     'unit'            => 'piece',
                     'category'        => 'food',
-                    'quantity'        => 25,
-                    'expiration_date' => '2027-01-01',
+                    'quantity'        => 20,
+                    'expiration_date' => '2028-01-01',
                 ],
             ],
         ])->assertOk();
@@ -502,20 +514,22 @@ class DeliverySubsidyEditTest extends TestCase
         $this->assertEquals($newSupplier->id, $ds->supplier_id);
         $this->assertSame('pending', $ds->status);
 
-        // Lines were rebuilt and the requested total recomputed from them
+        // Quantity preserved; descriptive correction applied.
         $line = $ds->items()->firstOrFail();
-        $this->assertEquals(25, (float) $line->quantity);
-        $this->assertEquals(25, (float) $ds->quantity_requested);
+        $this->assertEquals(20, (float) $line->quantity);
+        $this->assertEquals(20, (float) $ds->quantity_requested);
+        $this->assertEquals('2028-01-01', $line->expiration_date->format('Y-m-d'));
 
         $log = DeliverySubsidyAuditLog::where('delivery_subsidy_id', $ds->id)->firstOrFail();
         $this->assertSame('RIS-DSC-4', $log->changed_fields['ris_number']['old']);
         $this->assertSame('RIS-DSC-4-RENAMED', $log->changed_fields['ris_number']['new']);
-        $this->assertSame('20', (string) $log->changed_fields['quantity_requested']['old']);
-        $this->assertSame('25', (string) $log->changed_fields['quantity_requested']['new']);
+        $this->assertArrayNotHasKey('quantity_requested', $log->changed_fields);
     }
 
     public function test_posted_quantity_requested_is_ignored_and_recomputed_from_lines(): void
     {
+        // QUANTITY LOCK: crafted quantity + quantity_requested are both refused;
+        // the stored 20 is preserved.
         $wh  = $this->makeWarehouse('Edit WH 5', 'ESW5');
         $this->makeItem($wh, 'Rice', 50.00, 200);
         $cat = $this->makeCatalogItem('Rice');
@@ -531,10 +545,12 @@ class DeliverySubsidyEditTest extends TestCase
 
         $this->actingAs($this->admin())
             ->putJson(route('delivery_subsidies.update', $ds->id), $payload)
-            ->assertOk();
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('items.0.quantity');
 
         $ds->refresh();
-        $this->assertEquals(30, (float) $ds->quantity_requested);
+        $this->assertEquals(20, (float) $ds->quantity_requested);
+        $this->assertEquals(20, (float) $ds->items()->firstOrFail()->quantity);
     }
 
     public function test_fully_delivered_status_is_not_accepted_without_deliveries(): void

@@ -63,11 +63,21 @@
                         <div>
                             <strong>This subsidy already has related transactions.</strong>
                             <div id="edit-related-warning-detail" style="margin-top:4px;font-size:13px;line-height:1.5">
-                                Deliveries, stock cards and inventory records exist for this request. The RIS number, supplier and DR number are locked, and lines that already have delivered stock can only have their requested quantity changed. Delivered stock and inventory are never modified here.
+                                Deliveries, stock cards and inventory records exist for this request. The supplier and DR number are locked. The RIS No. may still be corrected — it is only a document number and never breaks the subsidy links (related records point to the permanent Subsidy ID). Requested quantities are permanently locked and cannot be changed — delivered stock and inventory are never modified here.
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <div class="edit-qty-locked-note" style="display:flex;gap:10px;align-items:flex-start;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#0c4a6e">
+                    <i class="fas fa-lock" style="margin-top:2px"></i>
+                    <div><strong>Quantities are locked.</strong> Requested, dispatched and remaining quantities are read-only after creation to protect inventory balances, augmentations (transfers), RIS issues, reservations and reports. The RIS No. may still be corrected as a document number; other descriptive details (date, remarks, item names, units, categories, expiry) may be corrected per the usual rules.</div>
+                </div>
+                <style>
+                    .edit-locked-field{background:#f1f5f9 !important;color:#475569 !important;cursor:not-allowed !important}
+                    .edit-delivered-note{font-size:11px;color:#64748b;margin-top:4px}
+                    .edit-qty-lock{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#64748b;font-weight:600}
+                </style>
 
                 <div class="subsidy-form-grid">
                     <div class="subsidy-main">
@@ -97,10 +107,10 @@
                                 </div>
                                 <div class="form-row cols-2">
                                     <div class="form-group">
-                                        <label class="form-label">RIS No. <span class="req">*</span> <i class="fas fa-lock" id="edit-ris-lock" style="display:none;color:var(--text-muted);font-size:11px"></i></label>
+                                        <label class="form-label">RIS No. <span class="req">*</span></label>
                                         <input type="text" name="ris_number" id="edit-ris-number" class="form-control" placeholder="e.g. RIS-2026-001" required>
-                                        <div id="edit-ris-note" style="display:none;font-size:11px;color:var(--text-muted);margin-top:4px">
-                                            <i class="fas fa-info-circle"></i> Locked because deliveries have been recorded.
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                                            <i class="fas fa-info-circle"></i> Correctable document number — links use the permanent Subsidy ID, so related transactions are unaffected.
                                         </div>
                                     </div>
                                     <div class="form-group">
@@ -142,7 +152,7 @@
                                                 <th style="width:40%">Description <span class="req">*</span></th>
                                                 <th style="width:11%">Unit <span class="req">*</span></th>
                                                 <th style="width:17%">Category <span class="req">*</span></th>
-                                                <th style="width:16%">Quantity Requested</th>
+                                                <th style="width:16%">Quantity Requested <span class="edit-qty-lock"><i class="fas fa-lock"></i> Locked</span></th>
                                                 <th style="width:13%">Expiry Date</th>
                                                 <th style="width:3%"></th>
                                             </tr>
@@ -165,7 +175,7 @@
                         </div>
                         <div class="summary-note">
                             <div id="edit-requested-note" style="font-size:12px;line-height:1.6;color:var(--text-muted)">
-                                The requested quantity is always recomputed from the line items so the header and the lines can never drift apart.
+                                <i class="fas fa-lock"></i> The requested quantity is permanently locked after creation and is always preserved — it is never recomputed from user input.
                             </div>
                         </div>
                     </aside>
@@ -196,6 +206,7 @@
     var editLoading     = false;
     var editCurrentId   = null;
     var editConfirmRequired = false;
+    var editCorrectionMode  = false;
     var editDataUrl     = '{{ route('delivery_subsidies.edit_data', ['deliverySubsidy' => '__ID__']) }}';
     var editUpdateUrl   = '{{ route('delivery_subsidies.update', ['deliverySubsidy' => '__ID__']) }}';
     var allOptions      = {!! json_encode($datalistOptions) !!};
@@ -260,7 +271,7 @@
             '</td>' +
             '<td data-label="Unit"><select name="items[' + idx + '][unit]" id="edit-unit-' + idx + '" class="form-control" required style="color:#000;background:#fff">' + unitOptions + '</select></td>' +
             '<td data-label="Category"><select name="items[' + idx + '][category]" id="edit-category-' + idx + '" class="form-control" required style="color:#000;background:#fff">' + catOptions + '</select></td>' +
-            '<td data-label="Quantity Requested"><input type="number" name="items[' + idx + '][quantity]" class="form-control edit-qty-input" min="1" step="1" oninput="editCalcTotal()" required style="color:#000;background:#fff"></td>' +
+            '<td data-label="Quantity Requested"><input type="number" name="items[' + idx + '][quantity]" class="form-control edit-qty-input edit-locked-field" min="1" step="1" readonly title="Quantity is locked and cannot be changed after creation" oninput="editCalcTotal();this.value=this.getAttribute(\'data-orig-qty\')||this.value" required style="color:#000;background:#f1f5f9">' + '</td>' +
             '<td data-label="Expiry Date"><input type="date" name="items[' + idx + '][expiration_date]" id="edit-expiry-' + idx + '" class="form-control" style="font-size:12px;color:#000;background:#fff"></td>' +
             '<td><button type="button" class="remove-row" id="edit-remove-' + idx + '" onclick="editRemoveRow(\'edit-row-' + idx + '\', ' + idx + ')"><i class="fas fa-times"></i></button></td>';
 
@@ -293,8 +304,24 @@
         var qty = document.querySelector('#edit-row-' + idx + ' .edit-qty-input');
         if (qty) qty.value = item.quantity !== undefined ? item.quantity : '';
 
-        // Lines that already have delivered stock are locked: only the requested
-        // quantity may change; the item identity cannot be re-pointed or removed.
+        // ── PERMANENT QUANTITY LOCK ──────────────────────────────────
+        // Requested quantity is read-only from the moment the subsidy is
+        // created (readOnly, not disabled, so the value still submits for
+        // backend verification). Dispatched / remaining figures are derived
+        // server-side and are never editable here.
+        if (qty) {
+            qty.readOnly = true;
+            qty.classList.add('edit-locked-field');
+            qty.title = 'Quantity is locked and cannot be changed after creation';
+            qty.setAttribute('data-orig-qty', item.quantity !== undefined ? item.quantity : '');
+            var lockNote = document.createElement('div');
+            lockNote.className = 'edit-delivered-note';
+            lockNote.innerHTML = '<i class="fas fa-lock"></i> Locked: ' + Number(item.quantity || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 });
+            qty.parentElement.appendChild(lockNote);
+        }
+
+        // Lines that already have delivered stock are locked to their item
+        // identity as well (cannot be re-pointed or removed).
         if (item.locked) {
             var btn = document.getElementById('edit-remove-' + idx);
             if (btn) {
@@ -321,13 +348,6 @@
             if (expiry) {
                 expiry.readOnly = true;
                 expiry.classList.add('edit-locked-field');
-            }
-            if (qty) {
-                qty.min = item.qty_delivered;
-                var note = document.createElement('div');
-                note.className = 'edit-delivered-note';
-                note.textContent = 'Delivered: ' + Number(item.qty_delivered || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 }) + ' — cannot go below this.';
-                qty.parentElement.appendChild(note);
             }
         }
     }
@@ -454,15 +474,19 @@
         var ref = document.getElementById('edit-ris-ref');
         if (ref) ref.textContent = data.ris_number ? '#' + data.ris_number : '';
 
-        // ── Locked mode (deliveries exist): freeze the historical identity, ──
+        // ── Locked mode (deliveries exist): freeze the supplier identity, ──
         //    hide the status picker, require explicit confirmation to save.
+        //    Requested quantities are ALWAYS locked (both modes) — this flag
+        //    only controls supplier/status/confirmation, never quantities.
+        //    ris_number is ALWAYS editable (correctable document number).
         var locked = !!data.has_deliveries;
         editConfirmRequired = locked;
+        editCorrectionMode  = locked;
 
         var risInput = document.getElementById('edit-ris-number');
         if (risInput) {
-            risInput.readOnly = locked;
-            risInput.classList.toggle('edit-locked-field', locked);
+            risInput.readOnly = false;
+            risInput.classList.remove('edit-locked-field');
         }
         var supplierSel = document.getElementById('edit-supplier');
         if (supplierSel) {
@@ -471,34 +495,35 @@
         }
         var statusGroup = document.getElementById('edit-status-group');
         if (statusGroup) statusGroup.style.display = locked ? 'none' : '';
+        // Line set is ALWAYS locked (adds/removals would change the locked
+        // total) — independent of whether deliveries exist.
         var addBtn = document.getElementById('edit-add-row-btn');
-        if (addBtn) addBtn.disabled = locked;
+        if (addBtn) {
+            addBtn.disabled = true;
+            addBtn.title = 'Line items cannot be added — quantities are locked after creation';
+            addBtn.innerHTML = '<i class="fas fa-lock"></i> Add Item';
+        }
         var confirmWrap = document.getElementById('edit-confirm-wrap');
         if (confirmWrap) confirmWrap.style.display = locked ? 'flex' : 'none';
         var confirmCheck = document.getElementById('edit-confirm-check');
         if (confirmCheck) confirmCheck.checked = false;
         var warn = document.getElementById('edit-related-warning');
         if (warn) warn.style.display = locked ? 'block' : 'none';
-        var risLock = document.getElementById('edit-ris-lock');
-        if (risLock) risLock.style.display = locked ? 'inline' : 'none';
         var supplierLock = document.getElementById('edit-supplier-lock');
         if (supplierLock) supplierLock.style.display = locked ? 'inline' : 'none';
-        var risNote = document.getElementById('edit-ris-note');
-        if (risNote) risNote.style.display = locked ? 'block' : 'none';
         var supplierNote = document.getElementById('edit-supplier-note');
         if (supplierNote) supplierNote.style.display = locked ? 'block' : 'none';
 
         (data.items || []).forEach(function (item) { editAddRow(item); });
 
-        // In locked mode no lines may be added or removed — only quantities
-        // on the existing lines (the Add Item button is already disabled above).
-        if (locked) {
-            document.querySelectorAll('#edit-items-body .remove-row').forEach(function (btn) {
-                btn.disabled = true;
-                btn.title = 'Lines cannot be added or removed once deliveries exist';
-                btn.innerHTML = '<i class="fas fa-lock"></i>';
-            });
-        }
+        // Line set is ALWAYS locked — quantities are permanent after creation.
+        // Remove buttons are disabled in both modes (delivered lines were
+        // already locked inside editFillRow; this covers the rest).
+        document.querySelectorAll('#edit-items-body .remove-row').forEach(function (btn) {
+            btn.disabled = true;
+            btn.title = 'Lines cannot be added or removed — quantities are locked after creation';
+            btn.innerHTML = '<i class="fas fa-lock"></i>';
+        });
 
         editCalcTotal();
         editUpdateCount();

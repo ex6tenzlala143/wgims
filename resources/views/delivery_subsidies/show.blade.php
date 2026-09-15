@@ -213,9 +213,10 @@
     </div>
     @foreach($deliverySubsidy->items as $poi)
     @php
-        // Collect every delivery_item row for this subsidy line, across all shipments
-        $allDiForItem = $deliverySubsidy->deliveries
-            ->flatMap(fn($d) => $d->items->where('delivery_subsidy_item_id', $poi->id)
+        // Collect every delivery_item row for this subsidy line, across all shipments,
+        // oldest first so the per-item batch sequence (1st dispatch, 2nd, …) is stable.
+        $allDiForItem = $deliverySubsidy->deliveries->sortBy('id')
+            ->flatMap(fn($d) => $d->items->sortBy('id')->where('delivery_subsidy_item_id', $poi->id)
                 ->map(fn($di) => ['delivery' => $d, 'di' => $di]))
             ->values();
 
@@ -269,6 +270,7 @@
             <table style="width:100%;border-collapse:collapse">
                 <thead>
                     <tr style="background:var(--surface-soft)">
+                        <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Batch No.</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Date Delivered</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Shipment DR No.</th>
                         <th style="padding:8px 14px;text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Stock No.</th>
@@ -294,6 +296,9 @@
                         $cumulativePct  = $orderedQty > 0 ? min(100, round($cumulativeQty / $orderedQty * 100)) : 0;
                     @endphp
                     <tr style="border-top:1px solid var(--border)">
+                        <td style="padding:10px 14px;text-align:center;font-weight:700;white-space:nowrap">
+                            Batch {{ $shipNum + 1 }}
+                        </td>
                         <td style="padding:10px 14px;text-align:center;color:var(--text-muted);white-space:nowrap">
                             {{ $row['delivery']->delivery_date->format('M d, Y') }}
                         </td>
@@ -382,12 +387,13 @@
                                     <i class="fas fa-book"></i>
                                 </a>
                             @endif
-                            {{-- Edit shipment --}}
+                            {{-- Edit shipment (popup modal) --}}
                             @if(auth()->user()->canWrite())
-                                <a href="{{ route('delivery_subsidies.edit_delivery', [$deliverySubsidy->id, $row['delivery']->id]) }}?di={{ $row['di']->id }}"
-                                   class="btn btn-sm btn-outline btn-icon" title="Edit this row only">
+                                <button type="button"
+                                    onclick="openShipmentEditModal({{ $deliverySubsidy->id }}, {{ $row['delivery']->id }}, {{ $row['di']->id }})"
+                                    class="btn btn-sm btn-outline btn-icon" title="Edit this shipment">
                                     <i class="fas fa-edit"></i>
-                                </a>
+                                </button>
                                 {{-- Delete shipment --}}
                                 <form method="POST"
                                       action="{{ route('delivery_subsidies.destroy_delivery', [$deliverySubsidy->id, $row['delivery']->id]) }}"
@@ -406,7 +412,7 @@
                 </tbody>
                 <tfoot>
                     <tr style="background:#f7fafc;font-weight:700;border-top:2px solid var(--border)">
-                        <td colspan="5" style="padding:10px 20px">Total Delivered</td>
+                        <td colspan="6" style="padding:10px 20px">Total Delivered</td>
                         <td></td>
                         <td></td>
                         <td style="padding:10px 14px;text-align:center;color:var(--success)">
@@ -445,5 +451,6 @@
 
 @if(auth()->user()->canWrite())
 @include('delivery_subsidies._edit_form')
+@include('delivery_subsidies._edit_shipment_modal')
 @endif
 @endsection

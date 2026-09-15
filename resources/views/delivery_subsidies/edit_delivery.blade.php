@@ -56,20 +56,12 @@
                             @error('quantity_delivered')<div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>@enderror
                         </div>
                     </div>
-                    <div class="form-row cols-4">
+                    <div class="form-row cols-3">
                         <div class="form-group">
                             <label class="form-label">Supplier / Subsidy</label>
                             <input type="text" class="form-control" tabindex="-1"
                                    value="{{ $deliverySubsidy->supplier->name ?? '—' }}"
                                    style="background:#f7fafc;color:var(--text-muted)" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Condition Status <span class="req">*</span></label>
-                            @php $editCond = strtolower(old('condition_status', $delivery->condition_status ?? 'good')); if ($editCond === 'partial') $editCond = 'good'; @endphp
-                            <select name="condition_status" class="form-control" required>
-                                <option value="good"    {{ $editCond === 'good'    ? 'selected' : '' }}>Good</option>
-                                <option value="damaged" {{ $editCond === 'damaged' ? 'selected' : '' }}>Damaged</option>
-                            </select>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Remarks</label>
@@ -118,6 +110,21 @@
                                     · Current stock: <strong>{{ number_format($di->item->quantity ?? 0) }}</strong>
                                 </div>
                             </div>
+                            <div style="min-width:140px">
+                                @php
+                                    $diCond = strtolower(old("items.{$idx}.condition", $di->condition ?? $delivery->condition_status ?? 'good'));
+                                    if ($diCond === 'partial') $diCond = 'good';
+                                    if (! in_array($diCond, ['good', 'damaged'], true)) $diCond = 'good';
+                                @endphp
+                                <label class="form-label">Condition <span class="req">*</span></label>
+                                <select name="items[{{ $idx }}][condition]" class="form-control" data-ss="false" required>
+                                    <option value="good"    {{ $diCond === 'good'    ? 'selected' : '' }}>Good</option>
+                                    <option value="damaged" {{ $diCond === 'damaged' ? 'selected' : '' }}>Damaged</option>
+                                </select>
+                                @error("items.{$idx}.condition")
+                                    <div style="color:var(--danger);font-size:11px;margin-top:2px">{{ $message }}</div>
+                                @enderror
+                            </div>
                         </div>
 
                         {{-- Row 1: Warehouse · Qty Delivered · Unit Cost --}}
@@ -139,6 +146,7 @@
                             <div class="form-group">
                                 @php
                                     $oldQtyVal = old("items.{$idx}.quantity_delivered", $di->quantity_delivered);
+                                    $txn = $transactions[$di->id] ?? [];
                                 @endphp
                                 <label class="form-label">Quantity Delivered <span class="req">*</span></label>
                                 <input type="number"
@@ -150,7 +158,14 @@
                                        max="{{ $editMaxQty }}"
                                        data-max="{{ $editMaxQty }}"
                                        required
-                                       oninput="recalcRow({{ $idx }})">
+                                       oninput="recalcRow({{ $idx }})"
+                                       {{ ! empty($txn) ? 'readonly' : '' }}
+                                       @if(! empty($txn)) title="Quantity is frozen: {{ implode('; ', $txn) }}" @endif>
+                                @if(! empty($txn))
+                                <div class="hint" style="margin-top:4px;color:var(--warning)">
+                                    <i class="fas fa-lock"></i> Quantity frozen — {{ implode('; ', $txn) }}.
+                                </div>
+                                @endif
                                 <div class="hint" style="margin-top:4px">
                                     Max <strong>{{ number_format($editMaxQty) }}</strong>
                                     ({{ number_format($lineMax) }} remaining)

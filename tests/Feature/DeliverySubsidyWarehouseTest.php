@@ -512,6 +512,9 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
     public function test_update_persists_edited_lines_and_new_items_without_unit_cost_or_warehouse(): void
     {
+        // QUANTITY LOCK: line adds are rejected even without deliveries — the
+        // locked line set (1 line, qty 5) is preserved. Descriptive edits on
+        // the existing line still succeed without unit cost / warehouse.
         $wh1   = $this->makeWarehouse('Warehouse One', 'WH1');
         $itemA = $this->makeItem($wh1, 'Item A', 100);
         $itemB = $this->makeItem($wh1, 'Item B', 200);
@@ -522,6 +525,7 @@ class DeliverySubsidyWarehouseTest extends TestCase
 
         $line = $ds->items()->firstOrFail();
 
+        // Attempting to add Item B must be refused.
         $this->actingAs($this->admin())
             ->putJson(route('delivery_subsidies.update', $ds), [
                 'ris_number'         => 'RIS-2026-EDIT-1',
@@ -549,11 +553,34 @@ class DeliverySubsidyWarehouseTest extends TestCase
                     ],
                 ],
             ])
+            ->assertStatus(422);
+
+        $ds->refresh();
+        $this->assertEquals(1, $ds->items()->count());
+        $this->assertEquals(5, (float) $ds->quantity_requested);
+
+        // Legitimate descriptive edit on the existing line succeeds.
+        $this->actingAs($this->admin())
+            ->putJson(route('delivery_subsidies.update', $ds), [
+                'ris_number'  => 'RIS-2026-EDIT-1',
+                'supplier_id' => $ds->supplier_id,
+                'date'        => '2026-08-02',
+                'status'      => 'pending',
+                'items'       => [[
+                    'dsi_id'          => $line->id,
+                    'item_id'         => $itemA->id,
+                    'description'     => 'Item A',
+                    'unit'            => 'piece',
+                    'category'        => 'food',
+                    'quantity'        => 5,
+                    'expiration_date' => '2027-06-01',
+                ]],
+            ])
             ->assertOk()
             ->assertJson(['redirect' => route('delivery_subsidies.show', $ds)]);
 
         $ds->refresh();
-        $this->assertEquals(2, $ds->items()->count());
+        $this->assertEquals(1, $ds->items()->count());
         $this->assertEquals('2026-08-02', $ds->date->format('Y-m-d'));
 
         // Unit cost / warehouse stay untouched by the edit form
@@ -563,11 +590,6 @@ class DeliverySubsidyWarehouseTest extends TestCase
         $this->assertEquals('2027-06-01', $lineA->expiration_date?->format('Y-m-d'));
         $this->assertNull($lineA->unit_cost);
         $this->assertNull($lineA->warehouse_id);
-
-        $lineB = $ds->items()->where('item_id', $itemB->id)->firstOrFail();
-        $this->assertEquals(3, $lineB->quantity);
-        $this->assertNull($lineB->unit_cost);
-        $this->assertNull($lineB->warehouse_id);
     }
 
     public function test_show_page_embeds_the_edit_modal_for_admin(): void

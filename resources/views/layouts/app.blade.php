@@ -913,6 +913,166 @@
         }
     </style>
 
+    {{-- ── UI/UX polish pass (laptop-first, system-wide) ───────────────────── --}}
+    {{-- Single source of truth for spacing/typography — page blades reuse    --}}
+    {{-- these shared classes, so fixes here apply to every module at once.   --}}
+    <style>
+        :root {
+            --sidebar-width: 208px;
+            --radius: 8px;
+            --focus-ring: 0 0 0 3px rgba(2, 132, 199, 0.15);
+        }
+        html { overflow-x: clip; }
+        body { font-size: 13px; overflow-x: clip; }
+
+        /* ── Sidebar + topbar as one system ─────────────────────────────── */
+        .sidebar-brand { padding: 10px 14px; gap: 8px; min-height: var(--topbar-height); }
+        .sidebar-brand .brand-text strong { font-size: 13px; letter-spacing: 2px; }
+        .nav-section { padding: 12px 18px 4px; }
+        .nav-item { padding: 8px 12px; font-size: 12.5px; margin: 2px 10px; }
+        .topbar { padding: 0 20px; }
+        .topbar-title { font-size: 14px; }
+        .notif-btn { padding: 6px; font-size: 16px; }
+        .warehouse-label { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ── Page header + content use laptop width properly ─────────────── */
+        .page-content { padding: 16px 20px 28px; overflow-x: clip; }
+        .page-header { margin-bottom: 14px; align-items: flex-start; }
+        .page-header h1 { font-size: 17px; letter-spacing: -0.01em; }
+        .breadcrumb { font-size: 12px; }
+        .page-header > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+        /* Detail-page two-column grids collapse before they overflow */
+        .page-content > div[style*="grid-template-columns"] { min-width: 0; }
+        @media (max-width: 1100px) {
+            .page-content > div[style*="grid-template-columns:2fr 1fr"],
+            .page-content > div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
+        }
+
+        /* ── Tables: scannable, consistent, scroll contained ─────────────── */
+        .table-wrapper { overflow-x: auto; border-radius: 0 0 8px 8px; }
+        .table-wrapper:focus-within { outline: none; }
+        table { font-size: 12px; }
+        thead th {
+            padding: 8px 12px;
+            font-size: 10.5px;
+            letter-spacing: 0.6px;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        tbody td { padding: 8px 12px; }
+        tbody tr { transition: background-color 0.12s; }
+        td .btn, td form { vertical-align: middle; }
+        td > div[style*="display:flex"] { flex-wrap: nowrap; }
+        /* Numeric columns read better tabular */
+        td[style*="text-align:right"], th[style*="text-align:right"] { font-variant-numeric: tabular-nums; }
+
+        /* ── Buttons: clear hierarchy, comfortable targets ───────────────── */
+        .btn { padding: 7px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; min-height: 32px; justify-content: center; }
+        .btn-sm { padding: 4px 9px; font-size: 11px; min-height: 28px; }
+        .btn-icon { padding: 0; width: 30px; height: 30px; min-height: 30px; align-items: center; justify-content: center; }
+        .btn:focus-visible, .logout-btn:focus-visible, .notif-btn:focus-visible,
+        .modal-close:focus-visible, #menu-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+        .btn:disabled, .btn.disabled { opacity: 0.55; cursor: not-allowed; }
+        .btn-outline { border-color: var(--border-strong); font-weight: 600; }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-danger.btn-outline { color: var(--danger); }
+        .btn-danger.btn-outline:hover { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+
+        /* ── Forms: readable labels, consistent control height ───────────── */
+        .form-group { margin-bottom: 14px; }
+        .form-label { font-size: 12px; font-weight: 600; margin-bottom: 5px; color: #4a5568; }
+        .form-control {
+            padding: 8px 10px;
+            font-size: 12.5px;
+            min-height: 34px;
+            border-radius: 6px;
+        }
+        .form-control:focus { box-shadow: var(--focus-ring); }
+        textarea.form-control { min-height: 76px; line-height: 1.5; }
+        select.form-control { padding-right: 26px; min-width: 0; }
+        select.form-control:disabled { background: var(--surface-soft); color: var(--text-muted); cursor: not-allowed; }
+        .invalid-feedback, .edit-field-error, .se-field-error { font-size: 11px; line-height: 1.45; }
+        .hint { font-size: 10.5px; line-height: 1.5; }
+        /* Wide grids step down gracefully on laptops before stacking */
+        @media (max-width: 1400px) {
+            .form-row.cols-4 { grid-template-columns: 1fr 1fr; }
+        }
+        /* Filter bars: controls share one height, search takes the space */
+        .filters-bar .form-control, .filter-row .form-control { min-height: 34px; font-size: 12.5px; }
+        .filter-row .form-control { flex: 1 1 150px; min-width: 140px; max-width: 260px; }
+        .search-row .search-input { flex: 1 1 240px; max-width: 420px; }
+        .search-row .search-input input { min-height: 34px; font-size: 12.5px; }
+
+        /* ── Modals: centered, laptop-sized, scrollable ──────────────────── */
+        .modal-overlay { align-items: center; padding: 20px; }
+        .modal-shell {
+            width: min(1180px, 100%);
+            max-width: min(1180px, 100%);
+            height: auto;
+            max-height: min(92vh, 900px);
+            min-height: 200px;
+        }
+        .modal-shell.modal-xl { width: min(1400px, 100%); max-width: min(1400px, 100%); }
+        .modal-shell.modal-sm { width: min(560px, 100%); max-width: min(560px, 100%); }
+        .modal-header { padding: 14px 18px; }
+        .modal-header h2 { font-size: 15px; }
+        .modal-body { padding: 16px 18px; }
+        .modal-footer { padding: 12px 18px; gap: 10px; }
+        .modal-footer .btn { min-width: 110px; }
+        .subsidy-form-grid { gap: 16px; }
+
+        /* ── Cards, alerts, badges ───────────────────────────────────────── */
+        .card { box-shadow: var(--shadow-sm); }
+        .card-header { padding: 12px 16px; }
+        .card-header h3 { font-size: 13px; }
+        .card-body { padding: 14px 16px; }
+        .alert { padding: 10px 14px; font-size: 12.5px; border-radius: 8px; align-items: center; }
+        .badge { padding: 3px 9px; font-size: 10px; letter-spacing: 0.4px; white-space: nowrap; }
+        .stat-value { font-size: 20px; font-variant-numeric: tabular-nums; }
+        .stat-label { font-size: 11px; }
+
+        /* ── IDs: one consistent mono style everywhere ───────────────────── */
+        /* Subsidy / RIS / DR / stock / transfer / reservation numbers all    */
+        /* render in <code> tags — this single rule beats the old per-page    */
+        /* inline font sizes so every ID looks identical system-wide.         */
+        /* IDs: plain light-red text-style links — no badge, background,    */
+        /* pill, padding or shadow. <code> and .id-badge share this single   */
+        /* rule, so Subsidy IDs, RIS IDs, stock / DR / transfer /            */
+        /* reservation numbers can never drift apart. Use <code> (or         */
+        /* class="id-badge" on non-code elements) — never inline styles.     */
+        code,
+        .id-badge {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            color: #ef4444 !important;
+            background: none !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            white-space: nowrap;
+        }
+        a:hover code,
+        a:hover .id-badge { text-decoration: underline; }
+
+        /* ── Laptop breakpoints ──────────────────────────────────────────── */
+        @media (max-width: 1400px) {
+            .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+            .quick-nav { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+        }
+        @media (max-width: 1100px) {
+            .page-content { padding: 14px 14px 24px; }
+            .topbar { padding: 0 14px; gap: 10px; }
+        }
+        @media (max-width: 640px) {
+            .page-content { padding: 12px 12px 20px; }
+            .page-header h1 { font-size: 16px; }
+            .btn { min-height: 34px; }
+        }
+    </style>
+
     @stack('styles')
     <script>
     // ── Back/Forward bfcache handling — prevents skeleton flash on Back ──────

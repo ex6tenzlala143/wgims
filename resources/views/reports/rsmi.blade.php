@@ -117,7 +117,7 @@
         {{-- Left: RIS metadata --}}
         <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
             <div>
-                <div style="font-weight:700;font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS ID:</span> <span style="font-family:monospace;color:var(--primary)">{{ $ris->ris_code ?? $ris->ris_id }}</span></span><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS No.:</span> <span style="font-weight:600">{{ $ris->ris_number }}</span></span></div>
+                <div style="font-weight:700;font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS ID:</span> <code>{{ $ris->ris_code ?? $ris->ris_id }}</code></span><span><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">RIS No.:</span> <span style="font-weight:600">{{ $ris->ris_number }}</span></span></div>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
                     {{ $ris->date_approved?->format('M d, Y') ?? '—' }}
                     &nbsp;·&nbsp;
@@ -175,7 +175,7 @@
                     $rowOutstanding = max(0, $rowRequested - (float) ($row['ri_issued'] ?? 0));
                 @endphp
                 <tr>
-                    <td style="font-family:monospace;font-size:11px">{{ $row['stock_no'] ?? '—' }}</td>
+                    <td><code>{{ $row['stock_no'] ?? '—' }}</code></td>
                     <td class="left">{{ $row['description'] ?? '—' }}</td>
                     <td class="center">{{ $row['unit'] ?? '—' }}</td>
                     <td style="text-align:right">{{ number_format($rowRequested) }}</td>

@@ -498,7 +498,7 @@ class RequisitionController extends Controller
                 if (! $catalog) continue;
 
                 $rep = $representatives[$catalog->id] ?? null;
-                $ri  = $line['id'] ? $existingItems->get((int) $line['id']) : null;
+                $ri  = ! empty($line['id']) ? $existingItems->get((int) $line['id']) : null;
 
                 if ($ri) {
                     $locked = $ri->quantity_issued > 0 || $ri->dispatch_items_count > 0;

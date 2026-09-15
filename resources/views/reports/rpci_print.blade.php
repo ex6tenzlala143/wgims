@@ -198,11 +198,11 @@
     $grandTotalQty   = 0;
     $grandTotalValue = 0;
 
-    // Per-category subtotals
+    // Per-category subtotals (official print uses ENGAS unit cost / ENGAS total)
     $catTotals = [];
     foreach ($grouped as $catKey => $catItems) {
         $qty   = $catItems->sum('quantity');
-        $value = $catItems->sum(fn($i) => $i->quantity * $i->unit_cost);
+        $value = $catItems->sum(fn($i) => $i->quantity * ($i->engas_unit_cost ?? $i->unit_cost));
         $catTotals[$catKey] = ['qty' => $qty, 'value' => $value];
         $grandTotalQty   += $qty;
         $grandTotalValue += $value;
@@ -292,10 +292,10 @@
                 <td class="left" style="font-size:8pt">{{ $item->stock_number }}</td>
                 <td class="left">{{ $item->description }}@if($item->ris_number) <span style="font-size:7.5pt;color:#555">({{ $item->ris_number }})</span>@endif</td>
                 <td>{{ $item->unit }}</td>
-                <td class="right">{{ number_format($item->unit_cost, 2) }}</td>
+                <td class="right">{{ number_format($item->engas_unit_cost ?? $item->unit_cost, 2) }}</td>
                 <td class="right">{{ number_format($item->quantity) }}</td>
                 <td class="right">{{ number_format($item->quantity) }}</td>
-                <td class="right">{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
+                <td class="right">{{ number_format($item->quantity * ($item->engas_unit_cost ?? $item->unit_cost), 2) }}</td>
                 <td></td>
             </tr>
             @endforeach

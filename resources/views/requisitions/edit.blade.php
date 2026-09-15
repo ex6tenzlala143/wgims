@@ -7,7 +7,7 @@
     <div>
         <h1>Edit Requisition {{ $requisition->ris_code ?? $requisition->ris_id }} <span style="font-weight:400;color:var(--text-muted);font-size:16px">/ {{ $requisition->ris_number }}</span></h1>
         <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / <a href="{{ route('requisitions.index') }}">Requisitions</a> / Edit</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">RIS ID: <span style="font-family:monospace;color:var(--primary);font-weight:600">{{ $requisition->ris_code ?? $requisition->ris_id }}</span> &nbsp;·&nbsp; RIS No.: <strong>{{ $requisition->ris_number }}</strong></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">RIS ID: <code>{{ $requisition->ris_code ?? $requisition->ris_id }}</code> &nbsp;·&nbsp; RIS No.: <strong>{{ $requisition->ris_number }}</strong></div>
     </div>
 </div>
 
@@ -20,60 +20,16 @@
             <div class="card-body">
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">RIS ID <span style="font-size:10px;color:var(--text-muted)">system, not editable</span></label>
-                        <input type="text" class="form-control" value="{{ $requisition->ris_code ?? $requisition->ris_id }}" readonly style="background:var(--surface-soft);font-family:monospace;color:var(--primary);font-weight:700">
-                    </div>
-                    <div class="form-group">
                         <label class="form-label">RIS No. <span class="req">*</span></label>
-                        <input type="text" name="ris_number" class="form-control {{ $errors->has('ris_number') ? 'is-invalid' : '' }}" value="{{ old('ris_number', $requisition->ris_number) }}" required>
+                        <input type="text" name="ris_number" class="form-control {{ $errors->has('ris_number') ? 'is-invalid' : '' }}" value="{{ old('ris_number', $requisition->ris_number) }}" placeholder="e.g. RIS-CAM-2026-001" required>
                         @error('ris_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <small style="color:var(--text-muted);font-size:11px">Official reference number (user-entered). RIS ID <code>{{ $requisition->ris_code ?? $requisition->ris_id }}</code> stays unchanged.</small>
                     </div>
-                </div>
-                <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">Date Requested <span class="req">*</span></label>
                         <input type="date" name="date_requested" class="form-control" value="{{ old('date_requested', $requisition->date_requested->format('Y-m-d')) }}" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Entity Name</label>
-                        <input type="text" name="entity_name" class="form-control" value="{{ old('entity_name', $requisition->entity_name) }}">
-                    </div>
                 </div>
-                <div class="form-row cols-2">
-                    <div class="form-group">
-                        <label class="form-label">Fund Cluster</label>
-                        <input type="text" name="fund_cluster" class="form-control" value="{{ old('fund_cluster', $requisition->fund_cluster) }}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Responsibility Center Code</label>
-                        <input type="text" name="responsibility_center_code" class="form-control" value="{{ old('responsibility_center_code', $requisition->responsibility_center_code) }}">
-                    </div>
-                </div>
-                <div class="form-row cols-2">
-                    <div class="form-group">
-                        <label class="form-label">Office</label>
-                        <input type="text" name="office" class="form-control" value="{{ old('office', $requisition->office) }}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Division</label>
-                        <input type="text" name="division" class="form-control" value="{{ old('division', $requisition->division) }}">
-                    </div>
-                </div>
-
-                <div class="form-section-label">
-                    <i class="fas fa-city"></i> Requesting LGU
-                </div>
-                <div class="form-row cols-2">
-                    <div class="form-group">
-                        <label class="form-label">Province</label>
-                        <input type="text" name="province" class="form-control" value="{{ old('province', $requisition->province) }}" placeholder="e.g. Cebu" style="width:100%">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Municipality</label>
-                        <input type="text" name="municipality" class="form-control" value="{{ old('municipality', $requisition->municipality) }}" placeholder="e.g. Lapu-Lapu City" style="width:100%">
-                    </div>
-                </div>
-
                 <div class="form-row cols-2">
                     <div class="form-group">
                         <label class="form-label">Requested By</label>
@@ -86,20 +42,35 @@
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label class="form-label">Status <span class="req">*</span></label>
-                        <select name="status" class="form-control" required>
-                            <option value="pending"             {{ old('status', $requisition->status) == 'pending'             ? 'selected' : '' }}>Pending</option>
-                            <option value="approved"            {{ old('status', $requisition->status) == 'approved'            ? 'selected' : '' }}>Approved</option>
-                            <option value="partially_approved"  {{ old('status', $requisition->status) == 'partially_approved'  ? 'selected' : '' }}>Partially Fulfilled</option>
-                            <option value="cancelled"           {{ old('status', $requisition->status) == 'cancelled'           ? 'selected' : '' }}>Cancelled</option>
-                        </select>
+                        <label class="form-label">Entity Name</label>
+                        <input type="text" name="entity_name" class="form-control" value="{{ old('entity_name', $requisition->entity_name) }}">
                     </div>
-                    <div class="form-group" style="visibility:hidden">
-                        <label class="form-label">&nbsp;</label>
-                        <input type="text" class="form-control" tabindex="-1">
+                    <div class="form-group">
+                        <label class="form-label">Fund Cluster</label>
+                        <input type="text" name="fund_cluster" class="form-control" value="{{ old('fund_cluster', $requisition->fund_cluster) }}">
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label class="form-label">Responsibility Center Code</label>
+                        <input type="text" name="responsibility_center_code" class="form-control" value="{{ old('responsibility_center_code', $requisition->responsibility_center_code) }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Office</label>
+                        <input type="text" name="office" class="form-control" value="{{ old('office', $requisition->office) }}">
+                    </div>
+                </div>
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label class="form-label">Division</label>
+                        <input type="text" name="division" class="form-control" value="{{ old('division', $requisition->division) }}">
+                    </div>
+                    <div class="form-group" style="visibility:hidden" aria-hidden="true">
+                        <label class="form-label">&nbsp;</label>
+                        <input type="text" class="form-control" tabindex="-1" readonly>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Purpose <span class="req">*</span></label>
                     <textarea name="purpose" class="form-control @error('purpose') is-invalid @enderror" rows="2" required>{{ old('purpose', $requisition->purpose) }}</textarea>
                     @error('purpose')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -107,92 +78,118 @@
             </div>
         </div>
 
+        <div class="card" style="margin-bottom:20px">
+            <div class="card-header"><h3><i class="fas fa-city" style="color:var(--primary)"></i> Requesting LGU</h3></div>
+            <div class="card-body">
+                <div class="form-row cols-2">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Province</label>
+                        <input type="text" name="province" class="form-control" value="{{ old('province', $requisition->province) }}" placeholder="e.g. Cebu" style="width:100%">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Municipality</label>
+                        <input type="text" name="municipality" class="form-control" value="{{ old('municipality', $requisition->municipality) }}" placeholder="e.g. Lapu-Lapu City" style="width:100%">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
-                <h3>Requested Items</h3>
-                <button type="button" class="btn btn-sm btn-primary" onclick="addRisRow()"><i class="fas fa-plus"></i> Add Item</button>
+                <h3><i class="fas fa-list" style="color:var(--primary)"></i> Requested Items</h3>
+                <button type="button" class="btn btn-sm btn-primary" onclick="risEditAddRow()"><i class="fas fa-plus"></i> Add Item</button>
             </div>
-
-            <div class="card-body">
-                <div id="ris-items" style="display:grid;gap:20px">
-                    @foreach($requisition->items as $idx => $ri)
-                    @php
-                        $locked = $ri->quantity_issued > 0 || $ri->dispatchItems->isNotEmpty();
-                    @endphp
-                    <div class="ris-item-card" id="ris-card-{{ $idx }}">
-                        <div class="ris-item-head">
-                            <div>
-                                <i class="fas fa-box" style="color:var(--primary)"></i>
-                                Item <span class="ris-item-num">{{ $loop->iteration }}</span>
-                                @if($ri->quantity_issued > 0)
-                                    <span class="badge badge-success" style="margin-left:6px">
-                                        <i class="fas fa-check"></i> {{ number_format($ri->quantity_issued) }} issued
-                                    </span>
-                                @endif
-                            </div>
-                            <button type="button" class="remove-row" title="Remove item" onclick="removeRisRow('ris-card-{{ $idx }}')"><i class="fas fa-times"></i></button>
+            <div class="card-body" style="padding:0">
+                @foreach($errors->keys() as $k)
+                    @if($k === 'items' || str_starts_with($k, 'items.'))
+                        <div style="padding:10px 20px;background:#fff5f5;border-bottom:1px solid var(--border);color:var(--danger);font-size:13px">
+                            <i class="fas fa-exclamation-triangle"></i> {{ $errors->first($k) }}
                         </div>
-
-                        <input type="hidden" name="items[{{ $idx }}][id]" value="{{ $ri->id }}">
-                        @if($locked)
-                            {{-- Disabled inputs are not submitted, so mirror the values --}}
-                            <input type="hidden" name="items[{{ $idx }}][catalog_item_id]" value="{{ $ri->catalog_item_id }}">
-                            <input type="hidden" name="items[{{ $idx }}][quantity_requested]" value="{{ $ri->quantity_requested }}">
-                        @endif
-
-                        <div class="form-group">
-                            <label class="form-label">Item Description <span class="req">*</span></label>
-                            <select name="items[{{ $idx }}][catalog_item_id]"
-                                    class="ris-item-select form-control"
-                                    id="item-select-{{ $idx }}"
-                                    data-selected="{{ $ri->catalog_item_id }}"
-                                    onchange="fillRisItem(this, {{ $idx }})"
-                                    {{ $locked ? 'disabled' : '' }} required>
-                                <option value="{{ $ri->catalog_item_id }}" selected>{{ $ri->description ?? ($ri->item?->description ?? '—') }}</option>
-                            </select>
-                            @if($locked)
-                                <small style="color:var(--text-muted);font-size:11px">Item is locked because this line has already been dispatched.</small>
-                            @endif
-                        </div>
-
-                        <div class="form-row cols-2">
-                            <div class="form-group">
-                                <label class="form-label">Requested Quantity <span class="req">*</span></label>
-                                <input type="number"
-                                       name="items[{{ $idx }}][quantity_requested]"
-                                       id="qty-{{ $idx }}"
-                                       class="form-control"
-                                       min="{{ $locked ? number_format($ri->quantity_issued, 0, '.', '') : '1' }}" step="1"
-                                       value="{{ $ri->quantity_requested }}"
-                                       {{ $locked ? 'disabled' : '' }} required>
-                                @if($locked)
-                                    <small style="color:var(--text-muted);font-size:11px">
-                                        Cannot be reduced below the {{ number_format($ri->quantity_issued) }} already issued.
-                                    </small>
-                                @endif
-                                @error('items.' . $idx . '.quantity_requested')
-                                <small style="color:var(--danger);font-size:11px;display:block;margin-top:4px">
-                                    <i class="fas fa-exclamation-triangle"></i> {{ $message }}
-                                </small>
-                                @enderror
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Account Code</label>
-                                <input type="text" name="items[{{ $idx }}][account_code]"
-                                       id="account-code-{{ $idx }}" class="form-control" readonly tabindex="-1"
-                                       placeholder="Auto from Item Categories"
-                                       value="{{ $ri->account_code ?? '' }}">
-                            </div>
-                        </div>
-
-                        <div class="ris-item-meta">
-                            <span>Unit <strong>{{ $ri->unit ?? ($ri->item?->unit ?? '—') }}</strong></span>
-                            @if($ri->dispatchItems->isNotEmpty())
-                                <span>Dispatched From <strong>{{ $ri->dispatchItems->pluck('item.warehouse.name')->unique()->filter()->implode(', ') ?: '—' }}</strong></span>
-                            @endif
-                        </div>
-                    </div>
-                    @endforeach
+                    @endif
+                @endforeach
+                <div class="table-wrapper">
+                    <table class="line-items-table" id="ris-items-table">
+                        <thead>
+                            <tr>
+                                <th style="width:70%">Item Description <span class="req">*</span></th>
+                                <th style="width:24%">Requested Quantity <span class="req">*</span></th>
+                                <th style="width:6%"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="ris-items-body">
+                            @php
+                                // Prefer failed-submission input so newly typed rows survive
+                                // a validation round-trip instead of vanishing.
+                                $oldInput = old('items');
+                                if (is_array($oldInput) && count($oldInput)) {
+                                    $byId = $requisition->items->keyBy('id');
+                                    $editRows = [];
+                                    foreach (array_values($oldInput) as $l) {
+                                        $ref = ! empty($l['id']) ? $byId->get((int) $l['id']) : null;
+                                        $issued = $ref ? (float) $ref->quantity_issued : 0;
+                                        $editRows[] = [
+                                            'id' => $l['id'] ?? null,
+                                            'catalog_item_id' => $l['catalog_item_id'] ?? null,
+                                            'description' => $l['description'] ?? ($ref->description ?? ($ref->item?->description ?? '')),
+                                            'quantity_requested' => $l['quantity_requested'] ?? '',
+                                            'locked' => $ref ? ($issued > 0 || $ref->dispatchItems->isNotEmpty()) : false,
+                                            'issued' => $issued,
+                                        ];
+                                    }
+                                } else {
+                                    $editRows = $requisition->items->map(fn($ri) => [
+                                        'id' => $ri->id,
+                                        'catalog_item_id' => $ri->catalog_item_id,
+                                        'description' => $ri->description ?? ($ri->item?->description ?? ''),
+                                        'quantity_requested' => $ri->quantity_requested,
+                                        'locked' => $ri->quantity_issued > 0 || $ri->dispatchItems->isNotEmpty(),
+                                        'issued' => (float) $ri->quantity_issued,
+                                    ])->all();
+                                }
+                            @endphp
+                            @foreach($editRows as $idx => $row)
+                            @php
+                                $locked = $row['locked'];
+                                $riDesc = $row['description'];
+                            @endphp
+                            <tr id="ris-row-{{ $idx }}">
+                                <td data-label="Item Description">
+                                    <div class="autocomplete-wrapper" id="ris-autocomplete-wrapper-{{ $idx }}">
+                                        <input type="text" class="form-control ris-desc-input"
+                                               name="items[{{ $idx }}][description]"
+                                               value="{{ $riDesc }}"
+                                               placeholder="Type item description, then pick from the list..."
+                                               {{ $locked ? 'readonly' : 'required' }} autocomplete="off"
+                                               data-ris-row-idx="{{ $idx }}">
+                                        <div class="autocomplete-dropdown" id="ris-autocomplete-dropdown-{{ $idx }}"></div>
+                                    </div>
+                                    @if(! empty($row['id']))
+                                    <input type="hidden" name="items[{{ $idx }}][id]" value="{{ $row['id'] }}">
+                                    @endif
+                                    <input type="hidden" name="items[{{ $idx }}][catalog_item_id]" id="ris-catalog-item-id-{{ $idx }}" value="{{ $row['catalog_item_id'] }}">
+                                    @if($locked)
+                                        <small style="color:var(--text-muted);font-size:11px">
+                                            <i class="fas fa-lock"></i> Locked — {{ number_format($row['issued']) }} already issued; item cannot be changed and quantity cannot go below issued.
+                                        </small>
+                                    @endif
+                                </td>
+                                <td data-label="Requested Quantity">
+                                    <input type="number" name="items[{{ $idx }}][quantity_requested]" id="ris-qty-{{ $idx }}"
+                                           class="ris-qty-input form-control"
+                                           min="{{ $locked ? max(1, (int) ceil($row['issued'])) : 1 }}" step="1"
+                                           value="{{ $row['quantity_requested'] }}" placeholder="e.g. 500" required>
+                                </td>
+                                <td><button type="button" class="remove-row" onclick="risEditRemoveRow('ris-row-{{ $idx }}')"><i class="fas fa-times"></i></button></td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px">
+                    <button type="button" class="btn btn-sm btn-outline" onclick="risEditAddRow()">
+                        <i class="fas fa-plus"></i> Add Another Item
+                    </button>
+                    <span id="ris-edit-row-count" style="font-size:12px;color:var(--text-muted)"></span>
                 </div>
             </div>
         </div>
@@ -219,176 +216,324 @@
 
 @push('scripts')
 <script>
-// ─── State ────────────────────────────────────────────────────────────────────
-let risRowCount = {{ $requisition->items->count() }};
-let rowState    = {};   // idx → { items, selectedItemId }
+// ─── Same item picker as the RIS creation form: type-ahead autocomplete over
+// the catalog list. Pre-filled rows keep their saved values; locked
+// (already dispatched) rows stay read-only. Warehouse is chosen later at
+// dispatch/approve time — exactly like creation.
+const RIS_EDIT_ITEMS_API_URL = '{{ route("requisitions.description_items") }}';
+// Next free row index, derived from the rendered rows so repopulated
+// (post-validation) rows never collide with newly added ones.
+let risEditRowCount = (function () {
+    let max = 0;
+    document.querySelectorAll('#ris-items-body tr[id^="ris-row-"]').forEach(function (tr) {
+        const n = parseInt(tr.id.replace('ris-row-', ''), 10);
+        if (!isNaN(n) && n >= max) max = n + 1;
+    });
+    return max;
+})();
+let risEditAllItems = [];
+const risEditAutocompleteState = {};
 
-const ITEMS_API_URL = '{{ route("requisitions.description_items") }}';
+// Load catalog items once for all rows
+fetch(RIS_EDIT_ITEMS_API_URL, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+})
+.then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+.then(data => { risEditAllItems = data; })
+.catch(err => {
+    console.error('Failed to load RIS items:', err);
+    risEditAllItems = [];
+});
 
-function formatQty(value) {
-    const n = parseFloat(value) || 0;
-    return n.toLocaleString('en-PH', { maximumFractionDigits: 0 });
-}
+function risEditInitAutocomplete(idx) {
+    const input = document.querySelector(`input[data-ris-row-idx="${idx}"]`);
+    const dropdown = document.getElementById(`ris-autocomplete-dropdown-${idx}`);
 
-function buildOptionsFor(idx, selectedId) {
-    return (rowState[idx]?.items || []).map(i => {
-        const sel = String(i.id) === String(selectedId) ? ' selected' : '';
-        const acctInfo  = i.account_code ? ` · <code>${i.account_code}</code>` : '';
-        const stockInfo = i.total_stock > 0
-            ? ` · ${formatQty(i.total_stock)} ${i.unit || ''} available`
-            : '';
-        return `<option value="${i.id}"
-            data-unit="${i.unit}"
-            data-total-stock="${i.total_stock}"
-            data-account-code="${i.account_code || ''}"
-            ${sel}>${i.name}${acctInfo}${stockInfo}</option>`;
-    }).join('');
-}
+    if (!input || !dropdown || input.readOnly) return;
 
-/** Load the description-level item list. */
-function loadRowItems(idx, selectItemId) {
-    const sel  = document.getElementById('item-select-' + idx);
-    if (!sel) { return; }
+    risEditAutocompleteState[idx] = {
+        input: input,
+        dropdown: dropdown,
+        selectedIndex: -1,
+        filteredOptions: []
+    };
 
-    sel.innerHTML = '<option value="">— Loading items… —</option>';
-    sel.disabled  = true;
+    function positionDropdown() {
+        const rect = input.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const dropdownMaxHeight = 320;
+        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceAbove = rect.top;
 
-    fetch(ITEMS_API_URL, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
-    })
-    .then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
-    .then(data => {
-        rowState[idx].items = data;
-        sel.innerHTML = '<option value="">— Select Item —</option>' + buildOptionsFor(idx, selectItemId);
-        sel.disabled  = false;
-        if (selectItemId) {
-            sel.value = String(selectItemId);
-            if (!sel.value) {
-                // Fall back to keeping the original option if the item is gone
-                sel.disabled = true;
-            }
+        const openAbove = spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow;
+
+        if (openAbove) {
+            dropdown.style.bottom = (viewportHeight - rect.top + 5) + 'px';
+            dropdown.style.top = 'auto';
+        } else {
+            dropdown.style.top = (rect.bottom + 5) + 'px';
+            dropdown.style.bottom = 'auto';
         }
-    })
-    .catch(() => {
-        sel.innerHTML = '<option value="">— Failed to load items —</option>';
-        sel.disabled  = false;
+
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.width = rect.width + 'px';
+    }
+
+    input.addEventListener('input', function(e) {
+        const value = e.target.value.trim();
+        if (value.length === 0) {
+            risEditCloseDropdown(idx);
+            risEditClearItemData(idx);
+            return;
+        }
+        positionDropdown();
+        risEditFilterAndShowDropdown(idx, value);
+    });
+
+    input.addEventListener('focus', function(e) {
+        const value = e.target.value.trim();
+        if (value.length > 0) {
+            positionDropdown();
+            risEditFilterAndShowDropdown(idx, value);
+        }
+    });
+
+    input.addEventListener('click', function(e) {
+        const value = e.target.value.trim();
+        if (value.length === 0 && risEditAllItems.length > 0) {
+            positionDropdown();
+            risEditFilterAndShowDropdown(idx, '');
+        }
+    });
+
+    window.addEventListener('resize', function() {
+        if (dropdown.classList.contains('open')) {
+            positionDropdown();
+        }
+    });
+
+    input.addEventListener('keydown', function(e) {
+        const state = risEditAutocompleteState[idx];
+        if (!state || !state.dropdown.classList.contains('open')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            state.selectedIndex = Math.min(state.selectedIndex + 1, state.filteredOptions.length - 1);
+            risEditUpdateSelectedItem(idx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            state.selectedIndex = Math.max(state.selectedIndex - 1, -1);
+            risEditUpdateSelectedItem(idx);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (state.selectedIndex >= 0 && state.selectedIndex < state.filteredOptions.length) {
+                risEditSelectItem(idx, state.filteredOptions[state.selectedIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            risEditCloseDropdown(idx);
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            risEditCloseDropdown(idx);
+        }
     });
 }
 
-// ─── Row management ───────────────────────────────────────────────────────────
-function renumberItems() {
-    document.querySelectorAll('#ris-items .ris-item-card .ris-item-num').forEach((el, i) => {
-        el.textContent = i + 1;
+function risEditFilterAndShowDropdown(idx, searchTerm) {
+    const state = risEditAutocompleteState[idx];
+    if (!state) return;
+
+    if (risEditAllItems.length === 0) {
+        state.dropdown.innerHTML = '<div class="autocomplete-no-results"><i class="fas fa-hourglass-half"></i> Loading items...</div>';
+        state.dropdown.classList.add('open');
+        return;
+    }
+
+    const lowerSearch = searchTerm.toLowerCase();
+    state.filteredOptions = risEditAllItems.filter(function(opt) {
+        return opt.name.toLowerCase().includes(lowerSearch) ||
+               (opt.account_code && opt.account_code.toLowerCase().includes(lowerSearch));
+    });
+
+    state.selectedIndex = -1;
+    risEditRenderDropdown(idx);
+}
+
+function risEditRenderDropdown(idx) {
+    const state = risEditAutocompleteState[idx];
+    if (!state) return;
+
+    const dropdown = state.dropdown;
+    dropdown.innerHTML = '';
+
+    if (state.filteredOptions.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-no-results"><i class="fas fa-search"></i> No matching items found</div>';
+        dropdown.classList.add('open');
+        return;
+    }
+
+    state.filteredOptions.forEach(function(opt, index) {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        if (index === state.selectedIndex) {
+            item.classList.add('selected');
+        }
+
+        let metaHtml = '<div class="item-meta">';
+        if (opt.account_code) {
+            metaHtml += '<span><i class="fas fa-hashtag"></i> ' + risEditEscapeHtml(opt.account_code) + '</span>';
+        }
+        if (opt.unit) {
+            metaHtml += '<span><i class="fas fa-box"></i> ' + risEditEscapeHtml(opt.unit) + '</span>';
+        }
+        if (opt.total_stock && opt.total_stock > 0) {
+            metaHtml += '<span><i class="fas fa-warehouse"></i> Available: ' + opt.total_stock.toLocaleString() + '</span>';
+        }
+        metaHtml += '</div>';
+
+        item.innerHTML = '<div>' + risEditEscapeHtml(opt.name) + '</div>' + metaHtml;
+
+        item.addEventListener('click', function() {
+            risEditSelectItem(idx, opt);
+        });
+
+        dropdown.appendChild(item);
+    });
+
+    dropdown.classList.add('open');
+}
+
+function risEditUpdateSelectedItem(idx) {
+    const state = risEditAutocompleteState[idx];
+    if (!state) return;
+
+    const items = state.dropdown.querySelectorAll('.autocomplete-item');
+    items.forEach(function(item, index) {
+        if (index === state.selectedIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+            item.classList.remove('selected');
+        }
     });
 }
 
-function addRisRow() {
-    const idx = risRowCount++;
-    const container = document.getElementById('ris-items');
-    const card      = document.createElement('div');
-    card.className = 'ris-item-card';
-    card.id = 'ris-card-' + idx;
+function risEditSelectItem(idx, option) {
+    const state = risEditAutocompleteState[idx];
+    if (!state) return;
 
-    card.innerHTML = `
-        <div class="ris-item-head">
-            <div><i class="fas fa-box" style="color:var(--primary)"></i> Item <span class="ris-item-num">${idx + 1}</span></div>
-            <button type="button" class="remove-row" title="Remove item" onclick="removeRisRow('ris-card-${idx}')">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
+    state.input.value = option.name;
 
-        <div class="form-group">
-            <label class="form-label">Item Description <span class="req">*</span></label>
-            <select name="items[${idx}][catalog_item_id]" class="ris-item-select form-control"
-                    id="item-select-${idx}" onchange="fillRisItem(this, ${idx})" required>
-                <option value="">— Select Item —</option>
-            </select>
-        </div>
+    const catalogItemId = document.getElementById('ris-catalog-item-id-' + idx);
+    if (catalogItemId) catalogItemId.value = option.id;
 
-        <div class="form-row cols-2">
-            <div class="form-group">
-                <label class="form-label">Requested Quantity <span class="req">*</span></label>
-                <input type="number" name="items[${idx}][quantity_requested]"
-                       id="qty-${idx}" class="form-control" min="1" step="1" required
-                       oninput="checkStock(${idx})">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Account Code</label>
-                <input type="text" name="items[${idx}][account_code]"
-                       id="account-code-${idx}" class="form-control" readonly tabindex="-1"
-                       placeholder="Auto from Item Categories">
-            </div>
-        </div>
-
-        <div class="ris-item-meta">
-            <span>Unit <strong id="unit-${idx}">—</strong></span>
-            <span>Available <strong id="stock-${idx}">—</strong></span>
-        </div>
-    `;
-    container.appendChild(card);
-
-    rowState[idx] = { items: [], selectedItemId: null };
-    loadRowItems(idx);
+    risEditCloseDropdown(idx);
 }
 
-function removeRisRow(id) {
-    if (document.querySelectorAll('#ris-items .ris-item-card').length > 1) {
-        document.getElementById(id)?.remove();
-        renumberItems();
+function risEditClearItemData(idx) {
+    const catalogItemId = document.getElementById('ris-catalog-item-id-' + idx);
+    if (catalogItemId) catalogItemId.value = '';
+}
+
+function risEditCloseDropdown(idx) {
+    const state = risEditAutocompleteState[idx];
+    if (state && state.dropdown) {
+        state.dropdown.classList.remove('open');
+        state.selectedIndex = -1;
     }
 }
 
-function fillRisItem(sel, idx) {
-    const opt    = sel.options[sel.selectedIndex];
-    const itemId = opt.value;
-
-    rowState[idx].selectedItemId = itemId;
-
-    document.getElementById('unit-' + idx).textContent = opt.dataset.unit || '—';
-
-    const acct = document.getElementById('account-code-' + idx);
-    if (acct) { acct.value = opt.dataset.accountCode || ''; }
-
-    const stockEl = document.getElementById('stock-' + idx);
-    const stock   = parseFloat(opt.dataset.totalStock || 0);
-    stockEl.textContent = stock > 0 ? formatQty(stock) : '—';
-    stockEl.style.color = stock > 0 ? 'var(--success)' : 'var(--danger)';
-
-    const qtyInput = document.getElementById('qty-' + idx);
-    if (qtyInput) { qtyInput.max = stock; }
-    checkStock(idx);
+function risEditEscapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
-function checkStock(idx) {
-    const qtyInput = document.getElementById('qty-' + idx);
-    if (!qtyInput) { return; }
-
-    const opt = document.getElementById('item-select-' + idx)?.selectedOptions?.[0];
-    const stock = opt ? parseFloat(opt.dataset.totalStock || 0) : 0;
-    const qty   = parseFloat(qtyInput.value) || 0;
-
-    qtyInput.classList.toggle('is-invalid', stock > 0 && qty > stock);
+function risEditUpdateCount() {
+    const n = document.querySelectorAll('#ris-items-body tr').length;
+    const el = document.getElementById('ris-edit-row-count');
+    if (el) el.textContent = n + ' line item' + (n === 1 ? '' : 's');
 }
 
-// ─── Bootstrap: wire up the server-rendered item cards ────────────────────────
-document.querySelectorAll('#ris-items .ris-item-select').forEach(sel => {
-    const idx    = sel.id.replace('item-select-', '');
-    const itemId = sel.dataset.selected;
+function risEditAddRow() {
+    const idx = risEditRowCount++;
+    const tbody = document.getElementById('ris-items-body');
+    const tr = document.createElement('tr');
+    tr.id = 'ris-row-' + idx;
+    tr.innerHTML =
+        '<td data-label="Item Description">' +
+            '<div class="autocomplete-wrapper" id="ris-autocomplete-wrapper-' + idx + '">' +
+                '<input type="text" name="items[' + idx + '][description]" class="form-control ris-desc-input" placeholder="Type item description, then pick from the list..." required autocomplete="off" data-ris-row-idx="' + idx + '">' +
+                '<div class="autocomplete-dropdown" id="ris-autocomplete-dropdown-' + idx + '"></div>' +
+            '</div>' +
+            '<input type="hidden" name="items[' + idx + '][catalog_item_id]" id="ris-catalog-item-id-' + idx + '">' +
+        '</td>' +
+        '<td data-label="Requested Quantity">' +
+            '<input type="number" name="items[' + idx + '][quantity_requested]" id="ris-qty-' + idx + '" class="ris-qty-input form-control" min="1" step="1" placeholder="e.g. 500" required>' +
+        '</td>' +
+        '<td><button type="button" class="remove-row" onclick="risEditRemoveRow(\'ris-row-' + idx + '\')"><i class="fas fa-times"></i></button></td>';
+    tbody.appendChild(tr);
+    risEditUpdateCount();
 
-    rowState[idx] = { items: [], selectedItemId: itemId };
+    // Make the new row impossible to miss: scroll to it, flash it, focus it.
+    try { tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+    tr.style.transition = 'background-color .6s';
+    tr.style.backgroundColor = '#ebf8ff';
+    setTimeout(function() { tr.style.backgroundColor = ''; }, 1200);
 
-    if (sel.disabled) {
-        // Locked (already dispatched) lines keep their server-rendered option.
-        rowState[idx].items = [{
-            id: itemId,
-            description: sel.options[sel.selectedIndex]?.text,
-            unit: '',
-            total_stock: 0,
-            record_count: 1,
-        }];
-    } else {
-        loadRowItems(idx, itemId);
+    setTimeout(function() {
+        risEditInitAutocomplete(idx);
+        const input = tr.querySelector('input[data-ris-row-idx]');
+        if (input) input.focus();
+    }, 50);
+}
+
+function risEditRemoveRow(id) {
+    if (document.querySelectorAll('#ris-items-body tr').length > 1) {
+        var row = document.getElementById(id);
+        if (row) {
+            const idx = id.replace('ris-row-', '');
+            if (risEditAutocompleteState[idx]) {
+                delete risEditAutocompleteState[idx];
+            }
+            row.remove();
+            risEditUpdateCount();
+        }
     }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Wire autocomplete to every pre-filled, unlocked row
+    document.querySelectorAll('#ris-items-body input[data-ris-row-idx]').forEach(function(input) {
+        risEditInitAutocomplete(input.getAttribute('data-ris-row-idx'));
+    });
+    risEditUpdateCount();
+});
+});
+
+// If a description was typed but never picked from the dropdown, link it
+// automatically when it exactly matches a catalog name — otherwise the row
+// would fail validation even though the name is correct.
+document.getElementById('edit-ris-form').addEventListener('submit', function() {
+    document.querySelectorAll('#ris-items-body tr').forEach(function(tr) {
+        const input = tr.querySelector('input[data-ris-row-idx]');
+        if (!input || input.readOnly) return;
+        const idx = input.getAttribute('data-ris-row-idx');
+        const hidden = document.getElementById('ris-catalog-item-id-' + idx);
+        if (!hidden || hidden.value) return;
+        const text = input.value.trim().toLowerCase();
+        if (!text || risEditAllItems.length === 0) return;
+        const match = risEditAllItems.find(function(o) {
+            return (o.name || '').trim().toLowerCase() === text;
+        });
+        if (match) {
+            hidden.value = match.id;
+            input.value = match.name;
+        }
+    });
 });
 
 // Never allow a double-click to save the same RIS edit twice.

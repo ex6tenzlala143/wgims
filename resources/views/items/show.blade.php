@@ -12,8 +12,25 @@
         @if($item->stock_number)
         <a href="{{ route('stock_cards.item_history', $item->id) }}" class="btn btn-primary"><i class="fas fa-book"></i> Stock Card</a>
         @endif
+        {{-- Controlled cleanup: admin-only, only for orphaned records from an
+             already-deleted subsidy. The backend re-verifies everything. --}}
+        @if(auth()->user()->isAdmin() && $item->isRelatedToDeletedSubsidy())
+        <form action="{{ route('items.destroy', $item->id) }}" method="POST" style="display:inline"
+            onsubmit="return confirm('Delete this orphaned item?\n\nThis item originated from a deleted subsidy ({{ $item->sourceSubsidyCode() ?? 'unknown' }}) and can be permanently removed.\n\nOnly this item will be deleted. No other inventory, subsidy, dispatch, transfer, RIS, or reservation will be touched.\n\nThis cannot be undone.')">
+            @csrf @method('DELETE')
+            <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete Orphaned Item</button>
+        </form>
+        @endif
     </div>
 </div>
+
+@if(auth()->user()->isAdmin() && $item->isRelatedToDeletedSubsidy())
+<div style="display:flex;gap:10px;align-items:flex-start;background:#fff5f5;border:1px solid #feb2b2;border-radius:8px;padding:12px 16px;margin-bottom:24px;font-size:13px;color:#742a2a">
+    <i class="fas fa-exclamation-triangle" style="margin-top:2px"></i>
+    <div><strong>This item originated from a deleted subsidy{{ $item->sourceSubsidyCode() ? ' (' . $item->sourceSubsidyCode() . ')' : '' }} and can be permanently removed.</strong><br>
+    <span style="color:#9b2c2c">Admin-only cleanup of an orphaned record. Deleting removes only this item — no other inventory, subsidy, dispatch, augmentation, RIS, reservation, or stock transfer is touched. Blocked automatically if the item is still required by any active transaction.</span></div>
+</div>
+@endif
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
     <div class="card">

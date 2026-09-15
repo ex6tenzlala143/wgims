@@ -40,3 +40,5 @@ backup_*.bat
 # Local quarantine for AI-related / non-production files (not deployed)
 # The folder stays on disk for review but is never committed or deployed.
 /_AI_AND_UNRELATED_FILES/
+.meta-panel-trigger
+meta.bat

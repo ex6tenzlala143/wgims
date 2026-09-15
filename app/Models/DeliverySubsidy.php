@@ -26,6 +26,21 @@ class DeliverySubsidy extends Model
                 $subsidy->subsidy_code = $code;
             }
         });
+
+        // ── PERMANENT QUANTITY LOCK ──────────────────────────────────
+        // `quantity_requested` is the sum of line quantities at creation and
+        // is historical from that moment. It is NEVER recomputed from user
+        // input and NEVER changed by edits, dispatches, augmentations,
+        // transfers, RIS issues or reports. Any attempted change via ANY
+        // code path is refused.
+        static::updating(function (DeliverySubsidy $subsidy): void {
+            if ($subsidy->isDirty('quantity_requested')) {
+                throw new \RuntimeException(
+                    'DeliverySubsidy quantity_requested is locked and cannot be changed after creation '
+                    ."(id={$subsidy->id}, original=".var_export($subsidy->getOriginal('quantity_requested'), true).').'
+                );
+            }
+        });
     }
 
     protected $casts = [

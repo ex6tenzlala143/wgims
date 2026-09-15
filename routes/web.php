@@ -45,7 +45,15 @@ Route::middleware(['auth', 'updater.restricted'])->group(function () {
     });
 
     // ── Items ─────────────────────────────────────────────────────────────────
+    // Items are view-only. The ONLY delete allowed is the controlled cleanup
+    // of an orphaned record whose originating subsidy was already deleted
+    // (ItemController@destroy enforces: admin + deleted-subsidy origin + no
+    // remaining dependencies). Up-front `admin.write` (admin-only) rejects
+    // managers/updaters before the controller's own backend checks run.
     Route::get('/items', [ItemController::class, 'index'])->name('items.index');
+    Route::middleware('admin.write')->group(function () {
+        Route::delete('/items/{item}', [ItemController::class, 'destroy'])->name('items.destroy');
+    });
     Route::get('/items/{item}', [ItemController::class, 'show'])->name('items.show');
 
     // ── Delivery / Subsidies ──────────────────────────────────────────────────
@@ -68,6 +76,7 @@ Route::middleware(['auth', 'updater.restricted'])->group(function () {
         // Admin-only: edit/update individual delivery records + audit log
         Route::middleware('admin')->group(function () {
             Route::get('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}/edit', [DeliverySubsidyController::class, 'editDelivery'])->name('delivery_subsidies.edit_delivery');
+            Route::get('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}/edit-data', [DeliverySubsidyController::class, 'deliveryEditData'])->name('delivery_subsidies.edit_delivery_data');
             Route::put('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}',      [DeliverySubsidyController::class, 'updateDelivery'])->name('delivery_subsidies.update_delivery');
             Route::delete('/delivery-subsidies/{deliverySubsidy}/deliveries/{delivery}',   [DeliverySubsidyController::class, 'destroyDelivery'])->name('delivery_subsidies.destroy_delivery');
         });

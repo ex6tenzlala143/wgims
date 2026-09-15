@@ -24,7 +24,17 @@
             </select>
         </form>
     </div>
+</div>
 @endif
+
+<div class="card">
+    <div class="card-header">
+        <h3>
+            <span class="badge badge-primary">{{ $categoryInfo['account_code'] }}</span>
+            {{ $categoryInfo['label'] }} — Stock Summary
+        </h3>
+        <span style="font-size:13px;color:var(--text-muted)">{{ $items->count() }} item(s)</span>
+    </div>
     <div class="table-wrapper">
         <table style="white-space:nowrap">
             <thead>

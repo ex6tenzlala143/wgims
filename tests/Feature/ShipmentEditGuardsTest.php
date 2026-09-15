@@ -106,4 +106,108 @@ class ShipmentEditGuardsTest extends TestCase
         ])->assertSessionHasErrors('items');
         $this->assertEquals(100, $item->fresh()->quantity);
     }
+
+    private function issueViaRis($admin, $catalog, $wh, $item, int $qty): void
+    {
+        $this->actingAs($admin)->post(route('requisitions.store'), [
+            'purpose' => 't', 'date_requested' => '2026-09-03',
+            'items' => [['catalog_item_id' => $catalog->id, 'quantity_requested' => $qty]],
+        ])->assertSessionHasNoErrors();
+        $ris = \App\Models\Requisition::latest('id')->firstOrFail();
+        $this->actingAs($admin)->post(route('requisitions.process_approval', $ris), [
+            'approved_by_name' => 'A', 'issued_by_name' => 'B',
+            'items' => [$ris->items()->firstOrFail()->id => ['warehouse_id' => $wh->id, 'item_id' => $item->id, 'quantity_issued' => $qty, 'dr_number' => 'DR-R1']],
+        ])->assertSessionHasNoErrors();
+    }
+
+    private function shipmentEditPayload($di, $wh, array $overrides = []): array
+    {
+        return [
+            'delivery_date' => '2026-09-02', 'condition_status' => 'good',
+            'items' => [array_merge([
+                'di_id' => $di->id, 'quantity_delivered' => $di->quantity_delivered,
+                'unit_cost' => $di->unit_cost, 'engas_unit_cost' => $di->engas_unit_cost,
+                'warehouse_id' => $wh->id, 'dr_number' => 'DR-D1',
+            ], $overrides)],
+        ];
+    }
+
+    public function test_edit_quantity_frozen_after_ris_issuance(): void
+    {
+        [$admin, $wh1, $wh2, $supplier] = $this->world();
+        $cat = \App\Models\ItemCategory::create(['key' => 'sgfood', 'label' => 'Food', 'account_code' => '1', 'is_active' => true, 'sort_order' => 1]);
+        $catalog = \App\Models\ItemCatalogItem::create(['item_category_id' => $cat->id, 'name' => 'Guard Packs', 'account_code' => '1', 'is_active' => true]);
+        [$ds, $delivery, $item] = $this->subsidyWithDelivery($admin, $supplier, $wh1, 10);
+        $di = $delivery->items()->firstOrFail();
+        $this->issueViaRis($admin, $catalog, $wh1, $item, 10);
+
+        // Quantity change (even an increase) is refused…
+        $this->actingAs($admin)->put(route('delivery_subsidies.update_delivery', [$ds, $delivery]),
+            $this->shipmentEditPayload($di, $wh1, ['quantity_delivered' => 90])
+        )->assertSessionHasErrors('items.0.quantity_delivered');
+        $this->assertEquals(100, $di->fresh()->quantity_delivered);
+        $this->assertEquals(90, $item->fresh()->quantity); // 100 − 10 issued
+
+        // …but metadata-only corrections on the same line still save.
+        $this->actingAs($admin)->put(route('delivery_subsidies.update_delivery', [$ds, $delivery]),
+            $this->shipmentEditPayload($di, $wh1, ['dr_number' => 'DR-D1-CORR'])
+        )->assertSessionHasNoErrors();
+        $this->assertSame('DR-D1-CORR', $di->fresh()->dr_number);
+        $this->assertEquals(100, $di->fresh()->quantity_delivered);
+    }
+
+    public function test_edit_quantity_frozen_by_reservation_lock(): void
+    {
+        [$admin, $wh1, $wh2, $supplier] = $this->world();
+        [$ds, $delivery, $item] = $this->subsidyWithDelivery($admin, $supplier, $wh1, 10);
+        $di = $delivery->items()->firstOrFail();
+        $this->actingAs($admin)->post(route('reservations.store'), [
+            'purpose' => 't', 'items' => [['warehouse_id' => $wh1->id, 'item_id' => $item->id, 'reserved_quantity' => 20]],
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->put(route('delivery_subsidies.update_delivery', [$ds, $delivery]),
+            $this->shipmentEditPayload($di, $wh1, ['quantity_delivered' => 110])
+        )->assertSessionHasErrors('items.0.quantity_delivered');
+        $this->assertEquals(100, $di->fresh()->quantity_delivered);
+        $this->assertEquals(100, $item->fresh()->quantity);
+    }
+
+    public function test_edit_quantity_frozen_after_transfer_movement(): void
+    {
+        [$admin, $wh1, $wh2, $supplier] = $this->world();
+        [$ds, $delivery, $item] = $this->subsidyWithDelivery($admin, $supplier, $wh1, 10);
+        $di = $delivery->items()->firstOrFail();
+        $this->actingAs($admin)->post(route('transfers.store'), [
+            'from_warehouse_id' => $wh1->id, 'to_warehouse_id' => $wh2->id, 'transfer_date' => '2026-09-04',
+            'items' => [['item_id' => $item->id, 'quantity' => 20, 'unit_cost' => 10]],
+        ])->assertSessionHasNoErrors();
+        $trf = \App\Models\StockTransfer::firstOrFail();
+        $this->actingAs($admin)->post(route('transfers.process_dispatch', $trf), [
+            'dispatch_date' => '2026-09-04',
+            'items' => [['sti_id' => $trf->items()->firstOrFail()->id, 'quantity' => 20]],
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->put(route('delivery_subsidies.update_delivery', [$ds, $delivery]),
+            $this->shipmentEditPayload($di, $wh1, ['quantity_delivered' => 90])
+        )->assertSessionHasErrors('items.0.quantity_delivered');
+        $this->assertEquals(100, $di->fresh()->quantity_delivered);
+    }
+
+    public function test_edit_data_flags_transacted_lines(): void
+    {
+        [$admin, $wh1, $wh2, $supplier] = $this->world();
+        $cat = \App\Models\ItemCategory::create(['key' => 'sgfood2', 'label' => 'Food', 'account_code' => '1', 'is_active' => true, 'sort_order' => 1]);
+        $catalog = \App\Models\ItemCatalogItem::create(['item_category_id' => $cat->id, 'name' => 'Guard Packs', 'account_code' => '1', 'is_active' => true]);
+        [$ds, $delivery, $item] = $this->subsidyWithDelivery($admin, $supplier, $wh1, 10);
+
+        $res = $this->actingAs($admin)->getJson(route('delivery_subsidies.edit_delivery_data', [$ds, $delivery]));
+        $res->assertOk();
+        $this->assertSame([], $res->json('items.0.transactions'));
+
+        $this->issueViaRis($admin, $catalog, $wh1, $item, 5);
+
+        $res = $this->actingAs($admin)->getJson(route('delivery_subsidies.edit_delivery_data', [$ds, $delivery]));
+        $res->assertOk();
+        $this->assertNotEmpty($res->json('items.0.transactions'));
+    }
 }

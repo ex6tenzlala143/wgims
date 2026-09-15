@@ -86,7 +86,7 @@
                     <td>
                         <div style="line-height:1.6">
                             <div style="display:flex;align-items:baseline;gap:6px;white-space:nowrap">
-                                <strong style="color:var(--primary);font-family:monospace">{{ $ris->ris_code ?? $ris->ris_id }}</strong>
+                                <code>{{ $ris->ris_code ?? $ris->ris_id }}</code>
                             </div>
                         </div>
                         @if($subSnapshot)

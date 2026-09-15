@@ -7,7 +7,7 @@
     <div>
         <h1>RIS {{ $requisition->ris_code ?? $requisition->ris_id }} <span style="font-weight:400;color:var(--text-muted);font-size:16px">/ {{ $requisition->ris_number }}</span></h1>
         <div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a> / <a href="{{ route('requisitions.index') }}">Requisitions</a> / View</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">RIS ID: <span style="font-family:monospace;color:var(--primary);font-weight:600">{{ $requisition->ris_code ?? $requisition->ris_id }}</span> &nbsp;·&nbsp; RIS No.: <strong>{{ $requisition->ris_number }}</strong></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">RIS ID: <code>{{ $requisition->ris_code ?? $requisition->ris_id }}</code> &nbsp;·&nbsp; RIS No.: <strong>{{ $requisition->ris_number }}</strong></div>
     </div>
     <div style="display:flex;gap:8px">
         @if(($requisition->status == 'pending' || $requisition->status == 'partially_approved') && auth()->user()->canApprove())
@@ -23,7 +23,7 @@
         @endif
         <a href="{{ route('requisitions.print', $requisition->id) }}" class="btn btn-outline" target="_blank"><i class="fas fa-print"></i> Print RIS</a>
 @if(auth()->user()->canWrite())
-<button type="button" class="btn btn-primary" onclick="openCorrectRisModal()"><i class="fas fa-edit"></i> Edit RIS</button>
+<button type="button" class="btn btn-primary" onclick="openEditRisModal()"><i class="fas fa-edit"></i> Edit RIS</button>
         @endif
     </div>
 </div>
@@ -33,7 +33,7 @@
         <div class="card-header"><h3>RIS Information</h3></div>
         <div class="card-body">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-                <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="color:var(--text-muted)">RIS ID:</span><strong style="font-family:monospace;color:var(--primary)">{{ $requisition->ris_code ?? $requisition->ris_id }}</strong> <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">(system)</span></div>
+                <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="color:var(--text-muted)">RIS ID:</span><code>{{ $requisition->ris_code ?? $requisition->ris_id }}</code> <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">(system)</span></div>
                 <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="color:var(--text-muted)">RIS No.:</span><strong>{{ $requisition->ris_number }}</strong> <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">(official)</span></div>
                 <div><span style="color:var(--text-muted)">Date Requested:</span><br>{{ $requisition->date_requested?->format('F d, Y') ?? '—' }}</div>
                 <div><span style="color:var(--text-muted)">Entity Name:</span><br>{{ $requisition->entity_name ?? '-' }}</div>
@@ -523,4 +523,5 @@
 @include('requisitions._dispatch_edit_modal')
 @include('requisitions._dispatch_delete_modal')
 @include('requisitions._correct_ris_modal')
+@include('requisitions._edit_modal', ['editModalOpen' => $errors->any()])
 @endif

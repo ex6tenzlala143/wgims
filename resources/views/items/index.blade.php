@@ -147,6 +147,16 @@
                             @if($item->stock_number)
                             <a href="{{ route('stock_cards.item_history', $item->id) }}" class="btn btn-sm btn-outline btn-icon" title="Stock Card"><i class="fas fa-book"></i></a>
                             @endif
+                            {{-- Controlled cleanup: only admins see this, and only
+                                 for orphaned records from an already-deleted
+                                 subsidy. The backend re-verifies everything. --}}
+                            @if(auth()->user()->isAdmin() && $item->isRelatedToDeletedSubsidy())
+                            <form action="{{ route('items.destroy', $item->id) }}" method="POST" style="display:inline"
+                                onsubmit="return confirm('Delete this orphaned item?\n\nThis item originated from a deleted subsidy ({{ $item->sourceSubsidyCode() ?? 'unknown' }}) and can be permanently removed.\n\nOnly this item will be deleted. No other inventory, subsidy, dispatch, transfer, RIS, or reservation will be touched.\n\nThis cannot be undone.')">
+                                @csrf @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete orphaned item from deleted subsidy"><i class="fas fa-trash"></i></button>
+                            </form>
+                            @endif
                         </div>
                     </td>
                     </tr>

@@ -306,6 +306,9 @@ class DeliverySubsidyController extends Controller
             'has_deliveries'  => $dsi->deliveryItems->count() > 0,
             'qty_delivered'   => (float) $dsi->qty_delivered,
             'locked'          => (float) $dsi->qty_delivered > 0,
+            // RIS issuance / transfer movement / reservation lock on this
+            // line's stock freezes its requested quantity entirely.
+            'downstream_use'  => $this->deliverySubsidyItemUsage($dsi),
         ]);
 
         return response()->json([
@@ -328,26 +331,41 @@ class DeliverySubsidyController extends Controller
     {
         abort_unless(Auth::user()->canWrite(), 403);
 
-        // ── The merged Edit Subsidy function ────────────────────────────────
-        //  • No deliveries yet  → the whole request is editable (RIS number,
-        //    supplier, header fields, line items) and is rebuilt from the
-        //    submitted lines. Status is limited to pending / cancelled.
-        //  • Deliveries exist    → this is a correction: the historical identity
-        //    (RIS number / supplier / DR number) is frozen and only the header
-        //    fields (date, place of delivery, remarks) plus per-line requested
-        //    quantities may change. A line that already has delivered stock is
-        //    locked to its item and can never drop below the delivered quantity.
-        //    Shipments, delivered quantities, stock cards, inventory, warehouse
-        //    assignments and DR numbers are NEVER modified here.
+        // ── The merged Edit Subsidy function (QUANTITY-LOCKED) ──────────────
+        // DATA-INTEGRITY RULE: the requested quantity of a subsidy — header
+        // `quantity_requested` and every line `delivery_subsidy_items.quantity`
+        // — is PERMANENTLY LOCKED once the subsidy row is created.
         //
-        // In both modes the header requested total is recomputed from the lines
-        // (so the header and the lines can never drift apart), the status is
-        // recomputed from requested vs. delivered, and every change is written
-        // to the audit log.
+        // IDENTIFIER RULE: the subsidy is found by its permanent internal ID
+        // (PK + `subsidy_code`, route-model binding). Related rows link via
+        // `delivery_subsidy_id` / `source_subsidy_id` foreign keys — NEVER via
+        // the RIS number. `ris_number` is a correctable document/reference
+        // number: it MAY be edited in both modes without touching the ID, the
+        // FKs, or any quantity.
+        //
+        //  • No deliveries yet  → ris_number, supplier, status plus date /
+        //    place / remarks plus per-line DESCRIPTIVE fields (description,
+        //    unit, category, catalog, account, expiry) remain editable.
+        //    Quantities and the line set (no adds/removals) are frozen.
+        //  • Deliveries exist    → same quantity/line-set freeze, plus supplier
+        //    / DR number stay frozen. ris_number REMAINS EDITABLE (document
+        //    correction). Only date / place / remarks (+ ris_number) plus
+        //    per-line descriptive fields on undelivered lines may change.
+        //
+        // Shipments, delivered quantities (qty_delivered), stock cards,
+        // inventory, warehouse assignments and DR numbers are NEVER modified
+        // here. The header `quantity_requested` is NEVER recomputed from user
+        // input — the stored value is always preserved — so remaining,
+        // balances, lineage and reports can never drift. Changing ris_number
+        // updates ONLY `delivery_subsidies.ris_number`; the subsidy ID, all
+        // FKs, snapshots and quantities are left untouched.
         $hasDeliveries = $deliverySubsidy->deliveries()->count() > 0;
 
         // Unit Cost and Warehouse are deliberately NOT editable here — they are
         // only assigned by the dispatcher when a delivery is recorded.
+        // Quantity is accepted in the payload for backward compatibility with
+        // existing forms, but ANY deviation from the stored value is rejected
+        // below (backend quantity lock — never trust the client).
         $rules = [
             'date'                    => 'required|date',
             'place_of_delivery'       => 'nullable|string|max:255',
@@ -361,15 +379,15 @@ class DeliverySubsidyController extends Controller
             'items.*.category'        => 'required|string|in:'.implode(',', array_keys(Item::getCategories())),
             'items.*.quantity'        => 'required|integer|min:1',
             'items.*.expiration_date' => 'nullable|date',
+            // Line identity is always required: lines can never be added or
+            // removed via edit (that would change the locked total).
+            'items.*.dsi_id'          => 'required|integer|exists:delivery_subsidy_items,id',
         ];
 
         if ($hasDeliveries) {
-            // Frozen identity: every submitted line must be an existing line of
-            // this subsidy (no additions, no removals — only quantity edits).
             $rules += [
                 'ris_number'      => 'required|string|max:255',
                 'supplier_id'     => 'required|exists:suppliers,id',
-                'items.*.dsi_id'  => 'required|integer|exists:delivery_subsidy_items,id',
             ];
         } else {
             $rules += [
@@ -382,13 +400,10 @@ class DeliverySubsidyController extends Controller
         $request->validate($rules);
 
         if ($hasDeliveries) {
-            // Historical identity is frozen once deliveries exist — reject any
-            // attempt to change it, even from a tampered request.
-            if ((string) $request->ris_number !== (string) $deliverySubsidy->ris_number) {
-                throw ValidationException::withMessages([
-                    'ris_number' => 'The RIS number cannot be changed once deliveries have been recorded.',
-                ]);
-            }
+            // Supplier is frozen once deliveries exist — reject any attempt to
+            // change it, even from a tampered request. ris_number is
+            // deliberately NOT frozen: it is a correctable document number and
+            // is never used as a relationship key (FKs use the subsidy ID).
             if ((int) $request->supplier_id !== (int) $deliverySubsidy->supplier_id) {
                 throw ValidationException::withMessages([
                     'supplier_id' => 'The supplier cannot be changed once deliveries have been recorded.',
@@ -406,11 +421,48 @@ class DeliverySubsidyController extends Controller
             DB::transaction(function () use ($request, $deliverySubsidy, $existingItems, $cascadeSvc, $hasDeliveries, &$changes, &$oldStatus, &$oldRequested) {
             $headerData = [];
 
+            // ── UNIVERSAL QUANTITY LOCK (both modes) ─────────────────────
+            // The line set must match exactly (no adds, no removals — either
+            // would change the locked total), and every submitted quantity
+            // must equal the stored quantity. This covers: plain edits,
+            // dispatched lines, augmentation (transfer) lines, RIS-issued
+            // lines, reserved lines, and any crafted API request.
+            $existingIds  = $existingItems->keys()->map(fn ($k) => (int) $k)->sort()->values()->all();
+            $submittedIds = collect($request->items)->map(fn ($l) => (int) ($l['dsi_id'] ?? 0))->sort()->values()->all();
+            if ($submittedIds !== $existingIds) {
+                throw ValidationException::withMessages([
+                    'items' => 'Subsidy line items cannot be added or removed. The locked quantity must be preserved.',
+                ]);
+            }
+            foreach ($request->items as $idx => $line) {
+                if (! $existingItems->has((int) $line['dsi_id'])) {
+                    throw ValidationException::withMessages([
+                        "items.{$idx}.dsi_id" => 'Invalid line item for this subsidy.',
+                    ]);
+                }
+                $dsi    = $existingItems->get((int) $line['dsi_id']);
+                $oldQty = (float) $dsi->quantity;
+                $newQty = round((float) ($line['quantity'] ?? $oldQty), 4);
+                if (abs($newQty - $oldQty) > 0.0001) {
+                    throw ValidationException::withMessages([
+                        "items.{$idx}.quantity" =>
+                            'Quantity is locked and cannot be changed after the subsidy is created. '
+                            .'Original: '.number_format($oldQty).'. No changes were made to inventory, dispatches, augmentations, or reports.',
+                    ]);
+                }
+            }
+            // Header total is always preserved — never taken from user input
+            // and never recomputed from it — so crafted `quantity_requested`
+            // values are ignored by design.
+
             if ($hasDeliveries) {
-                // ── Header: only date / place of delivery / remarks may change ──
-                // ris_number / supplier_id / dr_number are the historical
-                // identity of the request and are deliberately frozen here.
-                foreach (['date', 'place_of_delivery', 'remarks'] as $field) {
+                // ── Header: date / place / remarks + ris_number may change ──
+                // ris_number is a correctable document number (FKs use the
+                // subsidy ID, so links are unaffected). supplier_id /
+                // dr_number / quantity_requested stay frozen. Only the
+                // `ris_number` column itself is written — related rows, stock
+                // and quantities are never touched.
+                foreach (['ris_number', 'date', 'place_of_delivery', 'remarks'] as $field) {
                     $oldVal = $deliverySubsidy->{$field} instanceof \DateTimeInterface
                         ? $deliverySubsidy->{$field}->format('Y-m-d')
                         : $deliverySubsidy->{$field};
@@ -421,52 +473,32 @@ class DeliverySubsidyController extends Controller
                     }
                 }
 
-                // Every submitted line must belong to this subsidy.
-                foreach ($request->items as $idx => $line) {
-                    if (! $existingItems->has((int) $line['dsi_id'])) {
-                        throw ValidationException::withMessages([
-                            "items.{$idx}.dsi_id" => 'Invalid line item for this subsidy.',
-                        ]);
-                    }
-                }
-
-                // ── Lines: requested quantity (item change only when undelivered) ──
+                // ── Lines: descriptive fields only (quantity NEVER written) ──
                 foreach ($request->items as $idx => $line) {
                     $dsi    = $existingItems->get((int) $line['dsi_id']);
-                    $oldQty = (float) $dsi->quantity;
-                    $newQty = round((float) $line['quantity'], 4);
                     $locked = (float) $dsi->qty_delivered > 0;
 
-                    // Inventory protection: the request can never drop below what is
-                    // already delivered. Resolve an over-delivery via the shipment
-                    // edit instead.
-                    if ($newQty + 0.0001 < (float) $dsi->qty_delivered) {
-                        throw ValidationException::withMessages([
-                            "items.{$idx}.quantity" =>
-                                'Requested quantity ('.number_format($newQty).') cannot be less than the '
-                                .number_format($dsi->qty_delivered).' already delivered. '
-                                .'Edit the shipment(s) first, then fix the request.',
-                        ]);
-                    }
-
-                    // A delivered line is locked: only its requested quantity may
-                    // change. Attempting to re-point it at another item is rejected.
+                    // A delivered line is locked to its item identity as well:
+                    // re-pointing it would orphan dispatched stock history.
                     if ($locked) {
                         $submittedCat  = $line['catalog_item_id'] ?? null;
                         $submittedItem = $line['item_id'] ?? null;
                         if ($submittedCat && (int) $submittedCat !== (int) $dsi->catalog_item_id) {
                             throw ValidationException::withMessages([
-                                "items.{$idx}.catalog_item_id" => 'This item has already been delivered and cannot be changed. Edit the request quantity only.',
+                                "items.{$idx}.catalog_item_id" => 'This item has already been delivered and cannot be changed.',
                             ]);
                         }
                         if ($submittedItem && (int) $submittedItem !== (int) $dsi->item_id) {
                             throw ValidationException::withMessages([
-                                "items.{$idx}.item_id" => 'This item has already been delivered and cannot be changed. Edit the request quantity only.',
+                                "items.{$idx}.item_id" => 'This item has already been delivered and cannot be changed.',
                             ]);
                         }
                     }
 
-                    $data    = ['quantity' => $newQty];
+                    // NOTE: `quantity` is deliberately excluded — the stored
+                    // value is preserved. `qty_delivered` is never touched here
+                    // (dispatched quantities live on shipments/stock cards).
+                    $data    = [];
                     $oldDesc = $dsi->description;
 
                     if (! $locked) {
@@ -481,39 +513,32 @@ class DeliverySubsidyController extends Controller
                         ];
                     }
 
-                    $dsi->update($data);
-
-                    if (abs($newQty - $oldQty) > 0.0001) {
-                        $changes["items.{$dsi->id}.quantity"] = ['old' => $oldQty, 'new' => $newQty];
+                    if (! empty($data)) {
+                        $dsi->update($data);
                     }
+
                     if (! $locked && $dsi->description !== $oldDesc) {
                         $changes["items.{$dsi->id}.item"] = ['old' => $oldDesc, 'new' => $dsi->description];
                     }
                 }
 
-                // Recompute the header requested total from the edited lines so
-                // the header and the lines can never drift apart.
-                $newRequested = (int) round((float) $deliverySubsidy->items()->sum('quantity'), 4);
-                $headerData['quantity_requested'] = $newRequested;
-
+                // Preserve the locked header total; refresh status only (which
+                // is a pure function of locked-requested vs. delivered, so it
+                // cannot drift unless shipments changed elsewhere).
                 $deliverySubsidy->update($headerData);
 
-                // Recompute requested → delivered → outstanding → status. Shipments
-                // and inventory records are untouched — only the request is
-                // reclassified.
                 $deliverySubsidy->refresh();
                 $deliverySubsidy->updateDeliveryStatus();
 
-                if (abs($newRequested - $oldRequested) > 0.0001) {
-                    $changes['quantity_requested'] = ['old' => $oldRequested, 'new' => $newRequested];
-                }
                 if ($deliverySubsidy->status !== $oldStatus) {
                     $changes['status'] = ['old' => $oldStatus, 'new' => $deliverySubsidy->status];
                 }
 
                 $cascadeSvc->recordAudit($deliverySubsidy->id, $changes, [], 'correction');
             } else {
-                // ── No deliveries: full header edit + line rebuild ──────────
+                // ── No deliveries: header identity + descriptive fields only ─
+                // Quantity and line set stay locked even before any dispatch —
+                // the subsidy is historical from the moment it is created.
                 $headerFields = [
                     'ris_number'        => $request->ris_number,
                     'supplier_id'       => (int) $request->supplier_id,
@@ -532,66 +557,29 @@ class DeliverySubsidyController extends Controller
                     }
                 }
 
-                // Recompute the requested total from the submitted lines.
-                $newRequested = (int) collect($request->items)->sum(fn ($l) => (int) $l['quantity']);
+                // quantity_requested is NEVER updated — the original total is
+                // preserved even when descriptive fields are corrected.
+                $deliverySubsidy->update($headerFields);
 
-                $deliverySubsidy->update($headerFields + ['quantity_requested' => $newRequested]);
-
-                if (abs($newRequested - $oldRequested) > 0.0001) {
-                    $changes['quantity_requested'] = ['old' => $oldRequested, 'new' => $newRequested];
-                }
-
-                // No deliveries yet — update matching lines in place (stable IDs
-                // for the audit trail), create new lines, and drop orphans.
-                // Nothing downstream exists (no shipments, no stock cards, no
-                // transfers), so the historical identity is safe to rewrite.
-                $submittedDsiIds = [];
-
+                // Update descriptive fields in place (stable IDs for audit).
+                // No creation, no deletion — the locked line set is preserved.
                 foreach ($request->items as $line) {
-                    $data = [
+                    $dsi     = $existingItems->get((int) $line['dsi_id']);
+                    $oldDesc = $dsi->description;
+                    $dsi->update([
                         'item_id'         => $line['item_id'] ?? null,
                         'catalog_item_id' => $line['catalog_item_id'] ?? null,
                         'account_code'    => $line['account_code'] ?? null,
                         'description'     => $line['description'],
                         'unit'            => $line['unit'],
                         'category'        => $line['category'],
-                        'quantity'        => (int) $line['quantity'],
                         'expiration_date' => $line['expiration_date'] ?? null,
-                    ];
+                    ]);
 
-                    $dsiId = $line['dsi_id'] ?? null;
-                    $dsi   = $dsiId && $existingItems->has((int) $dsiId)
-                        ? $existingItems->get((int) $dsiId)
-                        : null;
-
-                    if ($dsi) {
-                        $oldQty  = (float) $dsi->quantity;
-                        $oldDesc = $dsi->description;
-                        $dsi->update($data);
-
-                        if (abs((float) $data['quantity'] - $oldQty) > 0.0001) {
-                            $changes["items.{$dsi->id}.quantity"] = ['old' => $oldQty, 'new' => (float) $data['quantity']];
-                        }
-                        if ($dsi->description !== $oldDesc) {
-                            $changes["items.{$dsi->id}.item"] = ['old' => $oldDesc, 'new' => $dsi->description];
-                        }
-                        $submittedDsiIds[] = $dsi->id;
-                    } else {
-                        $dsi = DeliverySubsidyItem::create($data + [
-                            'delivery_subsidy_id' => $deliverySubsidy->id,
-                            'unit_cost'           => null,
-                            'warehouse_id'        => null,
-                            'amount'              => null,
-                        ]);
-                        $submittedDsiIds[] = $dsi->id;
+                    if ($dsi->description !== $oldDesc) {
+                        $changes["items.{$dsi->id}.item"] = ['old' => $oldDesc, 'new' => $dsi->description];
                     }
                 }
-
-                // Remove orphan lines that were dropped from the form.
-                DeliverySubsidyItem::where('delivery_subsidy_id', $deliverySubsidy->id)
-                    ->whereNotIn('id', $submittedDsiIds)
-                    ->whereDoesntHave('deliveryItems')
-                    ->delete();
 
                 $cascadeSvc->recordAudit($deliverySubsidy->id, $changes, []);
             }
@@ -780,6 +768,57 @@ class DeliverySubsidyController extends Controller
      * (source or destination side), and active reservation locks.
      * Returns human-readable blocker notes (empty = safe to delete).
      */
+    /**
+     * Downstream usage of ONE subsidy line's delivered stock: RIS issuance,
+     * onward stock transfers (augmentation), and active reservation locks —
+     * traced through the transfer lineage so moved stock still counts.
+     * Returns human-readable usage notes (empty = freely editable).
+     * A non-empty result means the line's requested quantity is fully frozen.
+     */
+    private function deliverySubsidyItemUsage(DeliverySubsidyItem $dsi): array
+    {
+        $rootIds = $dsi->deliveryItems()->whereNotNull('item_id')->distinct()->pluck('item_id')->all();
+
+        if (empty($rootIds)) {
+            return [];
+        }
+
+        $lineageIds = $this->transferLineageItemIds($rootIds);
+        $usage = [];
+
+        $risNos = RequisitionDispatchItem::whereIn('item_id', $lineageIds)
+            ->with('requisitionItem.requisition')
+            ->get()
+            ->map(fn ($di) => $di->requisitionItem?->requisition?->ris_number)
+            ->filter()->unique()->values()->all();
+        foreach ($risNos as $n) {
+            $usage[] = "issued through RIS {$n}";
+        }
+
+        $trfNos = StockTransferItem::where(function ($q) use ($lineageIds) {
+                $q->whereIn('item_id', $lineageIds)
+                  ->orWhereIn('destination_item_id', $lineageIds);
+            })
+            ->where('quantity', '>', 0)
+            ->with('transfer')
+            ->get()
+            ->map(fn ($sti) => $sti->transfer?->transfer_number)
+            ->filter()->unique()->values()->all();
+        foreach ($trfNos as $t) {
+            $usage[] = "moved by transfer {$t}";
+        }
+
+        foreach ($lineageIds as $itemId) {
+            if (ReservationItem::reservedQuantityForItem((int) $itemId) > 0.0001) {
+                $item = Item::find($itemId);
+                $usage[] = 'locked by an active reservation (' . ($item->stock_number ?? $item?->description ?? 'stock') . ')';
+                break;
+            }
+        }
+
+        return $usage;
+    }
+
     private function subsidyDeletionBlockers(DeliverySubsidy $deliverySubsidy): array
     {
         $rootIds = DeliveryItem::whereHas('delivery', fn ($q) => $q->where('delivery_subsidy_id', $deliverySubsidy->id))
@@ -952,13 +991,56 @@ class DeliverySubsidyController extends Controller
         return $lineage;
     }
 
+    /**
+     * Downstream transactions on ONE delivered stock line: RIS issuance,
+     * executed stock-transfer movement (either side), and active reservation
+     * locks on the exact stock record. Same semantics as the shipment-delete
+     * guard. A non-empty result means the line's delivered quantity is frozen
+     * (metadata like costs, DR, expiry and condition may still be corrected).
+     */
+    private function deliveryItemTransactions(DeliveryItem $di): array
+    {
+        if (empty($di->item_id)) {
+            return [];
+        }
+
+        $use = [];
+
+        $risNo = RequisitionDispatchItem::where('item_id', $di->item_id)
+            ->with('requisitionItem.requisition')
+            ->get()
+            ->map(fn ($d) => $d->requisitionItem?->requisition?->ris_number)
+            ->filter()->unique()->values()->first();
+        if ($risNo) {
+            $use[] = "issued through RIS {$risNo}";
+        } elseif (RequisitionDispatchItem::where('item_id', $di->item_id)->exists()) {
+            $use[] = 'issued through a RIS';
+        }
+
+        $moved = StockTransferItem::where(function ($q) use ($di) {
+                $q->where('item_id', $di->item_id)
+                  ->orWhere('destination_item_id', $di->item_id);
+            })
+            ->where('quantity', '>', 0)
+            ->exists();
+        if ($moved) {
+            $use[] = 'moved by a stock transfer';
+        }
+
+        if (ReservationItem::reservedQuantityForItem((int) $di->item_id) > 0.0001) {
+            $use[] = 'locked by an active reservation';
+        }
+
+        return $use;
+    }
+
     public function delivery(DeliverySubsidy $deliverySubsidy)
     {
         $user = Auth::user();
         if (! $this->canAccessDeliverySubsidy($user, $deliverySubsidy)) {
             abort(403);
         }
-        $deliverySubsidy->load(['items.item', 'items.warehouse', 'supplier', 'warehouse']);
+        $deliverySubsidy->load(['items.item', 'items.warehouse', 'items.deliveryItems', 'supplier', 'warehouse']);
 
         // Warehouses the dispatcher may route this shipment to (center users are
         // limited to the warehouses they belong to).
@@ -1003,7 +1085,7 @@ class DeliverySubsidyController extends Controller
             'delivery_date'      => 'required|date',
             'dr_number'          => 'nullable|string|max:100',
             'batch_number'       => 'nullable|string|max:100',
-            'condition_status'   => 'required|string|in:good,damaged',
+            'condition_status'   => 'nullable|string|in:good,damaged',
             'quantity_delivered' => 'required|integer|min:1',
             'items'              => 'required|array',
         ];
@@ -1024,6 +1106,9 @@ class DeliverySubsidyController extends Controller
             $rules["items.{$key}.warehouse_id"]       = ['exists:warehouses,id'];
             $rules["items.{$key}.expiration_date"]    = ['nullable', 'date'];
             $rules["items.{$key}.dr_number"]          = ['string', 'max:100'];
+            // Per-item condition: validated when present; dispatching lines
+            // without one fall back to the header input (legacy payloads).
+            $rules["items.{$key}.condition"]          = ['nullable', 'string', 'in:good,damaged'];
 
             if ($dispatching) {
                 $rules["items.{$key}.quantity_delivered"][] = 'required';
@@ -1091,13 +1176,29 @@ class DeliverySubsidyController extends Controller
             // ── Delivery header: one row per shipment ──────────────────────
             // DR# is now tracked per dispatched item; the header keeps an
             // optional reference for legacy records only.
+            // Condition is tracked per dispatched item; the header keeps the
+            // most common value as a summary (legacy submissions without
+            // per-item values fall back to the header input).
+            $headerFallback = in_array($request->condition_status, ['good', 'damaged'], true)
+                ? $request->condition_status
+                : 'good';
+            $dispatchedConditions = [];
+            foreach ($request->items as $line) {
+                if ((int) ($line['quantity_delivered'] ?? 0) > 0) {
+                    $c = strtolower(trim((string) ($line['condition'] ?? $line['condition_status'] ?? $headerFallback)));
+                    $dispatchedConditions[] = in_array($c, ['good', 'damaged'], true) ? $c : $headerFallback;
+                }
+            }
+            $conditionCounts = array_count_values($dispatchedConditions);
+            arsort($conditionCounts);
+            $headerCondition = ! empty($conditionCounts) ? array_key_first($conditionCounts) : $headerFallback;
             $delivery = Delivery::create([
                 'delivery_subsidy_id'  => $deliverySubsidy->id,
                 'dr_number'          => $request->dr_number ?? null,
                 'received_by'        => $user->id,
                 'delivery_date'      => $request->delivery_date,
                 'batch_number'       => $request->batch_number,
-                'condition_status'   => $request->condition_status,
+                'condition_status'   => $headerCondition,
                 'quantity_delivered' => $request->quantity_delivered,
                 'remarks'            => $request->remarks,
             ]);
@@ -1151,6 +1252,13 @@ class DeliverySubsidyController extends Controller
                 // cannot override it (qty × engas unit cost).
                 $engasTotalCost = $engasUnitCost !== null ? round($qtyDelivered * $engasUnitCost, 2) : null;
 
+                // Condition is chosen per dispatched item in the form; legacy
+                // submissions without a per-item value fall back to the header.
+                $lineCondition = strtolower(trim((string) ($line['condition'] ?? $line['condition_status'] ?? $headerCondition)));
+                if (! in_array($lineCondition, ['good', 'damaged'], true)) {
+                    $lineCondition = $headerCondition;
+                }
+
                 // Stock lands in the warehouse the dispatcher selected for this
                 // item (chosen at dispatch time, not at creation).
                 $sourceWarehouseId = (int) $line['warehouse_id'];
@@ -1201,7 +1309,7 @@ class DeliverySubsidyController extends Controller
                     'unit_cost'              => $actualUnitCost,
                     'engas_unit_cost'        => $engasUnitCost,
                     'engas_total_cost'       => $engasTotalCost,
-                    'condition'              => $request->condition_status,
+                    'condition'              => $lineCondition,
                     'dr_number'              => $drNumber,
                 ]);
 
@@ -1312,7 +1420,65 @@ class DeliverySubsidyController extends Controller
             }
         }
 
-        return view('delivery_subsidies.edit_delivery', compact('deliverySubsidy', 'delivery', 'warehouses', 'focusedDiId', 'allItemsCount'));
+        // Per-line downstream transactions for the form: lines whose stock
+        // was already issued, transferred or reserved render read-only.
+        $transactions = $delivery->items->mapWithKeys(
+            fn ($di) => [$di->id => $this->deliveryItemTransactions($di)]
+        );
+
+        return view('delivery_subsidies.edit_delivery', compact('deliverySubsidy', 'delivery', 'warehouses', 'focusedDiId', 'allItemsCount', 'transactions'));
+    }
+
+    /**
+     * Admin JSON: shipment data for the Edit Shipment popup modal on the
+     * subsidy details page. Mirrors the standalone edit page payload.
+     *
+     * GET /delivery-subsidies/{ds}/deliveries/{delivery}/edit-data
+     */
+    public function deliveryEditData(DeliverySubsidy $deliverySubsidy, Delivery $delivery)
+    {
+        abort_unless(Auth::user()->canWrite(), 403);
+        abort_unless($delivery->delivery_subsidy_id === $deliverySubsidy->id, 404);
+
+        $delivery->load(['items.item', 'items.deliverySubsidyItem', 'items.warehouse']);
+        $deliverySubsidy->load(['supplier']);
+
+        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        return response()->json([
+            'id'               => $delivery->id,
+            'delivery_date'    => $delivery->delivery_date?->toDateString(),
+            'batch_number'     => $delivery->batch_number,
+            'remarks'          => $delivery->remarks,
+            'quantity_delivered' => $delivery->quantity_delivered,
+            'ris_number'       => $deliverySubsidy->ris_number,
+            'supplier_name'    => $deliverySubsidy->supplier->name ?? null,
+            'warehouses'       => $warehouses,
+            'items'            => $delivery->items->map(function ($di) {
+                $dsLine  = $di->deliverySubsidyItem;
+                $lineMax = $dsLine ? max(0, (float) $dsLine->quantity - (float) $dsLine->qty_delivered) : 0;
+                $cond    = strtolower((string) ($di->condition ?? 'good'));
+                return [
+                    'di_id'              => $di->id,
+                    'description'        => $di->item->description ?? $dsLine->description ?? '—',
+                    'unit'               => $di->item->unit ?? null,
+                    'stock_number'       => $di->item->stock_number ?? null,
+                    'current_stock'      => $di->item->quantity ?? 0,
+                    'warehouse_id'       => $di->warehouse_id ?? $dsLine->warehouse_id ?? $di->item->warehouse_id ?? null,
+                    'quantity_delivered' => $di->quantity_delivered,
+                    'max_qty'            => (float) $di->quantity_delivered + $lineMax,
+                    'remaining'          => $lineMax,
+                    'unit_cost'          => $di->unit_cost,
+                    'engas_unit_cost'    => $di->engas_unit_cost,
+                    'dr_number'          => $di->dr_number ?? null,
+                    'expiration_date'    => $di->item?->expiration_date?->toDateString(),
+                    'condition'          => in_array($cond, ['good', 'damaged'], true) ? $cond : 'good',
+                    // Non-empty when this line's stock has downstream
+                    // transactions — its quantity is frozen in the modal.
+                    'transactions'       => $this->deliveryItemTransactions($di),
+                ];
+            })->values(),
+        ]);
     }
 
     /**
@@ -1360,7 +1526,7 @@ class DeliverySubsidyController extends Controller
             'delivery_date'      => 'required|date',
             'dr_number'          => 'nullable|string|max:100',
             'batch_number'       => 'nullable|string|max:100',
-            'condition_status'   => 'required|string|in:good,damaged',
+            'condition_status'   => 'nullable|string|in:good,damaged',
             'remarks'            => 'nullable|string|max:1000',
             'items'              => 'required|array|min:1',
             'items.*.di_id'              => 'required|exists:delivery_items,id',
@@ -1370,6 +1536,9 @@ class DeliverySubsidyController extends Controller
             'items.*.warehouse_id'       => 'exists:warehouses,id',
             'items.*.expiration_date'    => 'nullable|date',
             'items.*.dr_number'          => 'string|max:100',
+            // Per-item condition: validated when present; lines without one
+            // fall back to the header input (legacy payloads).
+            'items.*.condition'          => 'nullable|string|in:good,damaged',
         ];
 
         foreach ($request->input('items', []) as $key => $line) {
@@ -1422,6 +1591,9 @@ class DeliverySubsidyController extends Controller
             }
         }
         if (! empty($editErrors)) {
+            if ($request->expectsJson()) {
+                return response()->json(['errors' => $editErrors], 422);
+            }
             return back()->withInput()->withErrors($editErrors);
         }
 
@@ -1443,6 +1615,7 @@ class DeliverySubsidyController extends Controller
                 'quantity_delivered' => $delivery->quantity_delivered,
             ];
             $changedFields = [];
+            $finalConditions = [];
 
             foreach ($request->items as $idx => $line) {
                 /** @var DeliveryItem $di */
@@ -1464,6 +1637,18 @@ class DeliverySubsidyController extends Controller
                 $newWarehouseId = (int) ($line['warehouse_id'] ?? 0);
                 $newExpiry = ($line['expiration_date'] ?? null) ?: null;
                 $newDr     = trim((string) $line['dr_number']);
+                // Condition is chosen per dispatched item in the form; legacy
+                // submissions without a per-item value fall back to the header
+                // input, then to the stored line value.
+                $newCondition = strtolower(trim((string) ($line['condition'] ?? $line['condition_status'] ?? $request->condition_status ?? $di->condition ?? 'good')));
+                if (! in_array($newCondition, ['good', 'damaged'], true)) {
+                    $newCondition = in_array($request->condition_status, ['good', 'damaged'], true)
+                        ? $request->condition_status
+                        : ($di->condition ?? 'good');
+                }
+                if ($newQty > 0) {
+                    $finalConditions[] = $newCondition;
+                }
                 $delta     = $newQty - $oldQty;
                 $oldCost   = (float) $di->unit_cost;
 
@@ -1474,6 +1659,19 @@ class DeliverySubsidyController extends Controller
                     continue;
                 }
 
+                // Transaction freeze: once this line's stock was issued (RIS),
+                // moved (transfer) or reserved, its delivered quantity cannot
+                // change in either direction — only metadata (costs, DR,
+                // expiry, condition) may still be corrected.
+                $lineTxn = $this->deliveryItemTransactions($di);
+                if (! empty($lineTxn) && abs($newQty - $oldQty) > 0.0001) {
+                    throw ValidationException::withMessages([
+                        "items.{$idx}.quantity_delivered" =>
+                            'Quantity cannot be changed because this stock already has '
+                            .implode('; ', array_unique($lineTxn)).'.',
+                    ]);
+                }
+
                 // Per-line values before mutation (expiry lives on the item).
                 $oldDiValues = [
                     'quantity_delivered' => $oldQty,
@@ -1482,6 +1680,7 @@ class DeliverySubsidyController extends Controller
                     'expiration_date'    => $oldItem?->expiration_date?->toDateString(),
                     'warehouse_id'       => $di->warehouse_id,
                     'dr_number'          => $di->dr_number,
+                    'condition'          => $di->condition,
                 ];
 
                 $oldItemId = $oldItem ? $oldItem->id : null;
@@ -1630,7 +1829,7 @@ class DeliverySubsidyController extends Controller
                     'unit_cost'          => $newCost,
                     'engas_unit_cost'    => $newEngas,
                     'engas_total_cost'   => $newEngasTotal,
-                    'condition'          => $request->condition_status,
+                    'condition'          => $newCondition,
                     'dr_number'          => $newDr,
                 ]);
 
@@ -1681,6 +1880,7 @@ class DeliverySubsidyController extends Controller
                     'expiration_date'    => $newExpiry,
                     'warehouse_id'       => $newWarehouseId,
                     'dr_number'          => $newDr,
+                    'condition'          => $newCondition,
                 ];
                 foreach ($newDiValues as $field => $newValue) {
                     if ((string) $oldDiValues[$field] !== (string) $newValue) {
@@ -1700,12 +1900,20 @@ class DeliverySubsidyController extends Controller
 
             // Header quantity must always equal the sum of its dispatched lines,
             // otherwise the subsidy status/fulfilment figures drift.
+            // Header condition keeps the most common per-item value as a
+            // summary (legacy header-only submissions fall back gracefully).
             $newHeaderQty = (float) $delivery->items()->sum('quantity_delivered');
+            $headerFallback = in_array($request->condition_status, ['good', 'damaged'], true)
+                ? $request->condition_status
+                : ($delivery->condition_status ?? 'good');
+            $headerConditionCounts = array_count_values($finalConditions);
+            arsort($headerConditionCounts);
+            $newHeaderCondition = ! empty($headerConditionCounts) ? array_key_first($headerConditionCounts) : $headerFallback;
             $delivery->update([
                 'dr_number'          => $request->dr_number ?? $delivery->dr_number,
                 'delivery_date'      => $request->delivery_date,
                 'batch_number'       => $request->batch_number,
-                'condition_status'   => $request->condition_status,
+                'condition_status'   => $newHeaderCondition,
                 'quantity_delivered' => $newHeaderQty,
                 'remarks'            => $request->remarks,
             ]);
@@ -1723,7 +1931,7 @@ class DeliverySubsidyController extends Controller
                 'delivery_date'      => ['old' => $oldHeader['delivery_date'],      'new' => $request->delivery_date],
                 'dr_number'          => ['old' => $oldHeader['dr_number'],          'new' => $request->dr_number ?? $oldHeader['dr_number']],
                 'batch_number'       => ['old' => $oldHeader['batch_number'],       'new' => $request->batch_number],
-                'condition_status'   => ['old' => $oldHeader['condition_status'],   'new' => $request->condition_status],
+                'condition_status'   => ['old' => $oldHeader['condition_status'],   'new' => $newHeaderCondition],
                 'remarks'            => ['old' => $oldHeader['remarks'],            'new' => $request->remarks],
                 'quantity_delivered' => ['old' => $oldHeader['quantity_delivered'], 'new' => $newHeaderQty],
             ];
@@ -1735,6 +1943,10 @@ class DeliverySubsidyController extends Controller
 
             $cascadeSvc->recordAudit($deliverySubsidy->id, $changedFields, $cascadeSummary);
             });
+
+            if ($request->expectsJson()) {
+                return response()->json(['redirect' => route('delivery_subsidies.show', $deliverySubsidy)]);
+            }
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -1744,6 +1956,10 @@ class DeliverySubsidyController extends Controller
                 'error'               => $e->getMessage(),
                 'trace'               => $e->getTraceAsString(),
             ]);
+
+            if ($request->expectsJson()) {
+                return response()->json(['errors' => ['general' => ['The transaction could not be completed. No changes were made. Please try again.']]], 500);
+            }
 
             return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
         }

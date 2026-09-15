@@ -7,6 +7,26 @@ use Illuminate\Support\Collection;
 
 class DeliverySubsidyItem extends Model
 {
+    protected static function booted(): void
+    {
+        // ── PERMANENT QUANTITY LOCK ──────────────────────────────────
+        // The requested quantity is historical from the moment the row is
+        // created. Any attempt to change it via ANY code path (controller,
+        // service, tinker, future endpoint) is refused so inventory,
+        // dispatches, augmentations (transfers), RIS issues, reservations
+        // and reports can never drift. Creation (creating) is the only
+        // allowed writer of `quantity`; `qty_delivered` (dispatch progress)
+        // remains managed exclusively by the shipment flow.
+        static::updating(function (DeliverySubsidyItem $item): void {
+            if ($item->isDirty('quantity')) {
+                throw new \RuntimeException(
+                    'DeliverySubsidyItem quantity is locked and cannot be changed after creation '
+                    ."(id={$item->id}, original=".var_export($item->getOriginal('quantity'), true).').'
+                );
+            }
+        });
+    }
+
     protected $fillable = [
         'delivery_subsidy_id', 'item_id', 'warehouse_id', 'quantity',
         'unit_cost', 'amount', 'qty_delivered',

@@ -66,27 +66,10 @@
                 </span>
             </div>
             <div class="card-body">
-                <div class="form-row cols-3">
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label">Batch No. <span style="font-size:11px;color:var(--text-muted);font-weight:normal">optional</span></label>
-                        <input type="text" name="batch_number" class="form-control"
-                               value="{{ old('batch_number') }}" placeholder="Optional">
-                    </div>
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label">Condition Status <span class="req">*</span></label>
-                        <select name="condition_status" class="form-control" required>
-                            <option value="good"    {{ old('condition_status', 'good') === 'good'    ? 'selected' : '' }}>Good</option>
-                            <option value="damaged" {{ old('condition_status') === 'damaged' ? 'selected' : '' }}>Damaged</option>
-                        </select>
-                        @error('condition_status')
-                            <div style="color:var(--danger);font-size:11px;margin-top:4px"><i class="fas fa-exclamation-circle"></i> {{ $message }}</div>
-                        @enderror
-                    </div>
-                    <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label">Remarks <span style="font-size:11px;color:var(--text-muted);font-weight:normal">optional</span></label>
-                        <input type="text" name="remarks" class="form-control"
-                               value="{{ old('remarks') }}" placeholder="Optional notes">
-                    </div>
+                <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Remarks <span style="font-size:11px;color:var(--text-muted);font-weight:normal">optional</span></label>
+                    <input type="text" name="remarks" class="form-control"
+                           value="{{ old('remarks') }}" placeholder="Optional notes">
                 </div>
             </div>
         </div>
@@ -98,9 +81,14 @@
             // quantity has been fully dispatched — independent of other lines.
             $lineRemaining = max(0, $poi->quantity - $poi->qty_delivered);
             $isDone        = $lineRemaining <= 0;
+            // Batch numbering continues across shipments: previously recorded
+            // dispatches for this line already occupy Batch 1..N, so the next
+            // batch row starts at N + 1 instead of always showing Batch 1.
+            $priorBatches  = $poi->deliveryItems ? $poi->deliveryItems->count() : 0;
+            $nextBatchNum  = $priorBatches + 1;
         @endphp
 
-        <div class="card" style="margin-bottom:16px" id="item-section-{{ $poiIdx }}" data-remaining="{{ $lineRemaining }}">
+        <div class="card" style="margin-bottom:16px" id="item-section-{{ $poiIdx }}" data-remaining="{{ $lineRemaining }}" data-next-batch="{{ $nextBatchNum }}">
             {{-- Item header --}}
             <div class="card-header" style="background:{{ $isDone ? '#f7fafc' : '#f0f9ff' }}">
                 <div style="display:flex;align-items:center;gap:10px">
@@ -152,11 +140,22 @@
                            {{ $isDone ? 'disabled' : '' }}>
 
                     <div class="batch-row-head">
-                        <span class="ris-item-num">Batch 1</span>
-                        <button type="button" class="btn btn-sm btn-danger remove-batch-btn"
-                                style="display:none" onclick="removeBatch(this)">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <span class="ris-item-num">Batch {{ $nextBatchNum }}</span>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <label class="form-label" style="margin:0;white-space:nowrap">Condition <span class="req">*</span></label>
+                            <select name="items[{{ $poiIdx }}_0][condition]"
+                                    class="form-control batch-condition"
+                                    style="width:auto;min-width:130px"
+                                    data-ss="false"
+                                    {{ $isDone ? 'disabled' : 'required' }}>
+                                <option value="good"    {{ old("items.{$poiIdx}_0.condition", 'good') === 'good'    ? 'selected' : '' }}>Good</option>
+                                <option value="damaged" {{ old("items.{$poiIdx}_0.condition") === 'damaged' ? 'selected' : '' }}>Damaged</option>
+                            </select>
+                            <button type="button" class="btn btn-sm btn-danger remove-batch-btn"
+                                    style="display:none" onclick="removeBatch(this)">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
 
                     {{-- Row 1: Warehouse · Expiration · Quantity --}}
@@ -443,7 +442,14 @@ function recalcBatch(el) {
  * @param {number} defaultEngas  - pre-fill ENGAS unit cost from item master
  */
 function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQty, defaultEngas) {
-    if (!batchCounts[poiIdx]) batchCounts[poiIdx] = 1;
+    // Continue the per-item batch sequence: the default row already occupies
+    // Batch N (N = prior dispatches + 1), so the counter starts at N and the
+    // label formula (batchIdx + 1) yields N + 1 for the first added row.
+    if (!batchCounts[poiIdx]) {
+        var section = document.getElementById('item-section-' + poiIdx);
+        var nextBatch = section ? parseInt(section.dataset.nextBatch || '1', 10) : 1;
+        batchCounts[poiIdx] = nextBatch;
+    }
     const batchIdx = batchCounts[poiIdx]++;
     const key      = poiIdx + '_' + batchIdx;
 
@@ -458,10 +464,21 @@ function addBatch(poiIdx, poItemId, defaultExpiry, defaultCost, defaultWh, maxQt
 
         <div class="batch-row-head">
             <span class="ris-item-num">Batch ${batchIdx + 1}</span>
-            <button type="button" class="btn btn-sm btn-danger remove-batch-btn"
-                    onclick="removeBatch(this)">
-                <i class="fas fa-times"></i>
-            </button>
+            <div style="display:flex;align-items:center;gap:8px">
+                <label class="form-label" style="margin:0;white-space:nowrap">Condition <span class="req">*</span></label>
+                <select name="items[${key}][condition]"
+                        class="form-control batch-condition"
+                        style="width:auto;min-width:130px"
+                        data-ss="false"
+                        required>
+                    <option value="good" selected>Good</option>
+                    <option value="damaged">Damaged</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-danger remove-batch-btn"
+                        onclick="removeBatch(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
         </div>
 
         <div class="shipment-item-grid">
