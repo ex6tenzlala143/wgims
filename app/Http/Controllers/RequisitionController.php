@@ -1094,16 +1094,26 @@ class RequisitionController extends Controller
                                 'Cannot deploy more than the remaining reserved quantity ('.number_format(max(0, $resRemaining)).').',
                         ]);
                     }
+
+                    // A reservation link is bound to the exact stock record it locks.
+                    // Without this, a lock on Item-A could credit availability on Item-B.
+                    if ((int) $linkedResItem->item_id !== (int) $item->id
+                        || (int) $linkedResItem->warehouse_id !== (int) $item->warehouse_id) {
+                        throw ValidationException::withMessages([
+                            "items.{$riItemId}.reservation_item_id" =>
+                                'The selected reservation does not lock the selected stock record.',
+                        ]);
+                    }
                 }
 
                 $totalReserved = \App\Models\Reservation::reservedQuantityForItem($item->id);
 
                 if ($reservationItemId) {
                     // Credit back the reserved quantity of the specific reservation
-                    // being consumed — it is available to this RIS.
-                    $thisReservation = \App\Models\ReservationItem::whereKey($reservationItemId)->first();
-                    $creditBack = $thisReservation
-                        ? max(0, (float) $thisReservation->reserved_quantity - (float) $thisReservation->deployed_quantity)
+                    // being consumed — it is available to this RIS. Reuse the
+                    // already-locked row instead of re-reading it unlocked.
+                    $creditBack = $linkedResItem
+                        ? max(0, (float) $linkedResItem->reserved_quantity - (float) $linkedResItem->deployed_quantity)
                         : 0;
                     $availableQty = $item->quantity - max(0, $totalReserved - $creditBack);
                 } else {
@@ -1138,13 +1148,16 @@ class RequisitionController extends Controller
 
                 // Record this dispatch. The exact stock record (item_id) pins the
                 // warehouse, unit cost and other stock info — no warehouse stored.
+                // Costs always follow the selected stock record (subsidy-mastered).
+                // Any submitted unit_cost/engas_unit_cost is ignored, same rule as
+                // updateDispatch, so RSMI totals cannot be tampered client-side.
                 $dispatch = RequisitionDispatchItem::create([
                     'requisition_item_id' => $riItem->id,
                     'item_id'             => $item->id,
                     'quantity_issued'     => $wanted,
-                    'unit_cost'           => (float) ($data['unit_cost'] ?? $item->unit_cost ?? 0),
-                    'engas_unit_cost'     => $data['engas_unit_cost'] ?? $item->engas_unit_cost ?? null,
-                    'expiration_date'     => $data['expiration_date'] ?? $item->expiration_date,
+                    'unit_cost'           => round((float) ($item->unit_cost ?? 0), 2),
+                    'engas_unit_cost'     => $item->engas_unit_cost !== null ? round((float) $item->engas_unit_cost, 2) : null,
+                    'expiration_date'     => $item->expiration_date,
                     'dr_number'           => $data['dr_number'] ?? null,
                     'created_by'          => $user->id,
                     'reservation_item_id' => ! empty($data['reservation_item_id'])

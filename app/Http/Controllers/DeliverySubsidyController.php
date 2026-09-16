@@ -1006,14 +1006,20 @@ class DeliverySubsidyController extends Controller
 
         $use = [];
 
-        $risNo = RequisitionDispatchItem::where('item_id', $di->item_id)
+        // Follow the transfer lineage so a receipt that moved onward (A→B→C)
+        // is still frozen when the destination stock was issued or reserved.
+        // Checking only the direct item_id would allow editing A after C was
+        // consumed, drifting quantities and balances.
+        $lineageIds = $this->transferLineageItemIds([(int) $di->item_id]);
+
+        $risNo = RequisitionDispatchItem::whereIn('item_id', $lineageIds)
             ->with('requisitionItem.requisition')
             ->get()
             ->map(fn ($d) => $d->requisitionItem?->requisition?->ris_number)
             ->filter()->unique()->values()->first();
         if ($risNo) {
             $use[] = "issued through RIS {$risNo}";
-        } elseif (RequisitionDispatchItem::where('item_id', $di->item_id)->exists()) {
+        } elseif (RequisitionDispatchItem::whereIn('item_id', $lineageIds)->exists()) {
             $use[] = 'issued through a RIS';
         }
 
@@ -1027,8 +1033,11 @@ class DeliverySubsidyController extends Controller
             $use[] = 'moved by a stock transfer';
         }
 
-        if (ReservationItem::reservedQuantityForItem((int) $di->item_id) > 0.0001) {
-            $use[] = 'locked by an active reservation';
+        foreach ($lineageIds as $lid) {
+            if (ReservationItem::reservedQuantityForItem((int) $lid) > 0.0001) {
+                $use[] = 'locked by an active reservation';
+                break;
+            }
         }
 
         return $use;
@@ -1192,6 +1201,9 @@ class DeliverySubsidyController extends Controller
             $conditionCounts = array_count_values($dispatchedConditions);
             arsort($conditionCounts);
             $headerCondition = ! empty($conditionCounts) ? array_key_first($conditionCounts) : $headerFallback;
+            // Header quantity is derived server-side so a crafted request cannot
+            // drift it from the sum of its lines (updateDelivery recomputes it).
+            $headerQty = collect($request->items)->sum(fn ($l) => max(0, (int) ($l['quantity_delivered'] ?? 0)));
             $delivery = Delivery::create([
                 'delivery_subsidy_id'  => $deliverySubsidy->id,
                 'dr_number'          => $request->dr_number ?? null,
@@ -1199,7 +1211,7 @@ class DeliverySubsidyController extends Controller
                 'delivery_date'      => $request->delivery_date,
                 'batch_number'       => $request->batch_number,
                 'condition_status'   => $headerCondition,
-                'quantity_delivered' => $request->quantity_delivered,
+                'quantity_delivered' => $headerQty,
                 'remarks'            => $request->remarks,
             ]);
 
@@ -1316,11 +1328,22 @@ class DeliverySubsidyController extends Controller
                 $dsItem->increment('qty_delivered', $qtyDelivered);
 
                 $newQty = $item->quantity + $qtyDelivered;
-                $item->update([
+                $itemUpdate = [
                     'quantity'   => $newQty,
                     'unit_cost'  => $actualUnitCost,
                     'ris_number' => $deliverySubsidy->ris_number,
-                ]);
+                ];
+                // Keep live stock in sync when merging into an existing batch —
+                // same rule as updateDelivery. findOrCreateByUnitCost only syncs
+                // account_code on merge, so ENGAS/expiry would otherwise go stale
+                // and later edits would cascade from a divergent basis.
+                if ($engasUnitCost !== null) {
+                    $itemUpdate['engas_unit_cost'] = $engasUnitCost;
+                }
+                if ($expirationDate) {
+                    $itemUpdate['expiration_date'] = $expirationDate;
+                }
+                $item->update($itemUpdate);
 
                 $item->applySubsidySnapshot(
                     $deliverySubsidy->id,
@@ -1966,7 +1989,13 @@ class DeliverySubsidyController extends Controller
             }
 
             // Rebuild every affected item's running stock-card balances so later
-            // entries stay consistent with the edited receipt.
+            // entries stay consistent with the edited receipt. The cascade also
+            // rewrites downstream transfer-chain receipts, so those destination
+            // items must be recalculated too — otherwise their balances keep the
+            // old cost basis.
+            foreach ($cascadeSummary['items_updated'] ?? [] as $destId) {
+                $affectedItemIds[(int) $destId] = true;
+            }
             foreach (array_keys($affectedItemIds) as $itemId) {
                 StockCardEntry::recalculateBalancesForItem($itemId);
             }

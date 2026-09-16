@@ -176,7 +176,7 @@
     $pct              = $totalRequested > 0 ? min(100, round($totalTransferred / $totalRequested * 100)) : 0;
     $isComplete       = $totalRemaining <= 0 && $totalTransferred > 0;
     $itemCount        = $transfer->items->count();
-    $totalValue       = $transfer->items->sum(fn($i) => $i->quantity * $i->unit_cost);
+    $totalValue       = $transfer->items->sum(fn($i) => $i->quantity * ($i->sourceItem->engas_unit_cost ?? $i->unit_cost));
 @endphp
 <div class="card" style="margin-bottom:24px">
     <div class="card-body" style="padding:20px 24px">
@@ -272,7 +272,7 @@
                 @php $grandTotal = 0; @endphp
                 @foreach($transfer->items as $i => $line)
                 @php
-                    $lineValue   = $line->quantity * $line->unit_cost;
+                    $lineValue   = $line->quantity * ($line->sourceItem->engas_unit_cost ?? $line->unit_cost);
                     $outstanding = max(0, $line->quantity_requested - $line->quantity);
                     $grandTotal += $lineValue;
                 @endphp
@@ -339,7 +339,7 @@
             </tbody>
             <tfoot>
                 <tr style="background:#f7fafc;font-weight:700">
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 12 : 10 }}" style="text-align:right;padding:12px 14px">Total Value Dispatched:</td>
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 13 : 11 }}" style="text-align:right;padding:12px 14px">Total Value Dispatched:</td>
                     <td style="text-align:right;padding:12px 14px">₱ {{ number_format($grandTotal, 2) }}</td>
                 </tr>
             </tfoot>

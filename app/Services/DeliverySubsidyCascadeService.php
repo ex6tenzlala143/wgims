@@ -120,6 +120,18 @@ class DeliverySubsidyCascadeService
         // A corrected subsidy cost must flow here too (qty locks untouched).
         $updated = ReservationItem::where('item_id', $item->id)->update($snapshotUpdate);
         $summary['reservation_rows'] = ($summary['reservation_rows'] ?? 0) + $updated;
+
+        // Stock-card receipts pin the cost basis used by recalculateBalancesForItem.
+        // Without this, a corrected subsidy cost leaves downstream delivery /
+        // transfer receipts stale and running balances drift from live stock.
+        $cost = (float) $newCost;
+        $updated = StockCardEntry::where('item_id', $item->id)
+            ->where('receipt_qty', '>', 0)
+            ->update([
+                'receipt_unit_cost'  => $cost,
+                'receipt_total_cost' => DB::raw('receipt_qty * '.$cost),
+            ]);
+        $summary['stock_card_rows'] = ($summary['stock_card_rows'] ?? 0) + $updated;
     }
 
     /**
