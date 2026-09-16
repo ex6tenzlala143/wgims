@@ -485,7 +485,8 @@
                             </span>
                         </td>
                         <td></td>
-                        @if(auth()->user()->canApprove())
+                        <td></td>
+                        @if(auth()->user()->canWrite())
                         <td></td>
                         @endif
                     </tr>

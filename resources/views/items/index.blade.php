@@ -161,7 +161,7 @@
                     </td>
                     </tr>
                 @empty
-                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 10 : 8 }}" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 12 : 10 }}" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-box-open" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     @if($warehouses->isEmpty() && !auth()->user()->hasAdminAccess())
                         No warehouses assigned. Please contact an administrator to get access to items.

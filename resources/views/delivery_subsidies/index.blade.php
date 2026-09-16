@@ -157,7 +157,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted)">
+                <tr><td colspan="{{ auth()->user()->hasAdminAccess() ? 10 : 9 }}" style="text-align:center;padding:40px;color:var(--text-muted)">
                     <i class="fas fa-file-invoice" style="font-size:32px;margin-bottom:8px;display:block"></i>
                     No delivery/subsidy records found.
                 </td></tr>

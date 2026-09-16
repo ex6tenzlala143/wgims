@@ -28,7 +28,7 @@
                     <th>Items</th>
                     @endif
                     <th>Status</th>
-                    @if(auth()->user()->hasAdminAccess())
+                    @if(auth()->user()->canWrite())
                     <th>Actions</th>
                     @endif
                 </tr>
@@ -59,7 +59,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="{{ auth()->user()->hasAdminAccess() ? 7 : 4 }}"
+                    <td colspan="{{ auth()->user()->hasAdminAccess() ? (auth()->user()->canWrite() ? 7 : 6) : 4 }}"
                         style="text-align:center;padding:40px;color:var(--text-muted)">
                         <i class="fas fa-warehouse" style="font-size:32px;margin-bottom:8px;display:block;opacity:.3"></i>
                         @if(auth()->user()->hasAdminAccess())
