@@ -141,6 +141,7 @@
                 </div>
                 <div class="form-group">
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+                        <input type="hidden" name="is_active" value="0">
                         <input type="checkbox" name="is_active" value="1" id="edit-is-active" style="width:16px;height:16px">
                         Active (visible in dropdowns)
                     </label>
@@ -250,6 +251,7 @@
                     <input type="text" name="name" id="editItemName" class="form-control" required>
                 </div>
                 <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-top:8px">
+                    <input type="hidden" name="is_active" value="0">
                     <input type="checkbox" name="is_active" value="1" id="editItemActive" style="width:15px;height:15px"> Active
                 </label>
             </div>
@@ -275,6 +277,9 @@
 @endphp
 <script>
 const editRouteBase = '{{ url("/item-categories") }}';
+// Must use url() so the path keeps the /wgims/public prefix on the server.
+// A hardcoded '/item-categories/...' would 404 there and surface as 'Network error'.
+const catalogItemBase = '{{ url("/item-categories/catalog-items") }}';
 const catalogItemsByCategory = @json($catalogItemsByCategory);
 let currentViewItemsCatId = null;
 
@@ -317,33 +322,42 @@ document.getElementById('addCategoryForm').addEventListener('submit', function(e
         },
         body: formData,
     })
-    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(async (response) => ({ status: response.status, body: await parseJsonSafe(response) }))
     .then(({ status, body }) => {
-        if (status === 200 && body.success) {
+        if (status === 200 && body && body.success) {
             closeAddCategoryModal();
             window.location.reload();
-        } else {
-            if (body.errors) {
-                let html = '<ul style="margin:0;padding-left:20px">';
-                for (const [field, messages] of Object.entries(body.errors)) {
-                    messages.forEach(msg => {
-                        html += '<li>' + msg + '</li>';
-                    });
-                }
-                html += '</ul>';
-                errorsEl.innerHTML = html;
-                errorsEl.style.display = 'block';
-            } else {
-                errorsEl.innerHTML = body.message || 'An error occurred. Please try again.';
-                errorsEl.style.display = 'block';
-            }
+            return;
         }
+        if (body && body.errors) {
+            let html = '<ul style="margin:0;padding-left:20px">';
+            for (const [field, messages] of Object.entries(body.errors)) {
+                messages.forEach(msg => {
+                    html += '<li>' + msg + '</li>';
+                });
+            }
+            html += '</ul>';
+            errorsEl.innerHTML = html;
+            errorsEl.style.display = 'block';
+            return;
+        }
+        errorsEl.innerHTML = (body && body.message) || httpErrorMessage(status) || 'An error occurred. Please try again.';
+        errorsEl.style.display = 'block';
     })
     .catch(() => {
-        errorsEl.innerHTML = 'Network error. Please try again.';
+        errorsEl.innerHTML = 'Cannot reach the server. Check your connection and try again.';
         errorsEl.style.display = 'block';
     });
 });
+
+function escapeHtml(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Escape for a single-quoted JS string inside a double-quoted onclick attribute.
+function escapeJs(s) {
+    return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/</g, '\\x3C');
+}
 
 function openViewItemsModal(catId) {
     currentViewItemsCatId = catId;
@@ -359,12 +373,12 @@ function openViewItemsModal(catId) {
         html += '<tbody>';
         items.forEach(item => {
             html += '<tr>';
-            html += '<td style="padding:8px;border-bottom:1px solid #eee">' + item.name + '</td>';
-            html += '<td style="padding:8px;border-bottom:1px solid #eee"><code style="background:#f0f4f8;padding:2px 6px;border-radius:4px">' + (item.account_code || '—') + '</code></td>';
+            html += '<td style="padding:8px;border-bottom:1px solid #eee">' + escapeHtml(item.name) + '</td>';
+            html += '<td style="padding:8px;border-bottom:1px solid #eee"><code style="background:#f0f4f8;padding:2px 6px;border-radius:4px">' + escapeHtml(item.account_code || '—') + '</code></td>';
             html += '<td style="padding:8px;border-bottom:1px solid #eee"><span class="badge ' + (item.is_active ? 'badge-success' : 'badge-secondary') + '">' + (item.is_active ? 'Active' : 'Inactive') + '</span></td>';
             html += '<td style="padding:8px;border-bottom:1px solid #eee;text-align:right">';
-            html += '<button class="btn btn-sm btn-outline" onclick="openEditItemModal(' + catId + ', ' + item.id + ', \'' + item.name.replace(/'/g, "\\'") + '\', ' + item.is_active + ')"><i class="fas fa-edit"></i></button> ';
-            html += '<button class="btn btn-sm btn-danger" onclick="deleteItem(' + item.id + ', \'' + item.name.replace(/'/g, "\\'").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '\')"><i class="fas fa-trash"></i></button>';
+            html += '<button class="btn btn-sm btn-outline" onclick="openEditItemModal(' + catId + ', ' + item.id + ', \'' + escapeJs(item.name) + '\', ' + item.is_active + ')"><i class="fas fa-edit"></i></button> ';
+            html += '<button class="btn btn-sm btn-danger" onclick="deleteItem(' + item.id + ', \'' + escapeJs(item.name) + '\')"><i class="fas fa-trash"></i></button>';
             html += '</td>';
             html += '</tr>';
         });
@@ -428,30 +442,30 @@ document.getElementById('addItemForm').addEventListener('submit', function(e) {
         },
         body: formData,
     })
-    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(async (response) => ({ status: response.status, body: await parseJsonSafe(response) }))
     .then(({ status, body }) => {
-        if (status === 200 && body.success) {
+        if (status === 200 && body && body.success) {
             closeAddItemModal();
             window.location.reload();
-        } else {
-            if (body.errors) {
-                let html = '<ul style="margin:0;padding-left:20px">';
-                for (const [field, messages] of Object.entries(body.errors)) {
-                    messages.forEach(msg => {
-                        html += '<li>' + msg + '</li>';
-                    });
-                }
-                html += '</ul>';
-                errorsEl.innerHTML = html;
-                errorsEl.style.display = 'block';
-            } else {
-                errorsEl.innerHTML = body.message || 'An error occurred. Please try again.';
-                errorsEl.style.display = 'block';
-            }
+            return;
         }
+        if (body && body.errors) {
+            let html = '<ul style="margin:0;padding-left:20px">';
+            for (const [field, messages] of Object.entries(body.errors)) {
+                messages.forEach(msg => {
+                    html += '<li>' + msg + '</li>';
+                });
+            }
+            html += '</ul>';
+            errorsEl.innerHTML = html;
+            errorsEl.style.display = 'block';
+            return;
+        }
+        errorsEl.innerHTML = (body && body.message) || httpErrorMessage(status) || 'An error occurred. Please try again.';
+        errorsEl.style.display = 'block';
     })
     .catch(() => {
-        errorsEl.innerHTML = 'Network error. Please try again.';
+        errorsEl.innerHTML = 'Cannot reach the server. Check your connection and try again.';
         errorsEl.style.display = 'block';
     });
 });
@@ -484,7 +498,7 @@ document.getElementById('editCategoryModal').addEventListener('click', function(
 
 function openEditItemModal(catId, itemId, name, isActive) {
     const modal = document.getElementById('editItemModal');
-    document.getElementById('editItemForm').action = '/item-categories/catalog-items/' + itemId;
+    document.getElementById('editItemForm').action = catalogItemBase + '/' + itemId;
     document.getElementById('editItemName').value = name;
     document.getElementById('editItemActive').checked = isActive;
     const errorsEl = document.getElementById('editItemErrors');
@@ -506,10 +520,30 @@ document.getElementById('editItemModal').addEventListener('click', function(e) {
     if (e.target === this) closeEditItemModal();
 });
 
+async function parseJsonSafe(response) {
+    const text = await response.text();
+    try {
+        return text ? JSON.parse(text) : {};
+    } catch {
+        return null; // non-JSON (e.g. 404/419/500 HTML page)
+    }
+}
+
+function httpErrorMessage(status) {
+    if (status === 419) return 'Session expired. Please refresh the page and try again.';
+    if (status === 403) return 'Forbidden: your account is not allowed to do that.';
+    if (status === 404) return 'Not found: the item may have been deleted already. Refresh the page.';
+    if (status === 422) return null; // caller shows the server message
+    return 'Request failed (HTTP ' + status + '). Please try again.';
+}
+
 document.getElementById('editItemForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const form = this;
     const formData = new FormData(form);
+    // FormData from the form already carries is_active=0 (hidden) + 1 when checked.
+    // Ensure the unchecked state is explicit even if the hidden input is removed later.
+    if (!formData.has('is_active')) formData.append('is_active', '0');
     const errorsEl = document.getElementById('editItemErrors');
     errorsEl.style.display = 'none';
     errorsEl.innerHTML = '';
@@ -523,30 +557,30 @@ document.getElementById('editItemForm').addEventListener('submit', function(e) {
         },
         body: formData,
     })
-    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(async (response) => ({ status: response.status, body: await parseJsonSafe(response) }))
     .then(({ status, body }) => {
-        if (status === 200 && body.success) {
+        if (status === 200 && body && body.success) {
             closeEditItemModal();
             window.location.reload();
-        } else {
-            if (body.errors) {
-                let html = '<ul style="margin:0;padding-left:20px">';
-                for (const [field, messages] of Object.entries(body.errors)) {
-                    messages.forEach(msg => {
-                        html += '<li>' + msg + '</li>';
-                    });
-                }
-                html += '</ul>';
-                errorsEl.innerHTML = html;
-                errorsEl.style.display = 'block';
-            } else {
-                errorsEl.innerHTML = body.message || 'An error occurred. Please try again.';
-                errorsEl.style.display = 'block';
-            }
+            return;
         }
+        if (body && body.errors) {
+            let html = '<ul style="margin:0;padding-left:20px">';
+            for (const [field, messages] of Object.entries(body.errors)) {
+                messages.forEach(msg => {
+                    html += '<li>' + msg + '</li>';
+                });
+            }
+            html += '</ul>';
+            errorsEl.innerHTML = html;
+            errorsEl.style.display = 'block';
+            return;
+        }
+        errorsEl.innerHTML = (body && body.message) || httpErrorMessage(status) || 'An error occurred. Please try again.';
+        errorsEl.style.display = 'block';
     })
     .catch(() => {
-        errorsEl.innerHTML = 'Network error. Please try again.';
+        errorsEl.innerHTML = 'Cannot reach the server. Check your connection and try again.';
         errorsEl.style.display = 'block';
     });
 });
@@ -556,7 +590,7 @@ function deleteItem(itemId, itemName) {
         return;
     }
 
-    fetch('/item-categories/catalog-items/' + itemId, {
+    fetch(catalogItemBase + '/' + itemId, {
         method: 'POST',
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
@@ -565,16 +599,16 @@ function deleteItem(itemId, itemName) {
         },
         body: new URLSearchParams({_method: 'DELETE'}),
     })
-    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(async (response) => ({ status: response.status, body: await parseJsonSafe(response) }))
     .then(({ status, body }) => {
-        if (status === 200 && body.success) {
+        if (status === 200 && body && body.success) {
             window.location.reload();
-        } else {
-            alert(body.message || 'Failed to delete item. Please try again.');
+            return;
         }
+        alert((body && body.message) || httpErrorMessage(status) || 'Failed to delete item. Please try again.');
     })
     .catch(() => {
-        alert('Network error. Please try again.');
+        alert('Cannot reach the server. Check your connection and try again.');
     });
 }
 

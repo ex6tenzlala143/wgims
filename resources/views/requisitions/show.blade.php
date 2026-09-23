@@ -73,7 +73,7 @@
                     'prefix' => 'RELATED TO',
                 ])
                 <span style="font-size:12px;color:var(--text-muted)">
-                    This RIS draws from stock that traces back to a {{ $subSnapshot['status'] === 'deleted' }} Subsidy.
+                    This RIS draws from stock that traces back to a {{ $subSnapshot['status'] === 'deleted' ? 'Deleted' : 'Archived' }} Subsidy.
                 </span>
             </div>
             @endif

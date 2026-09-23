@@ -1308,7 +1308,7 @@ class DeliverySubsidyController extends Controller
                     $dsItem->update($dsItemUpdate);
                 }
 
-                if ($dsItem->amount != $dsItem->quantity * $actualUnitCost) {
+                if (abs((float) $dsItem->amount - round($dsItem->quantity * $actualUnitCost, 2)) > 0.001) {
                     $dsItem->update(['amount' => round($dsItem->quantity * $actualUnitCost, 2)]);
                 }
 

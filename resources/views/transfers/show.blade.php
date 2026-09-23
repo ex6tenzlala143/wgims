@@ -27,7 +27,7 @@
         <form action="{{ route('transfers.destroy', $transfer) }}" method="POST"
             onsubmit="return confirm({{ $transfer->isRelatedToDeletedSubsidy()
                 ? "'This Stock Transfer is linked to a deleted Subsidy. Deleting this transfer will reverse its inventory movement. Are you sure?'"
-                : "'Delete transfer {$transfer->transfer_number}?\\n\\nThis will permanently delete the transfer and reverse all dispatched stock quantities — stock returns to the source warehouse.'"
+                : "'Delete transfer " . addslashes(e($transfer->transfer_number)) . "?\\n\\nThis will permanently delete the transfer and reverse all dispatched stock quantities — stock returns to the source warehouse.'"
             }})">
             @csrf @method('DELETE')
             <button type="submit" class="btn btn-danger">

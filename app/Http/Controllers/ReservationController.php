@@ -612,9 +612,20 @@ class ReservationController extends Controller
             ->whereNotNull('stock_number')
             ->orderBy('description')
             ->orderBy('unit_cost')
-            ->get()
-            ->map(function (Item $item) {
-                $reserved  = ReservationItem::reservedQuantityForItem($item->id);
+            ->get();
+
+        // Pre-load all reserved quantities in ONE query instead of N queries
+        $reservedMap = $items->isNotEmpty()
+            ? ReservationItem::whereIn('item_id', $items->pluck('id'))
+                ->whereIn('status', ReservationItem::ACTIVE_STATUSES)
+                ->groupBy('item_id')
+                ->selectRaw('item_id, SUM(GREATEST(reserved_quantity - deployed_quantity, 0)) as locked')
+                ->pluck('locked', 'item_id')
+                ->map(fn ($v) => (float) $v)
+            : collect();
+
+        $items = $items->map(function (Item $item) use ($reservedMap) {
+                $reserved  = (float) ($reservedMap[$item->id] ?? 0);
                 $available = max(0, $item->quantity - $reserved);
                 return [
                     'id'                 => $item->id,

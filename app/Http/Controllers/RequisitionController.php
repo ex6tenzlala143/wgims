@@ -168,8 +168,18 @@ class RequisitionController extends Controller
         $items = $query->get(['id', 'description', 'unit', 'quantity', 'stock_number',
                    'expiration_date', 'category', 'unit_cost', 'engas_unit_cost']);
 
-        return response()->json($items->map(function ($i) {
-            $reserved        = \App\Models\ReservationItem::reservedQuantityForItem($i->id);
+        // Pre-load all reserved quantities in ONE query instead of N queries
+        $reservedMap = $items->isNotEmpty()
+            ? \App\Models\ReservationItem::whereIn('item_id', $items->pluck('id'))
+                ->whereIn('status', \App\Models\ReservationItem::ACTIVE_STATUSES)
+                ->groupBy('item_id')
+                ->selectRaw('item_id, SUM(GREATEST(reserved_quantity - deployed_quantity, 0)) as locked')
+                ->pluck('locked', 'item_id')
+                ->map(fn ($v) => (float) $v)
+            : collect();
+
+        return response()->json($items->map(function ($i) use ($reservedMap) {
+            $reserved        = (float) ($reservedMap[$i->id] ?? 0);
             $availableQty    = max(0, $i->quantity - $reserved);
             $expiryFormatted = $i->expiration_date ? $i->expiration_date->format('M d, Y') : '—';
             $engasDisplay    = $i->engas_unit_cost !== null
@@ -549,10 +559,6 @@ class RequisitionController extends Controller
 
             return back()->withInput()->with('error', 'The transaction could not be completed. No changes were made. Please try again.');
         }
-
-        // Recompute fulfilment from the edited lines (see above: the caller
-        // can no longer set the status directly).
-        $requisition->updateFulfilmentStatus();
 
         return redirect()->route('requisitions.show', $requisition)
             ->with('success', 'Requisition updated successfully.');
@@ -1344,8 +1350,18 @@ class RequisitionController extends Controller
                 'name' => $w->name,
                 'code' => $w->code,
             ])->values(),
-            'stock_records'       => $stockRecords->map(function ($i) use ($dispatch) {
-                $reserved     = \App\Models\ReservationItem::reservedQuantityForItem($i->id);
+            'stock_records'       => $stockRecords->map(function ($i) use ($dispatch, $stockRecords) {
+                static $reservedMap = null;
+                if ($reservedMap === null) {
+                    $reservedMap = \App\Models\ReservationItem::whereIn('item_id', $stockRecords->pluck('id'))
+                        ->whereIn('status', \App\Models\ReservationItem::ACTIVE_STATUSES)
+                        ->groupBy('item_id')
+                        ->selectRaw('item_id, SUM(GREATEST(reserved_quantity - deployed_quantity, 0)) as locked')
+                        ->pluck('locked', 'item_id')
+                        ->map(fn ($v) => (float) $v)
+                        ->all();
+                }
+                $reserved     = (float) ($reservedMap[$i->id] ?? 0);
                 // When editing an existing dispatch, the quantity already issued
                 // by THIS dispatch is temporarily "returned" before comparing —
                 // so the current record is always selectable at its current qty.

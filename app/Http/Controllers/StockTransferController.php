@@ -317,17 +317,21 @@ class StockTransferController extends Controller
                     ]);
                 }
 
-                // Notifications
+                // Notifications — bulk insert so N admins = 1 query, not N queries
                 $adminIds = User::where('role', User::ROLE_ADMIN)->pluck('id');
-                foreach ($adminIds as $adminId) {
-                    SystemNotification::create([
-                        'user_id' => $adminId,
-                        'title'   => "Stock Transfer {$transfer->transfer_number}",
-                        'message' => "Transfer from {$fromWarehouse->name} to {$toWarehouse->name} created — pending dispatch.",
-                        'type'    => 'transfer',
-                        'link'    => route('transfers.show', $transfer->id),
-                        'is_read' => false,
-                    ]);
+                $now = now();
+                $notifRows = $adminIds->map(fn ($id) => [
+                    'user_id'    => $id,
+                    'title'      => "Stock Transfer {$transfer->transfer_number}",
+                    'message'    => "Transfer from {$fromWarehouse->name} to {$toWarehouse->name} created — pending dispatch.",
+                    'type'       => 'transfer',
+                    'link'       => route('transfers.show', $transfer->id),
+                    'is_read'    => false,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->toArray();
+                if (! empty($notifRows)) {
+                    SystemNotification::insert($notifRows);
                 }
 
                 $createdTransferId = $transfer->id;

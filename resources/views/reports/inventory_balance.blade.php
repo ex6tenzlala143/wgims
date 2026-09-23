@@ -268,7 +268,7 @@ function refreshItems() {
         return;
     }
 
-    fetch(`/api/requisition-items?warehouse_id=${encodeURIComponent(warehouseId)}`, {
+    fetch(`{{ route('requisitions.items_by_warehouse') }}?warehouse_id=${encodeURIComponent(warehouseId)}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
     })
     .then(r => r.ok ? r.json() : Promise.reject())

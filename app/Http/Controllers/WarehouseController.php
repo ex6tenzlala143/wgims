@@ -66,6 +66,11 @@ class WarehouseController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
+        // An unchecked checkbox sends no key at all, so without this the
+        // warehouse could never be deactivated (validated would lack the key
+        // and update() would leave the old `true` untouched).
+        $validated['is_active'] = $request->boolean('is_active');
+
         $warehouse->update($validated);
 
         return redirect()->route('warehouses.index')->with('success', 'Warehouse updated.');

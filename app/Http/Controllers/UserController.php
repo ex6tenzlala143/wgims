@@ -45,14 +45,11 @@ class UserController extends Controller
             'password'        => 'required|string|min:8|confirmed',
         ]);
 
-        $noWarehouseRole = in_array($request->role, ['admin', 'warehouse_manager', 'delivery_updater']);
+        // All three roles are all-scope (no warehouse assignments) —
+        // delivery updaters only confirm deliveries, so they need no warehouse.
+        $noWarehouseRole = in_array($request->role, [User::ROLE_ADMIN, User::ROLE_WAREHOUSE_MANAGER, User::ROLE_DELIVERY_UPDATER]);
 
-        // Roles other than admin/warehouse_manager/delivery_updater must have at least one warehouse
-        if (! $noWarehouseRole && empty($request->warehouse_ids)) {
-            return back()->withErrors(['warehouse_ids' => 'Please select at least one warehouse.'])->withInput();
-        }
-
-        // Primary warehouse: first selected, or null for all-scope roles (admin/warehouse_manager/delivery_updater)
+        // Primary warehouse: first selected, or null for all-scope roles
         $primaryId = (! $noWarehouseRole && ! empty($request->warehouse_ids))
             ? (int) $request->warehouse_ids[0]
             : null;
@@ -103,17 +100,20 @@ class UserController extends Controller
             'password'        => 'nullable|string|min:8|confirmed',
         ]);
 
-        $noWarehouseRole = in_array($request->role, ['admin', 'warehouse_manager', 'delivery_updater']);
+        // All three roles are all-scope (no warehouse assignments) —
+        // delivery updaters only confirm deliveries, so they need no warehouse.
+        $noWarehouseRole = in_array($request->role, [User::ROLE_ADMIN, User::ROLE_WAREHOUSE_MANAGER, User::ROLE_DELIVERY_UPDATER]);
 
-        // Roles other than admin/warehouse_manager/delivery_updater must have at least one warehouse
-        if (! $noWarehouseRole && empty($request->warehouse_ids)) {
-            return back()->withErrors(['warehouse_ids' => 'Please select at least one warehouse.'])->withInput();
-        }
-
-        // Primary warehouse: first selected, or null for all-scope roles (admin/warehouse_manager/delivery_updater)
+        // Primary warehouse: first selected, or null for all-scope roles
         $primaryId = (! $noWarehouseRole && ! empty($request->warehouse_ids))
             ? (int) $request->warehouse_ids[0]
             : null;
+
+        // Administrators are always active — the edit form hides the toggle
+        // for them, and any crafted is_active=0 must not deactivate one.
+        $isActive = $request->role === User::ROLE_ADMIN
+            ? true
+            : $request->boolean('is_active');
 
         $data = [
             'username'     => $request->username,
@@ -121,7 +121,9 @@ class UserController extends Controller
             'email'        => $request->email,
             'role'         => $request->role,
             'warehouse_id' => $primaryId,
-            'is_active'    => $request->boolean('is_active', true),
+            // No default `true` here: an unchecked box sends no key, and the
+            // default would force every save back to active. Missing = false.
+            'is_active'    => $isActive,
         ];
 
         if ($request->filled('password')) {
@@ -132,13 +134,13 @@ class UserController extends Controller
 
         // Deactivating an account must revoke its "Remember me" token so the
         // account can never silently re-authenticate from a remembered cookie.
-        if (! $request->boolean('is_active', true) && $user->remember_token) {
+        if (! $isActive && $user->remember_token) {
             $user->remember_token = null;
             $user->save();
         }
 
         if ($noWarehouseRole) {
-            // All-scope roles (admin/warehouse_manager/delivery_updater) have no warehouse assignments
+            // All-scope roles have no warehouse assignments — anything submitted is ignored
             $user->warehouses()->sync([]);
         } else {
             $submittedIds = array_map('intval', $request->warehouse_ids ?? []);

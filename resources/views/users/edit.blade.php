@@ -40,7 +40,8 @@
                     </select>
                 </div>
             </div>
-            <div class="form-group" id="warehouse-group">
+            {{-- Warehouse assignment is hidden: all roles (incl. delivery updater) are all-scope. --}}
+            <div class="form-group" id="warehouse-group" style="display:none">
                 <label class="form-label">
                     Warehouse Assignment
                     <small style="color:var(--text-muted);font-weight:400"> — select one or more; the first selected becomes the primary</small>
@@ -78,11 +79,13 @@
                 <div style="color:var(--danger);font-size:12px;margin-top:4px">{{ $message }}</div>
                 @enderror
             </div>
-            <div class="form-group">
+            <div class="form-group" id="active-group" style="{{ old('role', $user->role) === 'admin' ? 'display:none' : '' }}">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                    <input type="checkbox" name="is_active" value="1" {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
+                    <input type="hidden" name="is_active" value="0">
+                    <input type="checkbox" name="is_active" id="is_active" value="1" {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
                     <span class="form-label" style="margin:0">Active Account</span>
                 </label>
+                <small style="color:var(--text-muted);font-size:12px">Administrators are always active.</small>
             </div>
             <div class="form-row cols-2">
                 <div class="form-group">
@@ -106,7 +109,16 @@
 <script>
 function toggleCenter() {
     const role = document.getElementById('role').value;
-    document.getElementById('warehouse-group').style.display = (role === 'delivery_updater') ? '' : 'none';
+    // Administrators are always active — no toggle. Keep the box checked so
+    // the submitted value stays active even while hidden.
+    const activeGroup = document.getElementById('active-group');
+    if (activeGroup) {
+        activeGroup.style.display = (role === 'admin') ? 'none' : '';
+        if (role === 'admin') {
+            const box = document.getElementById('is_active');
+            if (box) box.checked = true;
+        }
+    }
 }
 toggleCenter();
 
@@ -117,7 +129,7 @@ document.getElementById('username').addEventListener('input', function() {
     const el = document.getElementById('username-check');
     if (!val) { el.textContent = ''; return; }
     usernameTimer = setTimeout(() => {
-        fetch(`/api/check-username?username=${encodeURIComponent(val)}&user_id={{ $user->id }}`)
+        fetch(`{{ route('users.check_username') }}?username=${encodeURIComponent(val)}&user_id={{ $user->id }}`)
             .then(r => r.json())
             .then(d => {
                 el.innerHTML = d.available

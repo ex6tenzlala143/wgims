@@ -56,7 +56,8 @@ class ItemCatalogItemController extends Controller
         $catalogItem->update([
             'name'         => $request->name,
             'account_code' => $catalogItem->category->account_code,
-            'is_active'    => $request->boolean('is_active', $catalogItem->is_active),
+            // Missing key (unchecked box) means false — never keep the old value.
+            'is_active'    => $request->boolean('is_active'),
         ]);
 
         if ($request->expectsJson()) {

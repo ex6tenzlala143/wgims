@@ -1466,7 +1466,9 @@
         }
 
         function handleNotifClick(el, id, link) {
-            fetch(`/notifications/${id}/read-ajax`, {
+            // url() keeps the /wgims/public prefix on the server — a hardcoded
+            // '/notifications/...' would 404 there and the click would silently fail.
+            fetch(`{{ url('/notifications') }}/${id}/read-ajax`, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': csrfToken,

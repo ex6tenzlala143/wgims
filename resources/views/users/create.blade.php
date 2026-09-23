@@ -51,7 +51,8 @@
                 <ul id="role-info-list" style="margin-top:6px;padding-left:20px"></ul>
             </div>
 
-            <div class="form-group" id="warehouse-group" style="{{ old('role')=='delivery_updater' ? '' : 'display:none' }}">
+            {{-- Warehouse assignment is hidden: all roles (incl. delivery updater) are all-scope. --}}
+            <div class="form-group" id="warehouse-group" style="display:none">
                 <label class="form-label">
                     Warehouse Assignment <span class="req">*</span>
                     <small style="color:var(--text-muted);font-weight:400"> — select one or more; the first selected becomes the primary</small>
@@ -122,9 +123,7 @@ const roleInfo = {
 
 function toggleCenter() {
     const role = document.getElementById('role').value;
-    const cg = document.getElementById('warehouse-group');
     const ri = document.getElementById('role-info');
-    cg.style.display = (role === 'delivery_updater') ? '' : 'none';
     if (role && roleInfo[role]) {
         ri.style.display = 'block';
         document.getElementById('role-info-title').textContent = roleInfo[role].title + ' Permissions:';
@@ -141,7 +140,7 @@ document.getElementById('username').addEventListener('input', function() {
     const el = document.getElementById('username-check');
     if (!val) { el.textContent = ''; return; }
     usernameTimer = setTimeout(() => {
-        fetch(`/api/check-username?username=${encodeURIComponent(val)}`)
+        fetch(`{{ route('users.check_username') }}?username=${encodeURIComponent(val)}`)
             .then(r => r.json())
             .then(d => {
                 el.innerHTML = d.available

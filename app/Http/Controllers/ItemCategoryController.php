@@ -76,7 +76,8 @@ class ItemCategoryController extends Controller
         $itemCategory->update([
             'label'        => $request->label,
             'account_code' => $request->account_code,
-            'is_active'    => $request->boolean('is_active', true),
+            // Missing key (unchecked box) means false — never default to true.
+            'is_active'    => $request->boolean('is_active'),
             'sort_order'   => $request->input('sort_order', $itemCategory->sort_order),
         ]);
 
